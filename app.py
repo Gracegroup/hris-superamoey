@@ -563,7 +563,7 @@ elif pilihan == "👥 Data Karyawan":
                     except sqlite3.IntegrityError:
                         st.error("❌ Employee ID sudah ada")
                 else:
-                    st.warning("Employee ID & Full Name wajib diisi")
+                    st.warning("employee_id & full_name wajib diisi")
 
     with tab2:
         df_k = pd.read_sql_query("SELECT * FROM karyawan ORDER BY id DESC", conn)
