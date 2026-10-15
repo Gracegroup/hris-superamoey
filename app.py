@@ -3,6 +3,8 @@ import pandas as pd
 import sqlite3
 import hashlib
 import os
+import io
+import json
 from datetime import datetime, timedelta, date
 import calendar
 import altair as alt
@@ -101,19 +103,16 @@ def get_conn():
 conn = get_conn()
 c = conn.cursor()
 
-# AUTO-DROP jika struktur lama berbeda
 try:
     c.execute("SELECT employee_id FROM karyawan LIMIT 1")
 except:
     c.execute("DROP TABLE IF EXISTS karyawan")
     conn.commit()
 
-# USERS
 c.execute('''CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT,
     nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 
-# KARYAWAN — 56 kolom sesuai template Employee
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id TEXT UNIQUE,
@@ -175,46 +174,38 @@ c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     gaji REAL DEFAULT 0,
     aktif INTEGER DEFAULT 1)''')
 
-# KANDIDAT
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, posisi_dilamar TEXT,
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
     status TEXT, catatan TEXT)''')
 
-# RESIGN
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT,
     alasan TEXT, jenis TEXT, exit_interview TEXT, clearance_status TEXT)''')
 
-# ASET
 c.execute('''CREATE TABLE IF NOT EXISTS aset (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT UNIQUE, nama TEXT, kategori TEXT,
     lokasi TEXT, kondisi TEXT, nilai REAL, tanggal_perolehan TEXT,
     penanggung_jawab TEXT, status TEXT, catatan TEXT)''')
 
-# RUKO
 c.execute('''CREATE TABLE IF NOT EXISTS ruko (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, alamat TEXT, status TEXT,
     penyewa TEXT, nilai_sewa REAL, mulai_sewa TEXT, akhir_sewa TEXT, catatan TEXT)''')
 
-# TENANT
 c.execute('''CREATE TABLE IF NOT EXISTS tenant (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, lokasi TEXT, kamar TEXT,
     penghuni TEXT, biaya_bulanan REAL, status_ci TEXT, mulai TEXT, catatan TEXT)''')
 
-# ABSENSI
 c.execute('''CREATE TABLE IF NOT EXISTS absensi (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal TEXT,
     jam_masuk TEXT, jam_keluar TEXT, status TEXT, keterangan TEXT,
     terlambat_menit INTEGER DEFAULT 0)''')
 
-# CUTI
 c.execute('''CREATE TABLE IF NOT EXISTS cuti (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, jenis_cuti TEXT,
     tanggal_mulai TEXT, tanggal_selesai TEXT, lama_hari INTEGER,
     alasan TEXT, status TEXT DEFAULT 'Menunggu', approved_by TEXT, approved_at TEXT)''')
 
-# PAYROLL
 c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, periode TEXT,
     gaji_pokok REAL, tunjangan_jabatan REAL, tunjangan_transport REAL,
@@ -225,7 +216,6 @@ c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     pph21 REAL, total_penghasilan_bruto REAL, total_potongan REAL,
     gaji_bersih REAL, status TEXT DEFAULT 'Final', tanggal_proses TEXT)''')
 
-# LOG
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
 conn.commit()
@@ -247,7 +237,6 @@ def metric_card(label, value, sub="", warna="card-blue"):
     return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
 
 def normalize_col(col):
-    """Convert header asli ke snake_case"""
     s = str(col).lower().strip()
     for ch in [' ', '.', '-', '/', '\\', ':', ',']:
         s = s.replace(ch, '_')
@@ -255,11 +244,9 @@ def normalize_col(col):
         s = s.replace(ch, '')
     while '__' in s:
         s = s.replace('__', '_')
-    s = s.strip('_')
-    return s
+    return s.strip('_')
 
 def map_columns(df, tabel):
-    """Mapping header CSV ke kolom DB"""
     SPECIAL_MAP = {
         "nik_npwp_16_digit": "nik_npwp_16",
         "nik_npwp_16": "nik_npwp_16",
@@ -280,6 +267,163 @@ def map_columns(df, tabel):
             target = None
         mapping[col] = target
     return mapping, kolom_db
+
+# ==================== MULTI-FORMAT FILE PARSERS ====================
+def parse_csv(file, delim=None, encoding=None):
+    raw = file.read()
+    file.seek(0)
+    if encoding is None:
+        for enc in ["utf-8-sig", "utf-8", "latin-1", "iso-8859-1"]:
+            try:
+                raw.decode(enc)
+                encoding = enc
+                break
+            except:
+                continue
+        encoding = encoding or "utf-8"
+    if delim is None:
+        try:
+            text = raw.decode(encoding)
+        except:
+            text = raw.decode("latin-1")
+        first_lines = "\n".join(text.split("\n")[:5])
+        counts = {
+            ",": first_lines.count(","),
+            ";": first_lines.count(";"),
+            "\t": first_lines.count("\t"),
+            "|": first_lines.count("|"),
+        }
+        delim = max(counts, key=counts.get)
+        if counts[delim] == 0:
+            delim = ","
+    return pd.read_csv(io.BytesIO(raw), delimiter=delim, encoding=encoding,
+                       on_bad_lines='skip', engine='python')
+
+def parse_excel(file):
+    raw = file.read()
+    file.seek(0)
+    try:
+        xls = pd.ExcelFile(io.BytesIO(raw))
+        sheet_names = xls.sheet_names
+        dfs = []
+        for sheet in sheet_names:
+            df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
+            if not df.empty:
+                dfs.append(df)
+        if len(dfs) == 1:
+            return dfs[0]
+        elif len(dfs) > 1:
+            return pd.concat(dfs, ignore_index=True)
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        raise Exception(f"Gagal baca Excel: {e}")
+
+def parse_json(file):
+    raw = file.read()
+    file.seek(0)
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except:
+        data = json.loads(raw.decode("latin-1"))
+    if isinstance(data, list):
+        return pd.DataFrame(data)
+    elif isinstance(data, dict):
+        # Coba cari list di dalamnya
+        for key, val in data.items():
+            if isinstance(val, list) and len(val) > 0:
+                return pd.DataFrame(val)
+        return pd.DataFrame([data])
+    return pd.DataFrame()
+
+def parse_word(file):
+    """Extract tables dari Word docx"""
+    try:
+        from docx import Document
+    except ImportError:
+        raise Exception("Package python-docx belum diinstall. Jalankan: pip install python-docx")
+    raw = file.read()
+    file.seek(0)
+    doc = Document(io.BytesIO(raw))
+    tables_data = []
+    for tbl in doc.tables:
+        data = []
+        for row in tbl.rows:
+            row_data = [cell.text.strip() for cell in row.cells]
+            data.append(row_data)
+        if data:
+            header = data[0]
+            rows = data[1:]
+            df = pd.DataFrame(rows, columns=header)
+            tables_data.append(df)
+    if not tables_data:
+        # Fallback: baca paragraf
+        lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        if lines:
+            return pd.DataFrame({"text": lines})
+        return pd.DataFrame()
+    if len(tables_data) == 1:
+        return tables_data[0]
+    return pd.concat(tables_data, ignore_index=True)
+
+def parse_pdf(file):
+    """Extract tables dari PDF"""
+    raw = file.read()
+    file.seek(0)
+    try:
+        import pdfplumber
+    except ImportError:
+        raise Exception("Package pdfplumber belum diinstall. Jalankan: pip install pdfplumber")
+    tables_data = []
+    text_lines = []
+    with pdfplumber.open(io.BytesIO(raw)) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for tbl in tables:
+                if tbl and len(tbl) > 1:
+                    header = tbl[0]
+                    rows = tbl[1:]
+                    # Bersihkan None
+                    header = [str(h) if h else f"col_{i}" for i, h in enumerate(header)]
+                    rows_clean = [[str(c) if c else "" for c in row] for row in rows]
+                    # Pastikan panjang row = panjang header
+                    max_len = len(header)
+                    rows_clean = [r + [""] * (max_len - len(r)) for r in rows_clean]
+                    rows_clean = [r[:max_len] for r in rows_clean]
+                    df = pd.DataFrame(rows_clean, columns=header)
+                    tables_data.append(df)
+            # Ambil juga text
+            txt = page.extract_text()
+            if txt:
+                text_lines.extend(txt.split("\n"))
+    if tables_data:
+        if len(tables_data) == 1:
+            return tables_data[0]
+        return pd.concat(tables_data, ignore_index=True)
+    elif text_lines:
+        return pd.DataFrame({"text": text_lines})
+    return pd.DataFrame()
+
+def parse_txt(file, delim=None):
+    return parse_csv(file, delim=delim)
+
+def parse_any_file(file, filename):
+    """Dispatch parser berdasarkan ekstensi"""
+    ext = filename.lower().split('.')[-1]
+    if ext in ['csv']:
+        return parse_csv(file)
+    elif ext in ['xlsx', 'xls', 'xlsm']:
+        return parse_excel(file)
+    elif ext in ['json']:
+        return parse_json(file)
+    elif ext in ['docx']:
+        return parse_word(file)
+    elif ext in ['pdf']:
+        return parse_pdf(file)
+    elif ext in ['txt', 'tsv']:
+        return parse_txt(file)
+    else:
+        raise Exception(f"Format .{ext} tidak didukung")
 
 def hitung_bpjs(gaji_pokok, tunjangan_tetap):
     upah = gaji_pokok + tunjangan_tetap
@@ -1184,150 +1328,166 @@ elif pilihan == "📊 Laporan & Analitik":
 elif pilihan == "💾 Import, Export & Backup":
     st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1></div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📤 Export", "📥 Import", "🗄️ Backup"])
+    tab1, tab2, tab3 = st.tabs(["📤 Export", "📥 Import (Multi-Format)", "🗄️ Backup"])
 
     with tab1:
         tabel = st.selectbox("Tabel", ["karyawan","absensi","cuti","payroll","kandidat","resign","aset","ruko","tenant","log_aktivitas"])
         df = pd.read_sql_query(f"SELECT * FROM {tabel}", conn)
         if not df.empty:
             st.dataframe(df.head(100), use_container_width=True, hide_index=True)
-            st.download_button(f"📥 Download {tabel}.csv", df.to_csv(index=False).encode(),
-                              f"{tabel}_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+
+            # Export ke Excel, CSV, JSON
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.download_button(f"📥 Download CSV", df.to_csv(index=False).encode(),
+                                  f"{tabel}_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+            with col2:
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine='openpyxl') as w:
+                    df.to_excel(w, index=False)
+                st.download_button(f"📥 Download Excel", buf.getvalue(),
+                                  f"{tabel}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            with col3:
+                st.download_button(f"📥 Download JSON", df.to_json(orient="records", indent=2).encode(),
+                                  f"{tabel}_{datetime.now().strftime('%Y%m%d')}.json", "application/json")
         else:
             st.info("Kosong")
 
     with tab2:
-        st.subheader("📥 Import CSV (Auto-Konversi Header)")
+        st.subheader("📥 Import File (Multi-Format)")
+        st.markdown("""
+        **Format yang didukung:**
+        | Format | Ekstensi | Keterangan |
+        |--------|----------|------------|
+        | 📊 Excel | `.xlsx`, `.xls`, `.xlsm` | Semua sheet otomatis dibaca |
+        | 📄 CSV | `.csv` | Auto-detect delimiter |
+        | 📝 JSON | `.json` | Array of objects |
+        | 📃 Word | `.docx` | Extract tabel dari dokumen |
+        | 📕 PDF | `.pdf` | Extract tabel dari halaman |
+        | 📄 Text | `.txt`, `.tsv` | Delimiter otomatis |
+        """)
+
         tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "aset", "absensi", "cuti"])
 
-        with st.expander("📖 Panduan Import"):
+        with st.expander("📖 Panduan Kolom"):
             st.markdown("""
-            **✅ Fitur Auto-Konversi:**
-            Sistem otomatis convert header CSV Anda ke format database.
-
-            | Header CSV Anda | Otomatis jadi |
-            |-----------------|---------------|
-            | `Employee ID` | `employee_id` ✅ |
-            | `Full Name` | `full_name` ✅ |
-            | `Job Position` | `job_position` ✅ |
-            | `Birth Date` | `birth_date` ✅ |
-            | `Mobile Phone` | `mobile_phone` ✅ |
+            **✅ Auto-Konversi Header** — `Employee ID` → `employee_id`, dst.
 
             **🔥 Kolom WAJIB:**
             - `karyawan`: **Employee ID** & **Full Name**
             - `kandidat`: **nama**
             - `aset`: **kode** & **nama**
+            - `absensi`: **karyawan_id** & **tanggal**
+            - `cuti`: **karyawan_id** & **jenis_cuti**
             """)
 
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            delimiter = st.selectbox("Delimiter CSV", [",", ";", "Tab (\\t)", "|"])
-            delim_actual = "\t" if "Tab" in delimiter else delimiter
-        with col_d2:
-            encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "iso-8859-1", "utf-8-sig"])
-
-        f = st.file_uploader(f"📂 Upload file CSV untuk {tabel}", type=["csv", "txt"])
+        f = st.file_uploader(
+            f"📂 Upload file untuk {tabel}",
+            type=["csv", "xlsx", "xls", "xlsm", "json", "docx", "pdf", "txt", "tsv"]
+        )
 
         if f is not None:
-            try:
-                df_imp = pd.read_csv(
-                    f, delimiter=delim_actual, encoding=encoding,
-                    on_bad_lines='skip', engine='python'
-                )
+            filename = f.name
+            ext = filename.lower().split('.')[-1]
 
-                st.success(f"✅ File dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
+            with st.spinner(f"⏳ Membaca file .{ext}..."):
+                try:
+                    df_imp = parse_any_file(f, filename)
 
-                mapping, kolom_db = map_columns(df_imp, tabel)
-
-                st.markdown("### 🔄 Konversi Header")
-                map_data = []
-                tidak_match = []
-                for csv_col, db_col in mapping.items():
-                    if db_col:
-                        map_data.append({"Header CSV Anda": csv_col, "→ Kolom Database": db_col, "Status": "✅ Cocok"})
+                    if df_imp.empty:
+                        st.warning("⚠️ File terbaca tapi tidak ada data. Cek apakah file berisi tabel/data.")
                     else:
-                        tidak_match.append(csv_col)
-                        map_data.append({"Header CSV Anda": csv_col, "→ Kolom Database": "-", "Status": "⚠️ Tidak dipakai"})
-                st.dataframe(pd.DataFrame(map_data), use_container_width=True, hide_index=True)
+                        st.success(f"✅ File **{filename}** berhasil dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
 
-                if tidak_match:
-                    st.warning(f"⚠️ {len(tidak_match)} kolom tidak cocok: **{', '.join(tidak_match[:5])}**...")
+                        mapping, kolom_db = map_columns(df_imp, tabel)
 
-                wajib_map = {
-                    "karyawan": ["employee_id", "full_name"],
-                    "kandidat": ["nama"],
-                    "aset": ["kode", "nama"],
-                    "absensi": ["karyawan_id", "tanggal"],
-                    "cuti": ["karyawan_id", "jenis_cuti"],
-                }
-                wajib = wajib_map.get(tabel, [])
-                mapped_targets = [v for v in mapping.values() if v]
-                missing = [k for k in wajib if k not in mapped_targets]
+                        st.markdown("### 🔄 Konversi Header")
+                        map_data = []
+                        tidak_match = []
+                        for csv_col, db_col in mapping.items():
+                            if db_col:
+                                map_data.append({"Header File": csv_col, "→ Database": db_col, "Status": "✅ Cocok"})
+                            else:
+                                tidak_match.append(csv_col)
+                                map_data.append({"Header File": csv_col, "→ Database": "-", "Status": "⚠️ Diabaikan"})
+                        st.dataframe(pd.DataFrame(map_data), use_container_width=True, hide_index=True)
 
-                if missing:
-                    st.error(f"❌ **Kolom wajib tidak ditemukan**: `{'`, `'.join(missing)}`")
-                else:
-                    st.success(f"✅ Semua kolom wajib ada: {', '.join(wajib)}")
+                        if tidak_match:
+                            with st.expander(f"⚠️ {len(tidak_match)} kolom tidak cocok"):
+                                st.write(tidak_match)
 
-                st.markdown("### 📋 Preview Data")
-                df_preview = df_imp.copy()
-                rename_map = {k: v for k, v in mapping.items() if v}
-                df_preview = df_preview.rename(columns=rename_map)
-                st.dataframe(df_preview.head(10), use_container_width=True, hide_index=True)
+                        wajib_map = {
+                            "karyawan": ["employee_id", "full_name"],
+                            "kandidat": ["nama"],
+                            "aset": ["kode", "nama"],
+                            "absensi": ["karyawan_id", "tanggal"],
+                            "cuti": ["karyawan_id", "jenis_cuti"],
+                        }
+                        wajib = wajib_map.get(tabel, [])
+                        mapped_targets = [v for v in mapping.values() if v]
+                        missing = [k for k in wajib if k not in mapped_targets]
 
-                if st.button("✅ PROSES IMPORT", type="primary"):
-                    if missing:
-                        st.error(f"❌ Kolom wajib hilang: {', '.join(missing)}")
-                    else:
-                        try:
-                            df_filtered = df_imp.rename(columns=rename_map)
-                            df_filtered = df_filtered[[cc for cc in df_filtered.columns if cc in kolom_db]]
+                        if missing:
+                            st.error(f"❌ **Kolom wajib tidak ditemukan**: `{'`, `'.join(missing)}`")
+                        else:
+                            st.success(f"✅ Semua kolom wajib ada: {', '.join(wajib)}")
 
-                            for k in kolom_db:
-                                if k == "id": continue
-                                if k not in df_filtered.columns:
-                                    df_filtered[k] = None
+                        st.markdown("### 📋 Preview Data")
+                        df_preview = df_imp.copy()
+                        rename_map = {k: v for k, v in mapping.items() if v}
+                        df_preview = df_preview.rename(columns=rename_map)
+                        st.dataframe(df_preview.head(10), use_container_width=True, hide_index=True)
 
-                            sukses = 0
-                            gagal = 0
-                            errors = []
-
-                            for idx, row in df_filtered.iterrows():
+                        if st.button("✅ PROSES IMPORT", type="primary"):
+                            if missing:
+                                st.error(f"❌ Kolom wajib hilang: {', '.join(missing)}")
+                            else:
                                 try:
-                                    cols = ", ".join(df_filtered.columns)
-                                    placeholders = ", ".join(["?"] * len(df_filtered.columns))
-                                    sql = f"INSERT INTO {tabel} ({cols}) VALUES ({placeholders})"
-                                    c.execute(sql, tuple(row.values))
-                                    sukses += 1
+                                    df_filtered = df_imp.rename(columns=rename_map)
+                                    df_filtered = df_filtered[[cc for cc in df_filtered.columns if cc in kolom_db]]
+
+                                    for k in kolom_db:
+                                        if k == "id": continue
+                                        if k not in df_filtered.columns:
+                                            df_filtered[k] = None
+
+                                    sukses = 0
+                                    gagal = 0
+                                    errors = []
+
+                                    for idx, row in df_filtered.iterrows():
+                                        try:
+                                            cols = ", ".join(df_filtered.columns)
+                                            placeholders = ", ".join(["?"] * len(df_filtered.columns))
+                                            sql = f"INSERT INTO {tabel} ({cols}) VALUES ({placeholders})"
+                                            c.execute(sql, tuple(row.values))
+                                            sukses += 1
+                                        except Exception as e:
+                                            gagal += 1
+                                            errors.append(f"Baris {idx+2}: {str(e)[:80]}")
+
+                                    conn.commit()
+
+                                    if sukses > 0:
+                                        st.success(f"🎉 **{sukses} data berhasil diimport!**")
+                                        st.balloons()
+                                    if gagal > 0:
+                                        st.warning(f"⚠️ **{gagal} baris gagal**")
+                                        with st.expander(f"Lihat {len(errors)} error"):
+                                            for e in errors[:20]:
+                                                st.caption(f"• {e}")
+                                    if sukses > 0:
+                                        st.rerun()
                                 except Exception as e:
-                                    gagal += 1
-                                    errors.append(f"Baris {idx+2}: {str(e)[:80]}")
+                                    st.error(f"❌ Error database: {e}")
 
-                            conn.commit()
+                except ImportError as e:
+                    st.error(f"❌ **Package belum terinstall**: {e}")
+                    st.info("💡 Tambahkan package di `requirements.txt` lalu push ulang ke GitHub.")
 
-                            if sukses > 0:
-                                st.success(f"🎉 **{sukses} data berhasil diimport!**")
-                                st.balloons()
-                            if gagal > 0:
-                                st.warning(f"⚠️ **{gagal} baris gagal**")
-                                with st.expander(f"Lihat {len(errors)} error"):
-                                    for e in errors[:20]:
-                                        st.caption(f"• {e}")
-                            if sukses > 0:
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Error database: {e}")
-
-            except pd.errors.ParserError as e:
-                st.error(f"❌ **Error parsing CSV**: {str(e)[:200]}")
-                st.info("💡 Coba ganti Delimiter ke **Semicolon** atau **Tab**")
-
-            except UnicodeDecodeError as e:
-                st.error(f"❌ **Error encoding**: {str(e)[:200]}")
-                st.info("💡 Coba ganti Encoding ke **latin-1** atau **utf-8-sig**")
-
-            except Exception as e:
-                st.error(f"❌ **Error**: {str(e)[:300]}")
+                except Exception as e:
+                    st.error(f"❌ **Error**: {str(e)[:500]}")
 
     with tab3:
         st.markdown("### 🗄️ Backup Database")
