@@ -3,7 +3,6 @@ import pandas as pd
 import sqlite3
 import hashlib
 import os
-import base64
 from datetime import datetime, timedelta, date
 import calendar
 import altair as alt
@@ -76,7 +75,6 @@ st.markdown("""
         border-radius: 8px; text-decoration: none; font-weight: 600;
         display: inline-block; font-size: 0.9em; border: none;
     }
-    .wa-btn:hover { background: #128C7E; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         background: white; border-radius: 10px 10px 0 0;
@@ -419,7 +417,7 @@ if pilihan == "🏠 Dashboard HRIS":
 elif pilihan == "👥 Data Karyawan":
     st.markdown('<div class="main-header"><h1>👥 Data Karyawan</h1></div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["➕ Tambah", "📋 Daftar & Edit", "🔍 Detail"])
+    tab1, tab2, tab3 = st.tabs(["➕ Tambah", "📋 Daftar", "🔍 Detail"])
 
     with tab1:
         with st.form("form_karyawan", clear_on_submit=True):
@@ -484,7 +482,7 @@ elif pilihan == "👥 Data Karyawan":
             st.markdown(html, unsafe_allow_html=True)
 
             st.markdown(f"""
-            **NIK**: {d['nik']}  |  **TTL**: {d['tanggal_lahir'] or '-'}  |  **JK**: {d['jenis_kelamin'] or '-'}  
+            **NIK**: {d['nik']}  |  **JK**: {d['jenis_kelamin'] or '-'}  
             **Telepon**: {d['telepon'] or '-'}  |  **Email**: {d['email'] or '-'}  
             **Alamat**: {d['alamat'] or '-'}  
             **Bank**: {d['bank'] or '-'} - {d['rekening'] or '-'}  
@@ -1068,25 +1066,148 @@ elif pilihan == "💾 Import, Export & Backup":
             st.info("Kosong")
 
     with tab2:
-        tabel = st.selectbox("Tabel Target", ["karyawan","kandidat","aset"])
-        f = st.file_uploader(f"Upload CSV untuk {tabel}", type=["csv"])
-        if f:
+        st.subheader("📥 Import CSV")
+        tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "aset", "absensi", "cuti"])
+
+        with st.expander("📖 Format CSV yang Benar"):
+            st.markdown("""
+            **PENTING:**
+            1. Delimiter koma (`,`) atau pilih dari dropdown
+            2. Kalau ada koma dalam data, apit dengan `"..."`  
+               Contoh: `K021,Siti,"Jl. Merdeka No 1, Jakarta",...`
+            3. Header CSV harus sesuai dengan kolom database
+            """)
+
+        # Download template
+        if st.button(f"📥 Download Template {tabel}.csv"):
+            templates = {
+                "karyawan": pd.DataFrame(columns=["nik","nama","jabatan","divisi","tanggal_masuk","tanggal_kontrak_habis","status","telepon","email","alamat","gaji","bank","rekening","status_ptkp","jenis_kelamin","pendidikan"]),
+                "kandidat": pd.DataFrame(columns=["nama","posisi_dilamar","telepon","email","sumber","tanggal_lamar","status","catatan"]),
+                "aset": pd.DataFrame(columns=["kode","nama","kategori","lokasi","kondisi","nilai","tanggal_perolehan","penanggung_jawab","status","catatan"]),
+                "absensi": pd.DataFrame(columns=["karyawan_id","tanggal","jam_masuk","jam_keluar","status","keterangan","terlambat_menit"]),
+                "cuti": pd.DataFrame(columns=["karyawan_id","jenis_cuti","tanggal_mulai","tanggal_selesai","lama_hari","alasan","status"]),
+            }
+            csv_tpl = templates[tabel].to_csv(index=False).encode()
+            st.download_button("⬇️ Klik untuk Download", csv_tpl, f"template_{tabel}.csv", "text/csv")
+
+        st.markdown("---")
+
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            delimiter = st.selectbox("Delimiter CSV", [",", ";", "Tab (\\t)", "|"])
+            delim_actual = "\t" if "Tab" in delimiter else delimiter
+        with col_d2:
+            encoding = st.selectbox("Encoding", ["utf-8", "latin-1", "iso-8859-1", "utf-8-sig"])
+
+        f = st.file_uploader(f"📂 Upload file CSV untuk {tabel}", type=["csv", "txt"])
+
+        if f is not None:
             try:
-                df_imp = pd.read_csv(f)
-                st.dataframe(df_imp.head(), use_container_width=True)
-                if st.button("✅ Proses Impor"):
-                    df_imp.to_sql(tabel, conn, if_exists='append', index=False)
-                    st.success(f"✅ {len(df_imp)} baris diimpor!")
-                    st.rerun()
+                df_imp = pd.read_csv(
+                    f,
+                    delimiter=delim_actual,
+                    encoding=encoding,
+                    on_bad_lines='skip',
+                    engine='python'
+                )
+
+                st.success(f"✅ File berhasil dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
+                st.markdown("### 📋 Preview Data")
+                st.dataframe(df_imp.head(20), use_container_width=True, hide_index=True)
+
+                with st.expander(f"📊 Info Kolom"):
+                    st.write("**Kolom terdeteksi:**")
+                    st.code(", ".join(df_imp.columns.tolist()))
+
+                    kolom_wajib = {
+                        "karyawan": ["nik", "nama"],
+                        "kandidat": ["nama"],
+                        "aset": ["kode", "nama"],
+                        "absensi": ["karyawan_id", "tanggal"],
+                        "cuti": ["karyawan_id", "jenis_cuti"],
+                    }
+                    wajib = kolom_wajib.get(tabel, [])
+                    missing = [k for k in wajib if k not in df_imp.columns]
+
+                    if missing:
+                        st.error(f"❌ Kolom wajib hilang: **{', '.join(missing)}**")
+                    else:
+                        st.success("✅ Semua kolom wajib ada!")
+
+                if st.button("✅ PROSES IMPORT", type="primary"):
+                    if missing:
+                        st.error(f"❌ Tidak bisa import. Kolom wajib hilang: {', '.join(missing)}")
+                    else:
+                        try:
+                            cur = conn.execute(f"PRAGMA table_info({tabel})")
+                            kolom_db = [r[1] for r in cur.fetchall()]
+                            df_filtered = df_imp[[c for c in df_imp.columns if c in kolom_db]]
+
+                            sukses = 0
+                            gagal = 0
+                            errors = []
+
+                            for idx, row in df_filtered.iterrows():
+                                try:
+                                    cols = ", ".join(df_filtered.columns)
+                                    placeholders = ", ".join(["?"] * len(df_filtered.columns))
+                                    sql = f"INSERT INTO {tabel} ({cols}) VALUES ({placeholders})"
+                                    c.execute(sql, tuple(row.values))
+                                    sukses += 1
+                                except Exception as e:
+                                    gagal += 1
+                                    errors.append(f"Baris {idx+2}: {str(e)[:80]}")
+
+                            conn.commit()
+
+                            if sukses > 0:
+                                st.success(f"🎉 **{sukses} data berhasil diimport!**")
+                                st.balloons()
+                            if gagal > 0:
+                                st.warning(f"⚠️ **{gagal} baris gagal**")
+                                with st.expander(f"Lihat {len(errors)} error"):
+                                    for e in errors[:20]:
+                                        st.caption(f"• {e}")
+                            if sukses > 0:
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error database: {e}")
+
+            except pd.errors.ParserError as e:
+                st.error(f"❌ **Error parsing CSV**: {str(e)[:200]}")
+                st.markdown("""
+                **Solusi:**
+                1. Coba ganti **Delimiter** di atas
+                2. Coba ganti **Encoding** ke `latin-1` atau `utf-8-sig`
+                3. Pastikan file CSV tidak rusak
+                """)
+
+            except UnicodeDecodeError as e:
+                st.error(f"❌ **Error encoding**: {str(e)[:200]}")
+                st.info("💡 Coba ganti Encoding menjadi **latin-1** atau **utf-8-sig**")
+
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"❌ **Error**: {str(e)[:300]}")
+                with st.expander("🔍 Lihat Isi File Mentah (debug)"):
+                    try:
+                        f.seek(0)
+                        raw = f.read().decode('utf-8', errors='replace')
+                        lines = raw.split('\n')
+                        st.markdown("**5 baris pertama:**")
+                        for i, line in enumerate(lines[:5]):
+                            st.code(f"Baris {i+1}: {line}")
+                        if len(lines) > 16:
+                            st.markdown("**Baris 17 (yang error):**")
+                            st.code(f"Baris 17: {lines[16]}")
+                    except:
+                        pass
 
     with tab3:
         st.markdown("### 🗄️ Backup Database")
         conn.commit()
         try:
             with open('hris_ga.db', 'rb') as f:
-                st.download_button("💾 Download Backup", f.read(),
+                st.download_button("💾 Download Backup DB", f.read(),
                                   f"backup_hris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
                                   "application/octet-stream")
         except Exception as e:
