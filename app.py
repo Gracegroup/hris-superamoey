@@ -101,19 +101,19 @@ def get_conn():
 conn = get_conn()
 c = conn.cursor()
 
-# AUTO-DROP jika struktur lama berbeda (sekali saja)
+# AUTO-DROP jika struktur lama berbeda
 try:
     c.execute("SELECT employee_id FROM karyawan LIMIT 1")
 except:
     c.execute("DROP TABLE IF EXISTS karyawan")
     conn.commit()
 
-# ========== USERS ==========
+# USERS
 c.execute('''CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT,
     nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 
-# ========== KARYAWAN — 56 KOLOM SESUAI TEMPLATE EMPLOYEE ==========
+# KARYAWAN — 56 kolom sesuai template Employee
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id TEXT UNIQUE,
@@ -175,46 +175,46 @@ c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     gaji REAL DEFAULT 0,
     aktif INTEGER DEFAULT 1)''')
 
-# ========== KANDIDAT ==========
+# KANDIDAT
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, posisi_dilamar TEXT,
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
     status TEXT, catatan TEXT)''')
 
-# ========== RESIGN ==========
+# RESIGN
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT,
     alasan TEXT, jenis TEXT, exit_interview TEXT, clearance_status TEXT)''')
 
-# ========== ASET ==========
+# ASET
 c.execute('''CREATE TABLE IF NOT EXISTS aset (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT UNIQUE, nama TEXT, kategori TEXT,
     lokasi TEXT, kondisi TEXT, nilai REAL, tanggal_perolehan TEXT,
     penanggung_jawab TEXT, status TEXT, catatan TEXT)''')
 
-# ========== RUKO ==========
+# RUKO
 c.execute('''CREATE TABLE IF NOT EXISTS ruko (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, alamat TEXT, status TEXT,
     penyewa TEXT, nilai_sewa REAL, mulai_sewa TEXT, akhir_sewa TEXT, catatan TEXT)''')
 
-# ========== TENANT ==========
+# TENANT
 c.execute('''CREATE TABLE IF NOT EXISTS tenant (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, lokasi TEXT, kamar TEXT,
     penghuni TEXT, biaya_bulanan REAL, status_ci TEXT, mulai TEXT, catatan TEXT)''')
 
-# ========== ABSENSI ==========
+# ABSENSI
 c.execute('''CREATE TABLE IF NOT EXISTS absensi (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal TEXT,
     jam_masuk TEXT, jam_keluar TEXT, status TEXT, keterangan TEXT,
     terlambat_menit INTEGER DEFAULT 0)''')
 
-# ========== CUTI ==========
+# CUTI
 c.execute('''CREATE TABLE IF NOT EXISTS cuti (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, jenis_cuti TEXT,
     tanggal_mulai TEXT, tanggal_selesai TEXT, lama_hari INTEGER,
     alasan TEXT, status TEXT DEFAULT 'Menunggu', approved_by TEXT, approved_at TEXT)''')
 
-# ========== PAYROLL ==========
+# PAYROLL
 c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, periode TEXT,
     gaji_pokok REAL, tunjangan_jabatan REAL, tunjangan_transport REAL,
@@ -225,7 +225,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     pph21 REAL, total_penghasilan_bruto REAL, total_potongan REAL,
     gaji_bersih REAL, status TEXT DEFAULT 'Final', tanggal_proses TEXT)''')
 
-# ========== LOG ==========
+# LOG
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
 conn.commit()
@@ -245,6 +245,41 @@ def log_aksi(u, a, d=""):
 def metric_card(label, value, sub="", warna="card-blue"):
     sub_html = f'<div class="sub">{sub}</div>' if sub else ''
     return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
+
+def normalize_col(col):
+    """Convert header asli ke snake_case"""
+    s = str(col).lower().strip()
+    for ch in [' ', '.', '-', '/', '\\', ':', ',']:
+        s = s.replace(ch, '_')
+    for ch in ['(', ')', '[', ']', '{', '}', '&', "'", '"']:
+        s = s.replace(ch, '')
+    while '__' in s:
+        s = s.replace('__', '_')
+    s = s.strip('_')
+    return s
+
+def map_columns(df, tabel):
+    """Mapping header CSV ke kolom DB"""
+    SPECIAL_MAP = {
+        "nik_npwp_16_digit": "nik_npwp_16",
+        "nik_npwp_16": "nik_npwp_16",
+        "npwp_16_digit_new": "npwp_16_new",
+        "npwp_16_new": "npwp_16_new",
+        "tin_taxpayer_identification_number": "tin",
+    }
+    cur = conn.execute(f"PRAGMA table_info({tabel})")
+    kolom_db = [r[1] for r in cur.fetchall()]
+    mapping = {}
+    for col in df.columns:
+        norm = normalize_col(col)
+        if norm in SPECIAL_MAP:
+            target = SPECIAL_MAP[norm]
+        elif norm in kolom_db:
+            target = norm
+        else:
+            target = None
+        mapping[col] = target
+    return mapping, kolom_db
 
 def hitung_bpjs(gaji_pokok, tunjangan_tetap):
     upah = gaji_pokok + tunjangan_tetap
@@ -374,23 +409,15 @@ if pilihan == "🏠 Dashboard HRIS":
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
-    
-    try:
-        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
-    except:
-        aktif = 0
-    
+
+    aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     diterima = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Diterima'").fetchone()[0]
     ditolak = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Ditolak'").fetchone()[0]
     proses = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Proses'").fetchone()[0]
     tgl_30 = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
     tgl_skrg = datetime.now().strftime("%Y-%m-%d")
-    
-    try:
-        kontrak_habis = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND end_date BETWEEN ? AND ?", (tgl_skrg, tgl_30)).fetchone()[0]
-    except:
-        kontrak_habis = 0
+    kontrak_habis = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND end_date BETWEEN ? AND ?", (tgl_skrg, tgl_30)).fetchone()[0]
 
     html = '<div class="metric-grid">'
     html += metric_card("👥 Karyawan Aktif", f"{aktif}", "belum resign", "card-blue")
@@ -436,7 +463,7 @@ if pilihan == "🏠 Dashboard HRIS":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-header"><h3>📊 Analitik Jabatan & Divisi</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><h3>📊 Analitik Job Position & Organization</h3></div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**👔 Job Position (Aktif)**")
@@ -467,12 +494,11 @@ elif pilihan == "👥 Data Karyawan":
 
     with tab1:
         with st.form("form_karyawan", clear_on_submit=True):
-            st.subheader("📋 Data Karyawan (Sesuai Template Employee)")
-            
+            st.subheader("📋 Data Karyawan")
             col1, col2, col3 = st.columns(3)
             with col1:
-                employee_id = st.text_input("employee_id *")
-                full_name = st.text_input("full_name *")
+                employee_id = st.text_input("Employee ID *")
+                full_name = st.text_input("Full Name *")
                 barcode = st.text_input("Barcode")
                 organization = st.text_input("Organization")
                 job_position = st.text_input("Job Position")
@@ -530,7 +556,7 @@ elif pilihan == "👥 Data Karyawan":
             with col11:
                 grade = st.text_input("Grade")
                 class_ = st.text_input("Class")
-            
+
             keterangan = st.text_area("Keterangan")
 
             if st.form_submit_button("💾 Simpan"):
@@ -543,11 +569,8 @@ elif pilihan == "👥 Data Karyawan":
                                      bank_account_holder, bpjs_ketenagakerjaan, bpjs_kesehatan, nik_npwp_16,
                                      mobile_phone, phone, branch_name, parent_branch_name, religion, gender,
                                      marital_status, blood_type, nationality_code, currency, payment_schedule,
-                                     approval_line, manager, grade, class, cost_center, cost_center_category,
-                                     sbu, npwp_16_new, passport, passport_expiration_date,
-                                     jenis_dok_referensi_bukti_potong, nomor_dok_referensi_bukti_potong,
-                                     tanggal_dok_referensi_bukti_potong, tin, divisi, keterangan, gaji)
-                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                     approval_line, manager, grade, class, tin, divisi, keterangan, gaji)
+                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                   (employee_id, full_name, barcode, organization, job_position,
                                    job_level, str(join_date), resign_date, status_employee, str(end_date), email,
                                    str(birth_date), birth_place, citizen_id_address, residential_address, npwp,
@@ -555,15 +578,14 @@ elif pilihan == "👥 Data Karyawan":
                                    bank_account_holder, bpjs_ketenagakerjaan, bpjs_kesehatan, nik_npwp_16,
                                    mobile_phone, phone, branch_name, parent_branch_name, religion, gender,
                                    marital_status, blood_type, nationality_code, currency, payment_schedule,
-                                   approval_line, manager, grade, class_, "", "", "", "", "", "",
-                                   "", "", "", tin, divisi, keterangan, gaji))
+                                   approval_line, manager, grade, class_, tin, divisi, keterangan, gaji))
                         conn.commit()
                         st.success(f"✅ Karyawan {full_name} disimpan!")
                         st.rerun()
                     except sqlite3.IntegrityError:
                         st.error("❌ Employee ID sudah ada")
                 else:
-                    st.warning("employee_id & full_name wajib diisi")
+                    st.warning("Employee ID & Full Name wajib diisi")
 
     with tab2:
         df_k = pd.read_sql_query("SELECT * FROM karyawan ORDER BY id DESC", conn)
@@ -1175,15 +1197,26 @@ elif pilihan == "💾 Import, Export & Backup":
             st.info("Kosong")
 
     with tab2:
-        st.subheader("📥 Import CSV")
+        st.subheader("📥 Import CSV (Auto-Konversi Header)")
         tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "aset", "absensi", "cuti"])
 
-        with st.expander("📖 Format CSV"):
+        with st.expander("📖 Panduan Import"):
             st.markdown("""
-            **Tips:**
-            1. Delimiter koma (`,`) atau pilih dropdown
-            2. Kalau ada koma dalam data, apit dengan `"..."`  
-            3. Header CSV harus sesuai kolom database (snake_case)
+            **✅ Fitur Auto-Konversi:**
+            Sistem otomatis convert header CSV Anda ke format database.
+
+            | Header CSV Anda | Otomatis jadi |
+            |-----------------|---------------|
+            | `Employee ID` | `employee_id` ✅ |
+            | `Full Name` | `full_name` ✅ |
+            | `Job Position` | `job_position` ✅ |
+            | `Birth Date` | `birth_date` ✅ |
+            | `Mobile Phone` | `mobile_phone` ✅ |
+
+            **🔥 Kolom WAJIB:**
+            - `karyawan`: **Employee ID** & **Full Name**
+            - `kandidat`: **nama**
+            - `aset`: **kode** & **nama**
             """)
 
         col_d1, col_d2 = st.columns(2)
@@ -1202,34 +1235,58 @@ elif pilihan == "💾 Import, Export & Backup":
                     on_bad_lines='skip', engine='python'
                 )
 
-                st.success(f"✅ File berhasil dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
-                st.markdown("### 📋 Preview Data")
-                st.dataframe(df_imp.head(20), use_container_width=True, hide_index=True)
+                st.success(f"✅ File dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
 
-                with st.expander(f"📊 Info Kolom"):
-                    st.code(", ".join(df_imp.columns.tolist()))
-                    kolom_wajib = {
-                        "karyawan": ["employee_id", "full_name"],
-                        "kandidat": ["nama"],
-                        "aset": ["kode", "nama"],
-                        "absensi": ["karyawan_id", "tanggal"],
-                        "cuti": ["karyawan_id", "jenis_cuti"],
-                    }
-                    wajib = kolom_wajib.get(tabel, [])
-                    missing = [k for k in wajib if k not in df_imp.columns]
-                    if missing:
-                        st.error(f"❌ Kolom wajib hilang: **{', '.join(missing)}**")
+                mapping, kolom_db = map_columns(df_imp, tabel)
+
+                st.markdown("### 🔄 Konversi Header")
+                map_data = []
+                tidak_match = []
+                for csv_col, db_col in mapping.items():
+                    if db_col:
+                        map_data.append({"Header CSV Anda": csv_col, "→ Kolom Database": db_col, "Status": "✅ Cocok"})
                     else:
-                        st.success("✅ Semua kolom wajib ada!")
+                        tidak_match.append(csv_col)
+                        map_data.append({"Header CSV Anda": csv_col, "→ Kolom Database": "-", "Status": "⚠️ Tidak dipakai"})
+                st.dataframe(pd.DataFrame(map_data), use_container_width=True, hide_index=True)
+
+                if tidak_match:
+                    st.warning(f"⚠️ {len(tidak_match)} kolom tidak cocok: **{', '.join(tidak_match[:5])}**...")
+
+                wajib_map = {
+                    "karyawan": ["employee_id", "full_name"],
+                    "kandidat": ["nama"],
+                    "aset": ["kode", "nama"],
+                    "absensi": ["karyawan_id", "tanggal"],
+                    "cuti": ["karyawan_id", "jenis_cuti"],
+                }
+                wajib = wajib_map.get(tabel, [])
+                mapped_targets = [v for v in mapping.values() if v]
+                missing = [k for k in wajib if k not in mapped_targets]
+
+                if missing:
+                    st.error(f"❌ **Kolom wajib tidak ditemukan**: `{'`, `'.join(missing)}`")
+                else:
+                    st.success(f"✅ Semua kolom wajib ada: {', '.join(wajib)}")
+
+                st.markdown("### 📋 Preview Data")
+                df_preview = df_imp.copy()
+                rename_map = {k: v for k, v in mapping.items() if v}
+                df_preview = df_preview.rename(columns=rename_map)
+                st.dataframe(df_preview.head(10), use_container_width=True, hide_index=True)
 
                 if st.button("✅ PROSES IMPORT", type="primary"):
                     if missing:
                         st.error(f"❌ Kolom wajib hilang: {', '.join(missing)}")
                     else:
                         try:
-                            cur = conn.execute(f"PRAGMA table_info({tabel})")
-                            kolom_db = [r[1] for r in cur.fetchall()]
-                            df_filtered = df_imp[[cc for cc in df_imp.columns if cc in kolom_db]]
+                            df_filtered = df_imp.rename(columns=rename_map)
+                            df_filtered = df_filtered[[cc for cc in df_filtered.columns if cc in kolom_db]]
+
+                            for k in kolom_db:
+                                if k == "id": continue
+                                if k not in df_filtered.columns:
+                                    df_filtered[k] = None
 
                             sukses = 0
                             gagal = 0
@@ -1263,7 +1320,7 @@ elif pilihan == "💾 Import, Export & Backup":
 
             except pd.errors.ParserError as e:
                 st.error(f"❌ **Error parsing CSV**: {str(e)[:200]}")
-                st.info("💡 Coba ganti Delimiter atau Encoding di atas")
+                st.info("💡 Coba ganti Delimiter ke **Semicolon** atau **Tab**")
 
             except UnicodeDecodeError as e:
                 st.error(f"❌ **Error encoding**: {str(e)[:200]}")
