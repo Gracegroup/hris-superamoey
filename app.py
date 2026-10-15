@@ -101,12 +101,18 @@ def get_conn():
 conn = get_conn()
 c = conn.cursor()
 
-# USERS
+# ==================== RESET & CREATE TABLES ====================
+# Hapus tabel lama jika struktur berbeda (sekali saja saat deploy baru)
+try:
+    c.execute("SELECT tanggal_resign FROM karyawan LIMIT 1")
+except:
+    c.execute("DROP TABLE IF EXISTS karyawan")
+    conn.commit()
+
 c.execute('''CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT,
     nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 
-# KARYAWAN — 54 kolom sesuai data asli
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id TEXT UNIQUE, nama TEXT, barcode TEXT, organization TEXT,
@@ -125,46 +131,38 @@ c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
     nomor_dok_potong TEXT, tanggal_dok_potong TEXT, tin TEXT,
     divisi TEXT, keterangan TEXT, gaji REAL DEFAULT 0, aktif INTEGER DEFAULT 1)''')
 
-# KANDIDAT
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, posisi_dilamar TEXT,
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
     status TEXT, catatan TEXT)''')
 
-# RESIGN
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT,
     alasan TEXT, jenis TEXT, exit_interview TEXT, clearance_status TEXT)''')
 
-# ASET
 c.execute('''CREATE TABLE IF NOT EXISTS aset (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT UNIQUE, nama TEXT, kategori TEXT,
     lokasi TEXT, kondisi TEXT, nilai REAL, tanggal_perolehan TEXT,
     penanggung_jawab TEXT, status TEXT, catatan TEXT)''')
 
-# RUKO
 c.execute('''CREATE TABLE IF NOT EXISTS ruko (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, alamat TEXT, status TEXT,
     penyewa TEXT, nilai_sewa REAL, mulai_sewa TEXT, akhir_sewa TEXT, catatan TEXT)''')
 
-# TENANT
 c.execute('''CREATE TABLE IF NOT EXISTS tenant (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, lokasi TEXT, kamar TEXT,
     penghuni TEXT, biaya_bulanan REAL, status_ci TEXT, mulai TEXT, catatan TEXT)''')
 
-# ABSENSI
 c.execute('''CREATE TABLE IF NOT EXISTS absensi (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal TEXT,
     jam_masuk TEXT, jam_keluar TEXT, status TEXT, keterangan TEXT,
     terlambat_menit INTEGER DEFAULT 0)''')
 
-# CUTI
 c.execute('''CREATE TABLE IF NOT EXISTS cuti (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, jenis_cuti TEXT,
     tanggal_mulai TEXT, tanggal_selesai TEXT, lama_hari INTEGER,
     alasan TEXT, status TEXT DEFAULT 'Menunggu', approved_by TEXT, approved_at TEXT)''')
 
-# PAYROLL
 c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, periode TEXT,
     gaji_pokok REAL, tunjangan_jabatan REAL, tunjangan_transport REAL,
@@ -175,7 +173,6 @@ c.execute('''CREATE TABLE IF NOT EXISTS payroll (
     pph21 REAL, total_penghasilan_bruto REAL, total_potongan REAL,
     gaji_bersih REAL, status TEXT DEFAULT 'Final', tanggal_proses TEXT)''')
 
-# LOG
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (
     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
 conn.commit()
@@ -324,8 +321,14 @@ if pilihan == "🏠 Dashboard HRIS":
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
-    aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE tanggal_resign IS NULL OR tanggal_resign='' OR tanggal_resign='None'").fetchone()[0]
-    resign_cnt = c.execute("SELECT COUNT(*) FROM karyawan WHERE tanggal_resign IS NOT NULL AND tanggal_resign!='' AND tanggal_resign!='None'").fetchone()[0]
+    
+    try:
+        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE tanggal_resign IS NULL OR tanggal_resign='' OR tanggal_resign='None'").fetchone()[0]
+        resign_cnt = c.execute("SELECT COUNT(*) FROM karyawan WHERE tanggal_resign IS NOT NULL AND tanggal_resign!='' AND tanggal_resign!='None'").fetchone()[0]
+    except:
+        aktif = 0
+        resign_cnt = 0
+    
     total = aktif + resign_cnt
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     diterima = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Diterima'").fetchone()[0]
@@ -333,7 +336,11 @@ if pilihan == "🏠 Dashboard HRIS":
     proses = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Proses'").fetchone()[0]
     tgl_30 = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
     tgl_skrg = datetime.now().strftime("%Y-%m-%d")
-    kontrak_habis = c.execute("SELECT COUNT(*) FROM karyawan WHERE (tanggal_resign IS NULL OR tanggal_resign='') AND tanggal_berakhir BETWEEN ? AND ?", (tgl_skrg, tgl_30)).fetchone()[0]
+    
+    try:
+        kontrak_habis = c.execute("SELECT COUNT(*) FROM karyawan WHERE (tanggal_resign IS NULL OR tanggal_resign='') AND tanggal_berakhir BETWEEN ? AND ?", (tgl_skrg, tgl_30)).fetchone()[0]
+    except:
+        kontrak_habis = 0
 
     html = '<div class="metric-grid">'
     html += metric_card("👥 Karyawan Aktif", f"{aktif}", "belum resign", "card-blue")
@@ -424,9 +431,9 @@ elif pilihan == "👥 Data Karyawan":
                 status_karyawan = st.selectbox("Status Karyawan", ["Contract", "Tetap", "Probation", "Magang"])
             with col3:
                 tanggal_berakhir = st.date_input("End Date", date.today() + timedelta(days=365))
-                tanggal_resign = st.date_input("Resign Date (kosongkan jika aktif)", date.today())
                 email = st.text_input("Email")
                 telepon = st.text_input("Mobile Phone")
+                gaji = st.number_input("Gaji (Rp)", min_value=0.0, step=100000.0)
 
             col4, col5, col6 = st.columns(3)
             with col4:
@@ -455,7 +462,7 @@ elif pilihan == "👥 Data Karyawan":
                 bpjs_kesehatan = st.text_input("BPJS Kesehatan")
                 divisi = st.selectbox("Divisi", ["PRODUCT SUPPORT","AFTER MARKET & INVENTORY WAREHOUSE","SALES & OPERATION","HRD","FINANCE","GA","PARTS","Adm.PS"])
                 manager = st.text_input("Manager")
-                gaji = st.number_input("Gaji (Rp)", min_value=0.0, step=100000.0)
+                tanggal_resign = st.text_input("Resign Date (kosongkan jika aktif)", value="")
 
             keterangan = st.text_area("Keterangan")
 
@@ -469,7 +476,7 @@ elif pilihan == "👥 Data Karyawan":
                                      golongan_darah, kewarganegaraan, divisi, manager, gaji, keterangan)
                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                   (employee_id, nama, barcode, organization, jabatan, job_level,
-                                   str(tanggal_masuk), str(tanggal_resign), status_karyawan, str(tanggal_berakhir),
+                                   str(tanggal_masuk), tanggal_resign, status_karyawan, str(tanggal_berakhir),
                                    email, str(tanggal_lahir), tempat_lahir, alamat_ktp, alamat_domisili, npwp,
                                    status_ptkp, bank, rekening, nama_rekening, bpjs_ketenagakerjaan, bpjs_kesehatan,
                                    nik_16, telepon, agama, jenis_kelamin, status_pernikahan, golongan_darah,
