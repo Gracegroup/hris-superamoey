@@ -471,8 +471,8 @@ elif pilihan == "👥 Data Karyawan":
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                employee_id = st.text_input("Employee ID *")
-                full_name = st.text_input("Full Name *")
+                employee_id = st.text_input("employee_id *")
+                full_name = st.text_input("full_name *")
                 barcode = st.text_input("Barcode")
                 organization = st.text_input("Organization")
                 job_position = st.text_input("Job Position")
