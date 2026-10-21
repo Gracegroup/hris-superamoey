@@ -177,7 +177,15 @@ c.execute('''CREATE TABLE IF NOT EXISTS karyawan (
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, posisi_dilamar TEXT,
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
-    status TEXT, catatan TEXT)''')
+    status TEXT, catatan TEXT, jadwal_interview TEXT, status_berkas TEXT, catatan_berkas TEXT)''')
+
+# Migrasi Otomatis untuk tabel kandidat (jika kolom baru belum ada)
+try:
+    c.execute("ALTER TABLE kandidat ADD COLUMN jadwal_interview TEXT")
+    c.execute("ALTER TABLE kandidat ADD COLUMN status_berkas TEXT")
+    c.execute("ALTER TABLE kandidat ADD COLUMN catatan_berkas TEXT")
+except sqlite3.OperationalError:
+    pass # Kolom sudah ada
 
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT,
@@ -1043,16 +1051,23 @@ elif pilihan == "📋 Rekrutmen & CV":
                 posisi = st.text_input("Posisi Dilamar")
                 telepon = st.text_input("Telepon/WA")
                 email = st.text_input("Email")
-            with col2:
                 sumber = st.selectbox("Sumber", ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"])
+            with col2:
                 tgl_lamar = st.date_input("Tanggal Lamar", date.today())
                 status = st.selectbox("Status", ["Proses","Wawancara","Diterima","Ditolak"])
-                catatan = st.text_area("Catatan")
+                tgl_interview = st.date_input("Tanggal Interview (Opsional)")
+                jam_interview = st.time_input("Jam Interview (Opsional)", datetime.strptime("09:00", "%H:%M").time())
+                status_berkas = st.selectbox("Kelengkapan Berkas", ["Lengkap", "Kurang", "Belum Ada"])
+            
+            catatan_berkas = st.text_input("Berkas yang kurang (jika ada)")
+            catatan = st.text_area("Catatan Tambahan")
+
             if st.form_submit_button("💾 Simpan Kandidat Baru"):
                 if nama:
-                    c.execute('''INSERT INTO kandidat (nama,posisi_dilamar,telepon,email,sumber,tanggal_lamar,status,catatan)
-                                 VALUES (?,?,?,?,?,?,?,?)''',
-                              (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan))
+                    jadwal_str = f"{tgl_interview} {jam_interview.strftime('%H:%M')}" if status == "Wawancara" else ""
+                    c.execute('''INSERT INTO kandidat (nama,posisi_dilamar,telepon,email,sumber,tanggal_lamar,status,catatan, jadwal_interview, status_berkas, catatan_berkas)
+                                 VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                              (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan, jadwal_str, status_berkas, catatan_berkas))
                     conn.commit()
                     log_aksi(st.session_state.username, "TAMBAH_KANDIDAT", nama)
                     st.success(f"✅ Kandidat {nama} berhasil disimpan!")
@@ -1068,12 +1083,13 @@ elif pilihan == "📋 Rekrutmen & CV":
             html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
             html += metric_card("Ditolak", str(len(df_k[df_k['status']=='Ditolak'])), "", "card-red")
             html += metric_card("Proses", str(len(df_k[df_k['status']=='Proses'])), "", "card-gold")
+            html += metric_card("Interview", str(len(df_k[df_k['status']=='Wawancara'])), "", "card-purple")
             html += '</div>'
             st.markdown(html, unsafe_allow_html=True)
 
             # 2. Tampilkan Tabel (Hanya untuk dilihat)
             st.markdown("---")
-            st.dataframe(df_k, use_container_width=True, hide_index=True)
+            st.dataframe(df_k[['id', 'nama', 'posisi_dilamar', 'status', 'jadwal_interview', 'status_berkas', 'catatan_berkas', 'telepon']], use_container_width=True, hide_index=True)
 
             # 3. Area Kelola Data (Pakai Selectbox agar dijamin muncul)
             st.markdown("### ⚙️ Kelola Data Kandidat")
@@ -1102,42 +1118,68 @@ elif pilihan == "📋 Rekrutmen & CV":
                         except:
                             db_tgl = date.today()
 
+                        # Ambil data jadwal interview
+                        jadwal_interview_val = selected_data['jadwal_interview'] if selected_data['jadwal_interview'] else ""
+                        try:
+                            if jadwal_interview_val:
+                                dt_int = datetime.strptime(jadwal_interview_val, "%Y-%m-%d %H:%M")
+                                tgl_int_default = dt_int.date()
+                                jam_int_default = dt_int.time()
+                            else:
+                                tgl_int_default = date.today()
+                                jam_int_default = datetime.strptime("09:00", "%H:%M").time()
+                        except:
+                            tgl_int_default = date.today()
+                            jam_int_default = datetime.strptime("09:00", "%H:%M").time()
+
                         col1, col2 = st.columns(2)
                         with col1:
                             edit_nama = st.text_input("Nama Kandidat", value=selected_data['nama'])
-                        with col2:
                             edit_posisi = st.text_input("Posisi Dilamar", value=selected_data['posisi_dilamar'])
-                        
-                        col3, col4 = st.columns(2)
-                        with col3:
                             edit_telepon = st.text_input("Telepon/WA", value=selected_data['telepon'])
-                        with col4:
+                        with col2:
                             edit_email = st.text_input("Email", value=selected_data['email'])
-                        
-                        colA, colB, colC = st.columns(3)
-                        with colA:
                             list_sumber = ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"]
                             idx_sumber = list_sumber.index(selected_data['sumber']) if selected_data['sumber'] in list_sumber else 0
                             edit_sumber = st.selectbox("Sumber", list_sumber, index=idx_sumber)
-                        with colB:
                             edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
-                        with colC:
+                        
+                        st.markdown("---")
+                        colA, colB, colC = st.columns(3)
+                        with colA:
                             list_status = ["Proses","Wawancara","Diterima","Ditolak"]
                             idx_status = list_status.index(selected_data['status']) if selected_data['status'] in list_status else 0
                             edit_status = st.selectbox("Status", list_status, index=idx_status)
+                        with colB:
+                            edit_tgl_int = st.date_input("Tanggal Interview", value=tgl_int_default)
+                        with colC:
+                            edit_jam_int = st.time_input("Jam Interview", value=jam_int_default)
                         
-                        edit_catatan = st.text_area("Catatan", value=selected_data['catatan'], height=100)
+                        st.markdown("---")
+                        colD, colE = st.columns(2)
+                        with colD:
+                            list_berkas = ["Lengkap", "Kurang", "Belum Ada"]
+                            idx_berkas = list_berkas.index(selected_data['status_berkas']) if selected_data['status_berkas'] in list_berkas else 0
+                            edit_status_berkas = st.selectbox("Kelengkapan Berkas", list_berkas, index=idx_berkas)
+                        with colE:
+                            edit_catatan_berkas = st.text_input("Berkas yang kurang (jika ada)", value=selected_data['catatan_berkas'] or "")
+                        
+                        edit_catatan = st.text_area("Catatan Tambahan", value=selected_data['catatan'], height=80)
 
                         # TOMBOL SAVE
                         if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                            jadwal_baru = f"{edit_tgl_int} {edit_jam_int.strftime('%H:%M')}" if edit_status == "Wawancara" else ""
+                            
                             c.execute('''UPDATE kandidat 
-                                         SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, status=?, catatan=?
+                                         SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, 
+                                             status=?, catatan=?, jadwal_interview=?, status_berkas=?, catatan_berkas=?
                                          WHERE id=?''',
-                                      (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), edit_status, edit_catatan, kandidat_id))
+                                      (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), 
+                                       edit_status, edit_catatan, jadwal_baru, edit_status_berkas, edit_catatan_berkas, kandidat_id))
                             conn.commit()
                             log_aksi(st.session_state.username, "EDIT_KANDIDAT", f"ID: {kandidat_id}")
                             st.success("✅ Data berhasil diupdate dan disimpan!")
-                            st.rerun() # Refresh agar tabel di atas ikut berubah
+                            st.rerun()
 
                 # === FITUR DELETE ===
                 with col_delete:
