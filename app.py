@@ -1032,6 +1032,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
 # ==================== 6. REKRUTMEN ====================
 # ==================== 6. REKRUTMEN ====================
 # ==================== 6. REKRUTMEN ====================
+# ==================== 6. REKRUTMEN ====================
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
 
