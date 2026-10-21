@@ -1030,9 +1030,6 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             st.info("Belum ada payroll")
 
 # ==================== 6. REKRUTMEN ====================
-# ==================== 6. REKRUTMEN ====================
-# ==================== 6. REKRUTMEN ====================
-# ==================== 6. REKRUTMEN ====================
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
 
@@ -1062,21 +1059,10 @@ elif pilihan == "📋 Rekrutmen & CV":
                     st.rerun()
 
     with tab2:
-        # Inisialisasi session state untuk menyimpan notifikasi dan ID yang dipilih
-        if "notif_kandidat" not in st.session_state:
-            st.session_state.notif_kandidat = ""
-        if "edit_kandidat_id" not in st.session_state:
-            st.session_state.edit_kandidat_id = None
-
-        # Tampilkan notifikasi sukses (jika ada)
-        if st.session_state.notif_kandidat:
-            st.success(st.session_state.notif_kandidat)
-            st.session_state.notif_kandidat = "" # Reset setelah ditampilkan
-
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         
         if not df_k.empty:
-            # Metrik Atas
+            # 1. Tampilkan Metrik Atas
             html = '<div class="metric-grid">'
             html += metric_card("Total", str(len(df_k)), "", "card-blue")
             html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
@@ -1085,97 +1071,119 @@ elif pilihan == "📋 Rekrutmen & CV":
             html += '</div>'
             st.markdown(html, unsafe_allow_html=True)
 
+            # 2. Tampilkan Tabel (Hanya untuk dilihat)
             st.markdown("---")
-            st.info("👇 **Klik salah satu baris pada tabel di bawah untuk memunculkan menu Edit & Hapus.**")
+            st.dataframe(df_k, use_container_width=True, hide_index=True)
 
-            # Tabel Interaktif
-            event = st.dataframe(
-                df_k, 
-                use_container_width=True, 
-                hide_index=True,
-                on_select="rerun",
-                selection_mode="single-row"
-            )
+            # 3. Area Kelola Data (Pakai Selectbox agar dijamin muncul)
+            st.markdown("### ⚙️ Kelola Data Kandidat")
+            opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_k.iterrows()}
+            
+            # Pilihan default kosong
+            pilihan_edit = st.selectbox("Pilih kandidat yang ingin diedit/dihapus:", ["-- Pilih Kandidat --"] + list(opsi_kandidat.keys()))
 
-            # Menyimpan ID yang diklik ke dalam session state
-            if len(event.selection.rows) > 0:
-                selected_index = event.selection.rows[0]
-                st.session_state.edit_kandidat_id = df_k.iloc[selected_index]['id']
-
-            # Jika ada ID yang tersimpan di session state, tampilkan form edit
-            if st.session_state.edit_kandidat_id is not None:
-                # Ambil data terbaru dari database berdasarkan ID
-                df_selected = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(st.session_state.edit_kandidat_id,))
+            # Jika kandidat dipilih, tampilkan form edit & hapus
+            if pilihan_edit != "-- Pilih Kandidat --":
+                kandidat_id = opsi_kandidat[pilihan_edit]
                 
-                if not df_selected.empty:
-                    selected_data = df_selected.iloc[0]
-                    st.markdown(f"### ⚙️ Kelola Data: **{selected_data['nama']}**")
-                    
-                    col_edit, col_delete = st.columns([3, 1])
+                # Ambil data terbaru dari database berdasarkan ID
+                df_sel = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,))
+                selected_data = df_sel.iloc[0]
 
-                    # === FITUR EDIT & SAVE ===
-                    with col_edit:
-                        with st.form("form_edit_kandidat"):
-                            st.markdown("**✏️ Form Edit Kandidat**")
-                            
-                            try:
-                                db_tgl = datetime.strptime(selected_data['tanggal_lamar'], "%Y-%m-%d").date()
-                            except:
-                                db_tgl = date.today()
+                col_edit, col_delete = st.columns([3, 1])
 
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                edit_nama = st.text_input("Nama Kandidat", value=selected_data['nama'])
-                            with col2:
-                                edit_posisi = st.text_input("Posisi Dilamar", value=selected_data['posisi_dilamar'])
-                            
-                            col3, col4 = st.columns(2)
-                            with col3:
-                                edit_telepon = st.text_input("Telepon/WA", value=selected_data['telepon'])
-                            with col4:
-                                edit_email = st.text_input("Email", value=selected_data['email'])
-                            
-                            colA, colB, colC = st.columns(3)
-                            with colA:
-                                list_sumber = ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"]
-                                idx_sumber = list_sumber.index(selected_data['sumber']) if selected_data['sumber'] in list_sumber else 0
-                                edit_sumber = st.selectbox("Sumber", list_sumber, index=idx_sumber)
-                            with colB:
-                                edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
-                            with colC:
-                                list_status = ["Proses","Wawancara","Diterima","Ditolak"]
-                                idx_status = list_status.index(selected_data['status']) if selected_data['status'] in list_status else 0
-                                edit_status = st.selectbox("Status", list_status, index=idx_status)
-                            
-                            edit_catatan = st.text_area("Catatan", value=selected_data['catatan'], height=100)
+                # === FITUR EDIT & SAVE ===
+                with col_edit:
+                    with st.form("form_edit_kandidat"):
+                        st.markdown(f"**✏️ Form Edit Kandidat: {selected_data['nama']}**")
+                        
+                        try:
+                            db_tgl = datetime.strptime(selected_data['tanggal_lamar'], "%Y-%m-%d").date()
+                        except:
+                            db_tgl = date.today()
 
-                            # TOMBOL SAVE / SIMPAN
-                            if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
-                                c.execute('''UPDATE kandidat 
-                                             SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, status=?, catatan=?
-                                             WHERE id=?''',
-                                          (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), edit_status, edit_catatan, selected_data['id']))
-                                conn.commit()
-                                log_aksi(st.session_state.username, "EDIT_KANDIDAT", f"ID: {selected_data['id']}")
-                                
-                                # Simpan pesan sukses ke session state agar tidak hilang saat rerun
-                                st.session_state.notif_kandidat = f"✅ Data kandidat {edit_nama} berhasil diupdate dan tersimpan di database!"
-                                st.rerun()
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            edit_nama = st.text_input("Nama Kandidat", value=selected_data['nama'])
+                        with col2:
+                            edit_posisi = st.text_input("Posisi Dilamar", value=selected_data['posisi_dilamar'])
+                        
+                        col3, col4 = st.columns(2)
+                        with col3:
+                            edit_telepon = st.text_input("Telepon/WA", value=selected_data['telepon'])
+                        with col4:
+                            edit_email = st.text_input("Email", value=selected_data['email'])
+                        
+                        colA, colB, colC = st.columns(3)
+                        with colA:
+                            list_sumber = ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"]
+                            idx_sumber = list_sumber.index(selected_data['sumber']) if selected_data['sumber'] in list_sumber else 0
+                            edit_sumber = st.selectbox("Sumber", list_sumber, index=idx_sumber)
+                        with colB:
+                            edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
+                        with colC:
+                            list_status = ["Proses","Wawancara","Diterima","Ditolak"]
+                            idx_status = list_status.index(selected_data['status']) if selected_data['status'] in list_status else 0
+                            edit_status = st.selectbox("Status", list_status, index=idx_status)
+                        
+                        edit_catatan = st.text_area("Catatan", value=selected_data['catatan'], height=100)
 
-                    # === FITUR DELETE ===
-                    with col_delete:
-                        st.markdown("**🗑️ Hapus Data**")
-                        st.write("Klik tombol di bawah untuk menghapus kandidat ini secara permanen.")
-                        if st.button("🗑️ Hapus Kandidat", type="primary", use_container_width=True):
-                            c.execute("DELETE FROM kandidat WHERE id=?", (selected_data['id'],))
+                        # TOMBOL SAVE
+                        if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                            c.execute('''UPDATE kandidat 
+                                         SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, status=?, catatan=?
+                                         WHERE id=?''',
+                                      (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), edit_status, edit_catatan, kandidat_id))
                             conn.commit()
-                            log_aksi(st.session_state.username, "HAPUS_KANDIDAT", f"ID: {selected_data['id']}")
-                            
-                            st.session_state.notif_kandidat = f"✅ Kandidat {selected_data['nama']} berhasil dihapus!"
-                            st.session_state.edit_kandidat_id = None # Reset form setelah dihapus
-                            st.rerun()
+                            log_aksi(st.session_state.username, "EDIT_KANDIDAT", f"ID: {kandidat_id}")
+                            st.success("✅ Data berhasil diupdate dan disimpan!")
+                            st.rerun() # Refresh agar tabel di atas ikut berubah
+
+                # === FITUR DELETE ===
+                with col_delete:
+                    st.markdown("**🗑️ Hapus Data**")
+                    st.write("Klik tombol di bawah untuk menghapus kandidat ini secara permanen.")
+                    if st.button("🗑️ Hapus Kandidat", type="primary", use_container_width=True):
+                        c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,))
+                        conn.commit()
+                        log_aksi(st.session_state.username, "HAPUS_KANDIDAT", f"ID: {kandidat_id}")
+                        st.success(f"✅ Kandidat berhasil dihapus!")
+                        st.rerun()
         else:
             st.info("Belum ada kandidat")
+
+# ==================== 7. RESIGN ====================
+elif pilihan == "📉 Resign & Turnover":
+    st.markdown('<div class="main-header"><h1>📉 Resign & Turnover</h1></div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["➕ Input Resign", "📋 Daftar"])
+
+    with tab1:
+        df_k = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE resign_date IS NULL OR resign_date=''", conn)
+        if not df_k.empty:
+            opsi = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in df_k.iterrows()}
+            with st.form("form_resign"):
+                pilih = st.selectbox("Karyawan", list(opsi.keys()))
+                tgl = st.date_input("Tanggal Resign", date.today())
+                jenis = st.selectbox("Jenis", ["Resign Sendiri","PHK","Pensiun","Kontrak Habis"])
+                alasan = st.text_area("Alasan")
+                interview = st.text_area("Hasil Exit Interview")
+                if st.form_submit_button("💾 Simpan"):
+                    kid = opsi[pilih]
+                    c.execute('''INSERT INTO resign (karyawan_id,tanggal_resign,alasan,jenis,exit_interview,clearance_status)
+                                 VALUES (?,?,?,?,?,?)''', (kid, str(tgl), alasan, jenis, interview, "Proses"))
+                    c.execute("UPDATE karyawan SET resign_date=? WHERE id=?", (str(tgl), kid))
+                    conn.commit()
+                    st.success("✅ Data resign disimpan!")
+                    st.rerun()
+
+    with tab2:
+        df_r = pd.read_sql_query("""
+            SELECT r.id, k.employee_id, k.full_name, r.tanggal_resign, r.jenis, r.alasan, r.clearance_status
+            FROM resign r JOIN karyawan k ON r.karyawan_id = k.id ORDER BY r.id DESC
+        """, conn)
+        st.dataframe(df_r, use_container_width=True, hide_index=True)
+
 # ==================== 8. EXIT CLEARANCE ====================
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1></div>', unsafe_allow_html=True)
