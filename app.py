@@ -329,7 +329,6 @@ def parse_json(file):
     if isinstance(data, list):
         return pd.DataFrame(data)
     elif isinstance(data, dict):
-        # Coba cari list di dalamnya
         for key, val in data.items():
             if isinstance(val, list) and len(val) > 0:
                 return pd.DataFrame(val)
@@ -337,7 +336,6 @@ def parse_json(file):
     return pd.DataFrame()
 
 def parse_word(file):
-    """Extract tables dari Word docx"""
     try:
         from docx import Document
     except ImportError:
@@ -357,7 +355,6 @@ def parse_word(file):
             df = pd.DataFrame(rows, columns=header)
             tables_data.append(df)
     if not tables_data:
-        # Fallback: baca paragraf
         lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
         if lines:
             return pd.DataFrame({"text": lines})
@@ -367,7 +364,6 @@ def parse_word(file):
     return pd.concat(tables_data, ignore_index=True)
 
 def parse_pdf(file):
-    """Extract tables dari PDF"""
     raw = file.read()
     file.seek(0)
     try:
@@ -383,16 +379,13 @@ def parse_pdf(file):
                 if tbl and len(tbl) > 1:
                     header = tbl[0]
                     rows = tbl[1:]
-                    # Bersihkan None
                     header = [str(h) if h else f"col_{i}" for i, h in enumerate(header)]
                     rows_clean = [[str(c) if c else "" for c in row] for row in rows]
-                    # Pastikan panjang row = panjang header
                     max_len = len(header)
                     rows_clean = [r + [""] * (max_len - len(r)) for r in rows_clean]
                     rows_clean = [r[:max_len] for r in rows_clean]
                     df = pd.DataFrame(rows_clean, columns=header)
                     tables_data.append(df)
-            # Ambil juga text
             txt = page.extract_text()
             if txt:
                 text_lines.extend(txt.split("\n"))
@@ -408,7 +401,6 @@ def parse_txt(file, delim=None):
     return parse_csv(file, delim=delim)
 
 def parse_any_file(file, filename):
-    """Dispatch parser berdasarkan ekstensi"""
     ext = filename.lower().split('.')[-1]
     if ext in ['csv']:
         return parse_csv(file)
@@ -1038,8 +1030,58 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             st.info("Belum ada payroll")
 
 # ==================== 6. REKRUTMEN ====================
-# ==================== 6. REKRUTMEN ====================
-# ==================== 6. REKRUTMEN ====================
+elif pilihan == "📋 Rekrutmen & CV":
+    st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Aksi"])
+
+    with tab1:
+        with st.form("form_kandidat", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                nama = st.text_input("Nama Kandidat *")
+                posisi = st.text_input("Posisi Dilamar")
+                telepon = st.text_input("Telepon/WA")
+                email = st.text_input("Email")
+            with col2:
+                sumber = st.selectbox("Sumber", ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"])
+                tgl_lamar = st.date_input("Tanggal Lamar", date.today())
+                status = st.selectbox("Status", ["Proses","Wawancara","Diterima","Ditolak"])
+                catatan = st.text_area("Catatan")
+            if st.form_submit_button("💾 Simpan Kandidat Baru"):
+                if nama:
+                    c.execute('''INSERT INTO kandidat (nama,posisi_dilamar,telepon,email,sumber,tanggal_lamar,status,catatan)
+                                 VALUES (?,?,?,?,?,?,?,?)''',
+                              (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan))
+                    conn.commit()
+                    log_aksi(st.session_state.username, "TAMBAH_KANDIDAT", nama)
+                    st.success(f"✅ Kandidat {nama} berhasil disimpan!")
+                    st.rerun()
+
+    with tab2:
+        df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
+        if not df_k.empty:
+            # Metrik Atas
+            html = '<div class="metric-grid">'
+            html += metric_card("Total", str(len(df_k)), "", "card-blue")
+            html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
+            html += metric_card("Ditolak", str(len(df_k[df_k['status']=='Ditolak'])), "", "card-red")
+            html += metric_card("Proses", str(len(df_k[df_k['status']=='Proses'])), "", "card-gold")
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.info("👇 **Klik salah satu baris pada tabel di bawah untuk memunculkan menu Edit & Hapus.**")
+
+            # Tabel Interaktif (Bisa diklik)
+            event = st.dataframe(
+                df_k, 
+                use_container_width=True, 
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row"
+            )
+
             # Logika jika baris diklik
             if len(event.selection.rows) > 0:
                 selected_index = event.selection.rows[0]
@@ -1111,6 +1153,9 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                         log_aksi(st.session_state.username, "HAPUS_KANDIDAT", f"ID: {kandidat_id}")
                         st.success(f"✅ Kandidat {selected_data['nama']} berhasil dihapus!")
                         st.rerun()
+        else:
+            st.info("Belum ada kandidat")
+
 # ==================== 7. RESIGN ====================
 elif pilihan == "📉 Resign & Turnover":
     st.markdown('<div class="main-header"><h1>📉 Resign & Turnover</h1></div>', unsafe_allow_html=True)
