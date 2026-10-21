@@ -179,7 +179,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
     status TEXT, catatan TEXT, jadwal_interview TEXT, status_berkas TEXT, catatan_berkas TEXT)''')
 
-# Migrasi Otomatis untuk tabel kandidat (jika kolom baru belum ada)
+# Migrasi Otomatis untuk tabel kandidat (jika kolom baru belum ada di database lama)
 try:
     c.execute("ALTER TABLE kandidat ADD COLUMN jadwal_interview TEXT")
     c.execute("ALTER TABLE kandidat ADD COLUMN status_berkas TEXT")
@@ -1087,24 +1087,27 @@ elif pilihan == "📋 Rekrutmen & CV":
             html += '</div>'
             st.markdown(html, unsafe_allow_html=True)
 
-            # 2. Tampilkan Tabel (Hanya untuk dilihat)
+            # 2. Tampilkan Tabel
             st.markdown("---")
             st.dataframe(df_k[['id', 'nama', 'posisi_dilamar', 'status', 'jadwal_interview', 'status_berkas', 'catatan_berkas', 'telepon']], use_container_width=True, hide_index=True)
 
-            # 3. Area Kelola Data (Pakai Selectbox agar dijamin muncul)
+            # 3. Area Kelola Data
             st.markdown("### ⚙️ Kelola Data Kandidat")
             opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_k.iterrows()}
             
-            # Pilihan default kosong
             pilihan_edit = st.selectbox("Pilih kandidat yang ingin diedit/dihapus:", ["-- Pilih Kandidat --"] + list(opsi_kandidat.keys()))
 
-            # Jika kandidat dipilih, tampilkan form edit & hapus
             if pilihan_edit != "-- Pilih Kandidat --":
                 kandidat_id = opsi_kandidat[pilihan_edit]
                 
-                # Ambil data terbaru dari database berdasarkan ID
                 df_sel = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,))
                 selected_data = df_sel.iloc[0]
+
+                # === BANNER JADWAL INTERVIEW (Muncul jika sudah ada jadwal) ===
+                if selected_data['jadwal_interview']:
+                    st.success(f"📅 **JADWAL INTERVIEW TERJADWAL:** {selected_data['jadwal_interview']} WITA")
+                elif selected_data['status'] == "Wawancara" and not selected_data['jadwal_interview']:
+                    st.warning("⚠️ Status kandidat sudah 'Wawancara', namun jadwal belum diisi. Silakan isi di form di bawah.")
 
                 col_edit, col_delete = st.columns([3, 1])
 
@@ -1118,7 +1121,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         except:
                             db_tgl = date.today()
 
-                        # Ambil data jadwal interview
+                        # Parsing Tanggal & Jam Interview dari database
                         jadwal_interview_val = selected_data['jadwal_interview'] if selected_data['jadwal_interview'] else ""
                         try:
                             if jadwal_interview_val:
@@ -1145,6 +1148,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                             edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
                         
                         st.markdown("---")
+                        st.markdown("**📅 Jadwal Interview (Wajib jika status = Wawancara)**")
                         colA, colB, colC = st.columns(3)
                         with colA:
                             list_status = ["Proses","Wawancara","Diterima","Ditolak"]
@@ -1156,11 +1160,12 @@ elif pilihan == "📋 Rekrutmen & CV":
                             edit_jam_int = st.time_input("Jam Interview", value=jam_int_default)
                         
                         st.markdown("---")
+                        st.markdown("**📁 Kelengkapan Berkas**")
                         colD, colE = st.columns(2)
                         with colD:
                             list_berkas = ["Lengkap", "Kurang", "Belum Ada"]
                             idx_berkas = list_berkas.index(selected_data['status_berkas']) if selected_data['status_berkas'] in list_berkas else 0
-                            edit_status_berkas = st.selectbox("Kelengkapan Berkas", list_berkas, index=idx_berkas)
+                            edit_status_berkas = st.selectbox("Status Kelengkapan", list_berkas, index=idx_berkas)
                         with colE:
                             edit_catatan_berkas = st.text_input("Berkas yang kurang (jika ada)", value=selected_data['catatan_berkas'] or "")
                         
@@ -1168,6 +1173,7 @@ elif pilihan == "📋 Rekrutmen & CV":
 
                         # TOMBOL SAVE
                         if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                            # Simpan jadwal hanya jika statusnya Wawancara
                             jadwal_baru = f"{edit_tgl_int} {edit_jam_int.strftime('%H:%M')}" if edit_status == "Wawancara" else ""
                             
                             c.execute('''UPDATE kandidat 
