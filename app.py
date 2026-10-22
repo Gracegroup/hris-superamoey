@@ -731,7 +731,7 @@ with st.sidebar:
             st.session_state[k] = False if k == "logged_in" else ""
         st.rerun()
 
-# ==================== 1. DASHBOARD (TIDAK DIUBAH) ====================
+# ==================== 1. DASHBOARD ====================
 if pilihan == "🏠 Dashboard HRIS":
     st.markdown(f"""
     <div class="main-header">
@@ -763,6 +763,18 @@ if pilihan == "🏠 Dashboard HRIS":
     html += metric_card("⚠️ SP Aktif", f"{sp_aktif}", "disiplin", "card-red")
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
+
+    # --- TAMBAHAN BARU: DETAIL OPEN VACANT ---
+    st.markdown('<div class="section-header"><h3>📢 Detail Kebutuhan (Open Vacant)</h3></div>', unsafe_allow_html=True)
+    df_vacant = pd.read_sql_query("""
+        SELECT posisi AS 'Posisi / Level', departemen AS 'Departemen', jumlah_dibutuhkan AS 'Jumlah Dibutuhkan', deskripsi AS 'Keterangan'
+        FROM lowongan WHERE status='Buka' ORDER BY id DESC
+    """, conn)
+    if not df_vacant.empty:
+        st.dataframe(df_vacant, use_container_width=True, hide_index=True)
+    else:
+        st.info("✅ Tidak ada posisi yang sedang open vacant saat ini.")
+    # -----------------------------------------
 
     # Utility KPI
     st.markdown('<div class="section-header"><h3>💡 KPI Utility Melak</h3></div>', unsafe_allow_html=True)
