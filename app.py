@@ -6,9 +6,11 @@ import os
 import io
 import json
 import re
-from datetime import datetime, timedelta, date
 import calendar
 import altair as alt
+import base64
+import zipfile
+from datetime import datetime, timedelta, date
 from urllib.parse import quote
 from io import StringIO
 
@@ -22,6 +24,88 @@ st.set_page_config(
 
 os.makedirs("uploads/foto", exist_ok=True)
 os.makedirs("uploads/dokumen", exist_ok=True)
+
+# ==================== FITUR INSTALL APLIKASI (POJOK KANAN) ====================
+def create_install_button():
+    # 1. Siapkan isi file run.bat (untuk Windows)
+    bat_content = """@echo off
+title Aplikasi HRIS & GA
+color 0A
+echo ========================================================
+echo MENGINSTALL APLIKASI HRIS ^& GA
+echo ========================================================
+echo.
+echo [1/2] Menginstall library yang dibutuhkan (Mohon tunggu)...
+pip install -r requirements.txt
+echo.
+echo [2/2] Menjalankan Aplikasi...
+streamlit run app.py
+pause
+"""
+    
+    # 2. Siapkan isi file requirements.txt
+    req_content = "streamlit\npandas\naltair\nopenpyxl\n"
+    
+    # 3. Baca kode app.py saat ini
+    app_content = ""
+    try:
+        with open(__file__, "r", encoding="utf-8") as f:
+            app_content = f.read()
+    except:
+        app_content = "# Silakan copy-paste kode utama Anda di sini\n"
+
+    # 4. Buat file ZIP di memori
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr("app.py", app_content)
+        zip_file.writestr("requirements.txt", req_content)
+        zip_file.writestr("run.bat", bat_content)
+        zip_file.writestr("CARA_INSTALL.txt", "CARA INSTALL:\n1. Ekstrak file ZIP ini.\n2. Klik 2x file 'run.bat'.\n3. Browser akan otomatis terbuka.\n\n*Pastikan Python sudah terinstall di laptop Anda.")
+        
+    # 5. Konversi ke Base64 untuk link download
+    b64 = base64.b64encode(zip_buffer.getvalue()).decode()
+    
+    # 6. Buat Tombol HTML/CSS di Pojok Kanan Atas
+    html_button = f"""
+    <style>
+        .install-btn {{
+            position: fixed;
+            top: 70px; /* Posisi di bawah menu Streamlit */
+            right: 20px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white !important;
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .install-btn:hover {{
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6);
+            color: white !important;
+        }}
+    </style>
+    <a href="data:application/zip;base64,{b64}" download="Aplikasi_HRIS_GA.zip" class="install-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+          <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+        </svg>
+        Install Aplikasi
+    </a>
+    """
+    st.markdown(html_button, unsafe_allow_html=True)
+
+# Panggil fungsinya
+create_install_button()
+# ==============================================================================
 
 # ==================== CUSTOM CSS ====================
 st.markdown("""
@@ -203,7 +287,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS lowongan (
     jumlah_dibutuhkan INTEGER, status TEXT DEFAULT 'Buka',
     deskripsi TEXT, tanggal_dibuka TEXT, tanggal_ditutup TEXT)''')
 
-# === DATA SEEDING LOWONGAN (UPDATE DENGAN KURNIA BANGUN SAMUDERA) ===
+# === DATA SEEDING LOWONGAN ===
 c.execute("SELECT COUNT(*) FROM lowongan")
 if c.fetchone()[0] == 0:
     tgl_buka = date.today().strftime("%Y-%m-%d")
