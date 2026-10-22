@@ -1370,9 +1370,9 @@ elif pilihan == "📈 Manpower Report":
 
 elif pilihan == "💾 Import, Export & Backup":
     st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1><p>Universal Import untuk Semua Data (CSV/Excel)</p></div>', unsafe_allow_html=True)
-    
+
     tab1, tab2, tab3, tab4 = st.tabs(["📥 Import Manpower", "📦 Universal Import (Excel/CSV)", "📤 Export Data", "💾 Backup Database"])
-    
+
     with tab1:
         st.markdown("### 📥 Import Data Manpower (Format MELAK)")
         file_imp = st.file_uploader("Pilih file Excel Manpower", type=["xlsx", "xls", "xlsm"], key="imp_manpower")
@@ -1401,11 +1401,9 @@ elif pilihan == "💾 Import, Export & Backup":
         tabel_list = ["jobdesk", "ci", "skd", "im", "lowongan", "kandidat", "aset", "utility", "disiplin"]
         target_table = st.selectbox("Pilih Tabel Tujuan", tabel_list)
         
-        # Ambil struktur kolom dari tabel yang dipilih
         c.execute(f"PRAGMA table_info({target_table})")
-        columns = [info[1] for info in c.fetchall() if info[1] != 'id'] # Abaikan kolom ID
+        columns = [info[1] for info in c.fetchall() if info[1] != 'id']
         
-        # Tombol Download Template
         df_template = pd.DataFrame(columns=columns)
         csv_template = df_template.to_csv(index=False).encode('utf-8')
         st.download_button(f"📄 Download Template {target_table.upper()} (CSV)", csv_template, f"template_{target_table}.csv", "text/csv")
@@ -1421,45 +1419,39 @@ elif pilihan == "💾 Import, Export & Backup":
                     else:
                         df_imp = pd.read_excel(file_univ)
                     
-                    # 1. Bersihkan nama kolom (jadikan huruf kecil dan ganti spasi dengan underscore)
                     df_imp.columns = [str(col).lower().strip().replace(' ', '_') for col in df_imp.columns]
                     
-                    # 2. FITUR PINTAR: Jika user pakai NRP, ubah otomatis jadi karyawan_id
                     if ('nrp' in df_imp.columns or 'employee_id' in df_imp.columns) and 'karyawan_id' in columns:
                         nrp_col = 'nrp' if 'nrp' in df_imp.columns else 'employee_id'
                         def get_kid(nrp):
                             res = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (str(nrp).strip(),)).fetchone()
                             return res[0] if res else None
                         df_imp['karyawan_id'] = df_imp[nrp_col].apply(get_kid)
-                        # Hapus kolom NRP agar tidak mengganggu proses insert
                         df_imp = df_imp.drop(columns=['nrp', 'employee_id'], errors='ignore')
                     
-                    # 3. Validasi apakah kolom sudah lengkap
                     missing_cols = [col for col in columns if col not in df_imp.columns]
                     if missing_cols:
                         st.error(f"❌ Kolom berikut tidak ditemukan di file Anda: **{', '.join(missing_cols)}**")
-                        st.info("💡 Pastikan Anda mengisi nama kolom di Excel sesuai dengan Template yang didownload.")
                     else:
                         sukses, gagal = 0, 0
                         for _, row in df_imp.iterrows():
                             try:
-                                # Cek apakah karyawan_id kosong (tidak ditemukan di DB)
                                 if 'karyawan_id' in columns and pd.isna(row['karyawan_id']):
-                                    raise ValueError("NRP tidak ditemukan di Data Karyawan")
+                                    raise ValueError("NRP tidak ditemukan")
                                 
                                 vals = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
                                 ph = ", ".join(["?"] * len(columns))
                                 c.execute(f"INSERT INTO {target_table} ({', '.join(columns)}) VALUES ({ph})", tuple(vals))
                                 sukses += 1
-                            except Exception as row_err:
+                            except Exception:
                                 gagal += 1
-                                
+                        
                         conn.commit()
                         if sukses > 0:
                             st.success(f"✅ Berhasil mengimpor {sukses} baris ke tabel {target_table}!")
                             st.rerun()
                         if gagal > 0:
-                            st.warning(f"⚠️ {gagal} baris gagal diimport (cek apakah NRP valid).")
+                            st.warning(f"⚠️ {gagal} baris gagal diimport.")
                             
                 except Exception as e:
                     st.error(f"❌ Gagal import: {e}")
