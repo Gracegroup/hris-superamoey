@@ -1807,3 +1807,84 @@ st.markdown("""
     © 2024 — All Rights Reserved
 </div>
 """, unsafe_allow_html=True)
+import streamlit as st
+from playwright.sync_api import sync_playwright
+import pandas as pd
+import io
+import time
+
+def tarik_data_uniquip(username, password):
+    with sync_playwright() as p:
+        # Buka browser (headless=False agar Anda bisa melihat prosesnya)
+        browser = p.chromium.launch(headless=False) 
+        page = browser.new_page()
+        
+        try:
+            # 1. BUKA HALAMAN LOGIN
+            page.goto("https://files.uniquip.co.id/asetuniquip/app_Login/")
+            page.wait_for_load_state('networkidle')
+            
+            # 2. ISI FORM LOGIN
+            # Catatan: Jika kolom tidak terisi, cek F12 di kolom User/Password untuk melihat atribut 'name' atau 'id' aslinya.
+            page.fill('input[name="user"]', username) # Ganti jika atribut name-nya berbeda
+            page.fill('input[type="password"]', password)
+            
+            # 3. KLIK TOMBOL SIGN IN
+            # Kita gunakan target berdasarkan 'value="Sign In"' sesuai gambar Anda
+            page.click('input[value="Sign In"]')
+            
+            # Tunggu proses login selesai
+            page.wait_for_load_state('networkidle')
+            time.sleep(2) # Jeda ekstra untuk memastikan dashboard termuat
+            
+            # 4. BUKA HALAMAN ASET
+            page.goto("https://files.uniquip.co.id/asetuniquip/menu_aset/")
+            page.wait_for_load_state('networkidle')
+            
+            # 5. KLIK MENU INVENTORY & LIST ASET
+            page.click('text="Inventory Management"')
+            time.sleep(1) # Tunggu menu dropdown muncul
+            
+            page.click('text="List Aset"')
+            
+            # 6. TUNGGU TABEL MUNCUL DAN AMBIL DATA
+            page.wait_for_selector('table', timeout=15000)
+            time.sleep(3) # Beri waktu agar data tabel termuat sempurna
+            
+            html_content = page.content()
+            tables = pd.read_html(io.StringIO(html_content))
+            
+            browser.close()
+            
+            if len(tables) > 0:
+                return tables[0] # Ambil tabel pertama
+            else:
+                return None
+                
+        except Exception as e:
+            browser.close()
+            raise Exception(f"Error saat robot berjalan: {e}")
+
+# --- TAMPILAN STREAMLIT ---
+st.title("Auto-Sync Data Aset Uniquip")
+
+with st.form("login_form"):
+    st.subheader("Login Uniquip")
+    user = st.text_input("User")
+    pwd = st.text_input("Password", type="password")
+    submit = st.form_submit_button("Tarik Data Aset")
+
+if submit:
+    if user and pwd:
+        with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
+            try:
+                df = tarik_data_uniquip(user, pwd)
+                if df is not None:
+                    st.success("Data berhasil ditarik!")
+                    st.dataframe(df) 
+                else:
+                    st.warning("Tabel tidak ditemukan di halaman.")
+            except Exception as e:
+                st.error(f"Gagal: {e}")
+    else:
+        st.warning("Username dan Password harus diisi!")
