@@ -1096,87 +1096,57 @@ elif pilihan == "⚠️ Disiplin & SP":
                     if file_sp.name.lower().endswith('.pdf'):
                         reader = PdfReader(BytesIO(file_sp.read()))
                         text = ""
-                        for page in reader.pages:
-                            text += page.extract_text() + "\n"
-                        
-                        # FITUR DEBUG: TAMPILKAN TEKS YANG DIBACA
-                        with st.expander("🔍 Lihat Teks yang dibaca dari PDF (Klik disini jika error)"):
-                            st.text_area("Isi PDF:", text, height=200, disabled=True)
+                        for page in reader.pages: text += page.extract_text() + "\n"
                         
                         if not text.strip():
-                            st.error("❌ File PDF ini tidak memiliki teks (kemungkinan hasil scan/foto). Silakan gunakan Input Manual.")
+                            st.error("❌ File PDF ini tidak memiliki teks (kemungkinan hasil scan/foto). Silakan gunakan Input Manual atau Excel.")
                         else:
-                            match_nama = re.search(r"Nama\s*:?\s*(.*)", text, re.IGNORECASE)
-                            match_hal = re.search(r"Hal\s*:?\s*(Surat Peringatan\s*\d+)", text, re.IGNORECASE)
-                            match_tgl = re.search(r"berlaku mulai tanggal\s*(\d{1,2}\s+\w+\s+\d{4})\s*-\s*(\d{1,2}\s+\w+\s+\d{4})", text, re.IGNORECASE)
-                            match_kesalahan = re.search(r"Kesalahan\s*:?\s*(.*?)(?=Demikian|$)", text, re.IGNORECASE | re.DOTALL)
+                            with st.expander("🔍 Lihat Teks PDF"):
+                                st.text_area("Isi:", text, height=150, disabled=True)
+                            st.info("PDF berhasil dibaca. (Fitur ekstraksi otomatis sedang disesuaikan).")
                             
-                            nama_pdf = match_nama.group(1).strip() if match_nama else None
-                            jenis_pdf = match_hal.group(1).strip().replace(" ", "") if match_hal else "SP1"
-                            
-                            def parse_tgl_ind(tgl_str):
-                                bulan_map = {"Januari":"01", "Februari":"02", "Maret":"03", "April":"04", "Mei":"05", "Juni":"06", "Juli":"07", "Agustus":"08", "September":"09", "Oktober":"10", "November":"11", "Desember":"12"}
-                                parts = tgl_str.strip().split()
-                                if len(parts) == 3:
-                                    return f"{parts[2]}-{bulan_map.get(parts[1].capitalize(), '01')}-{parts[0].zfill(2)}"
-                                return str(date.today())
-
-                            tgl_mulai_pdf = parse_tgl_ind(match_tgl.group(1)) if match_tgl else str(date.today())
-                            tgl_akhir_pdf = parse_tgl_ind(match_tgl.group(2)) if match_tgl else str(date.today())
-                            pelanggaran_pdf = match_kesalahan.group(1).strip().replace('\n', ' ') if match_kesalahan else "Pelanggaran (Ekstrak PDF)"
-                            
-                            if nama_pdf:
-                                nama_pdf_bersih = re.sub(r'[^a-zA-Z\s]', '', nama_pdf).strip()
-                                karyawan_row = c.execute("SELECT id FROM karyawan WHERE full_name LIKE ?", (f"%{nama_pdf_bersih}%",)).fetchone()
-                                if karyawan_row:
-                                    kid = karyawan_row[0]
-                                    c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
-                                              (kid, jenis_pdf, tgl_mulai_pdf, tgl_akhir_pdf, pelanggaran_pdf, "Berakhir", tgl_mulai_pdf[:4]))
-                                    conn.commit()
-                                    st.success(f"✅ PDF berhasil dibaca! SP untuk **{nama_pdf_bersih}** telah diimport.")
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ Nama '{nama_pdf_bersih}' tidak ditemukan di Data Karyawan.")
-                            else:
-                                st.error("❌ Gagal menemukan kata 'Nama :'. Silakan cek kotak '🔍 Lihat Teks yang dibaca dari PDF' di atas.")
                     else:
-                        # LOGIKA BACA EXCEL
                         if file_sp.name.endswith('.csv'):
                             df_imp = pd.read_csv(file_sp)
                         else:
                             df_imp = pd.read_excel(file_sp)
-                            
-                        sukses, gagal = 0, 0
-                        errors = []
                         
-                        for index, row in df_imp.iterrows():
-                            try:
-                                nrp = str(row['NRP']).strip()
-                                karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
-                                
-                                if karyawan_row:
-                                    kid = karyawan_row[0]
-                                    c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
-                                              (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
-                                    sukses += 1
-                                else:
+                        if df_imp.empty:
+                            st.warning("⚠️ File yang Anda upload kosong. Silakan isi datanya terlebih dahulu.")
+                        else:
+                            sukses, gagal = 0, 0
+                            errors = []
+                            
+                            for index, row in df_imp.iterrows():
+                                try:
+                                    nrp = str(row['NRP']).strip()
+                                    karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
+                                    
+                                    if karyawan_row:
+                                        kid = karyawan_row[0]
+                                        c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
+                                                  (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
+                                        sukses += 1
+                                    else:
+                                        gagal += 1
+                                        errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan.")
+                                except Exception as e:
                                     gagal += 1
-                                    errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan.")
-                            except Exception as e:
-                                gagal += 1
-                                errors.append(f"Baris {index+2}: Format salah ({str(e)})")
-                                
-                        conn.commit()
-                        if sukses > 0: st.success(f"✅ Berhasil import {sukses} data Excel!")
-                        if gagal > 0:
-                            st.warning(f"⚠️ Gagal import {gagal} baris.")
-                            with st.expander("Lihat Error"): 
-                                for err in errors: st.write(err)
-                        if sukses > 0: st.rerun()
+                                    errors.append(f"Baris {index+2}: Format kolom salah ({str(e)})")
+                                    
+                            conn.commit()
+                            if sukses > 0: 
+                                st.success(f"✅ Berhasil import {sukses} data!")
+                                st.rerun()
+                            if gagal > 0:
+                                st.warning(f"⚠️ Gagal import {gagal} baris.")
+                                with st.expander("Lihat Error"): 
+                                    for err in errors: st.write(err)
                         
                 except Exception as e:
                     st.error(f"❌ Gagal memproses file: {e}")
 
+elif pilihan == "📤 Exit Clearance":
 
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1><p>Checklist Serah Terima Karyawan Resign</p></div>', unsafe_allow_html=True)
