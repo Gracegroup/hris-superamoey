@@ -191,19 +191,16 @@ if c.fetchone()[0] == 0:
     tgl_buka = date.today().strftime("%Y-%m-%d")
     tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
     
-    # 1. Mekanik M2
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
               ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 4, "Buka", 
                "Pengganti: La Wajar, Ronald, Herianus, Fahrul", tgl_buka, tgl_tutup))
-    
-    # 2. Mekanik M3
+               
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
               ("Mekanik 3 (M3)", "PRODUCT SUPPORT", 4, "Buka", 
                "Pengganti: Indra S, Wardiansyah, Iwan, Salman", tgl_buka, tgl_tutup))
                
-    # 3. Warehouseman
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
               ("Warehouseman", "AFTER MARKET & INVENTORY WAREHOUSE", 1, "Buka", 
@@ -1579,21 +1576,105 @@ elif pilihan == "💾 Import, Export & Backup":
 
     with tab2:
         st.subheader("📥 Import File (Multi-Format)")
-        st.markdown("""
-        **Format yang didukung:**
-        | Format | Ekstensi | Keterangan |
-        |--------|----------|------------|
-        | 📊 Excel | `.xlsx`, `.xls`, `.xlsm` | Semua sheet otomatis dibaca |
-        | 📄 CSV | `.csv` | Auto-detect delimiter |
-        | 📝 JSON | `.json` | Array of objects |
-        | 📃 Word | `.docx` | Extract tabel dari dokumen |
-        | 📕 PDF | `.pdf` | Extract tabel dari halaman |
-        | 📄 Text | `.txt`, `.tsv` | Delimiter otomatis |
-        """)
-
+        
         tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "lowongan", "aset", "absensi", "cuti"])
 
-        with st.expander("📖 Panduan Kolom"):
+        # ==========================================
+        # FITUR KHUSUS: IMPORT DATA OPEN INTERVIEW EXCEL DENGAN CEK DUPLIKAT
+        # ==========================================
+        if tabel == "kandidat":
+            st.markdown("---")
+            st.markdown("### 🎯 Import Data Open Interview (Cek Duplikat Otomatis)")
+            st.info("Fitur ini akan membaca sheet **MASTER DATA** dari file Excel Open Interview. Sistem akan mengecek apakah **Nama** dan **No HP** sudah ada di database. Jika sudah ada, data akan dilewati.")
+            
+            f_excel = st.file_uploader("Upload File OPEN INTERVIEW.xlsx", type=["xlsx"], key="open_interview_uploader")
+            
+            if f_excel is not None:
+                if st.button("🚀 Proses Import Open Interview", type="primary"):
+                    try:
+                        with st.spinner("Membaca dan memproses data..."):
+                            # Baca semua sheet untuk berjaga-jaga, tapi fokus ke MASTER DATA
+                            xls = pd.ExcelFile(f_excel)
+                            if 'MASTER DATA' in xls.sheet_names:
+                                df_open = pd.read_excel(xls, sheet_name='MASTER DATA')
+                            else:
+                                # Fallback jika MASTER DATA tidak ada, gabungkan semua
+                                dfs = [pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names if not pd.read_excel(xls, sheet_name=s).empty]
+                                df_open = pd.concat(dfs, ignore_index=True)
+                            
+                            # Normalisasi nama kolom (lowercase, hapus spasi)
+                            df_open.columns = [str(c).lower().strip() for c in df_open.columns]
+                            
+                            sukses = 0
+                            gagal = 0
+                            skip = 0
+                            
+                            for idx, row in df_open.iterrows():
+                                nama = str(row.get('nama', '')).strip()
+                                if pd.isna(nama) or nama == '' or nama.lower() == 'nan':
+                                    continue
+                                
+                                telepon = str(row.get('no hp', row.get('telepon', ''))).strip()
+                                if pd.isna(telepon) or telepon.lower() == 'nan':
+                                    telepon = ''
+                                
+                                # Cek Duplikat berdasarkan Nama DAN No HP
+                                c.execute("SELECT id FROM kandidat WHERE nama = ?", (nama,))
+                                existing = c.fetchone()
+                                
+                                if existing:
+                                    # Jika nama sama, cek no HP (jika no HP kosong di excel, anggap duplikat by nama)
+                                    if telepon == '':
+                                        skip += 1
+                                        continue
+                                    else:
+                                        c.execute("SELECT id FROM kandidat WHERE nama = ? AND telepon = ?", (nama, telepon))
+                                        if c.fetchone():
+                                            skip += 1
+                                            continue
+                                
+                                # Ambil data pendukung
+                                posisi = str(row.get('kategori', row.get('posisi_dilamar', ''))).strip()
+                                if pd.isna(posisi) or posisi.lower() == 'nan': posisi = '-'
+                                
+                                email = str(row.get('email', '')).strip()
+                                if pd.isna(email) or email.lower() == 'nan': email = ''
+                                
+                                hasil_interview = str(row.get('hasil', 'Proses')).strip()
+                                if pd.isna(hasil_interview) or hasil_interview.lower() == 'nan': 
+                                    status_kandidat = 'Proses'
+                                else:
+                                    # Mapping status agar sesuai sistem
+                                    if 'APPROVE' in hasil_interview.upper() or 'DITERIMA' in hasil_interview.upper():
+                                        status_kandidat = 'Diterima'
+                                    elif 'REJECT' in hasil_interview.upper() or 'DITOLAK' in hasil_interview.upper():
+                                        status_kandidat = 'Ditolak'
+                                    else:
+                                        status_kandidat = 'Proses'
+                                
+                                # Insert
+                                try:
+                                    c.execute('''INSERT INTO kandidat (nama, posisi_dilamar, telepon, email, sumber, tanggal_lamar, status, catatan)
+                                                 VALUES (?,?,?,?,?,?,?,?)''',
+                                              (nama, posisi, telepon, email, 'Import Open Interview', str(date.today()), status_kandidat, 'Data dari file Excel Open Interview'))
+                                    sukses += 1
+                                except Exception as e:
+                                    gagal += 1
+                            
+                            conn.commit()
+                            
+                            st.success(f"🎉 **Import Selesai!**")
+                            st.info(f"✅ Berhasil masuk: **{sukses}** data baru")
+                            st.warning(f"⏭️ Dilewati (Sudah ada/Duplikat): **{skip}** data")
+                            if gagal > 0:
+                                st.error(f"❌ Gagal: **{gagal}** data")
+                                
+                    except Exception as e:
+                        st.error(f"❌ Error membaca file: {e}")
+            st.markdown("---")
+        # ==========================================
+
+        with st.expander("📖 Panduan Kolom Generic Import"):
             st.markdown("""
             **✅ Auto-Konversi Header** — `Employee ID` → `employee_id`, dst.
 
@@ -1606,49 +1687,8 @@ elif pilihan == "💾 Import, Export & Backup":
             - `cuti`: **karyawan_id** & **jenis_cuti**
             """)
 
-        # ==========================================
-        # FITUR DOWNLOAD TEMPLATE EXCEL
-        # ==========================================
-        st.markdown("---")
-        st.markdown("### 📥 Download Template Excel Kandidat")
-        st.info("Gunakan template ini untuk mempermudah import data kandidat.")
-        
-        data_kandidat = {
-            'nama': ['Muhammad Rizki Fahrozi', 'Nugroho Isnan Pamungkas', 'Imran Deriawan', 'Agrey Surya Nugraha'],
-            'posisi_dilamar': ['Warehouseman site', 'Mekanik', 'Mekanik', 'Warehouseman Site'],
-            'telepon': ['082199293734', '081326222734', '085342600393', '085348493230'],
-            'email': ['mrizkifahrozi@gmail.com', 'nugrohoisnan211104@gmail.com', 'imrannautika19@gmail.com', 'agreynugraha@gmail.com'],
-            'sumber': ['Job Portal', 'Job Portal', 'Job Portal', 'LinkedIn'],
-            'tanggal_lamar': ['2026-10-17', '2026-10-19', '2026-10-20', '2026-10-19'],
-            'status': ['Proses', 'Proses', 'Proses', 'Proses'],
-            'catatan': [
-                'Lulusan S1 Teknik Informatika. Berpengalaman sebagai Warehouseman di PT Hexindo.',
-                'Lulusan SMK Teknik Kendaraan Ringan. Berpengalaman maintenance heavy equipment di PT Bumi Citra Tractor.',
-                'Mekanik Alat Berat (4+ tahun). Berpengalaman di PT Bumi Citra Tractor Nusantara dan PT Eka Karya Cipta Simpatik.',
-                'Berpengalaman sebagai Admin Workshop, Fueltruck Driver, dan Teknisi. Memiliki SIM B2 Umum.'
-            ],
-            'jadwal_interview': ['', '', '', ''],
-            'status_berkas': ['Lengkap', 'Lengkap', 'Lengkap', 'Lengkap'],
-            'catatan_berkas': ['', '', '', '']
-        }
-        
-        df_template = pd.DataFrame(data_kandidat)
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_template.to_excel(writer, index=False, sheet_name='Data Kandidat')
-        
-        st.download_button(
-            label="📥 Download Excel Kandidat (4 Data)",
-            data=buffer.getvalue(),
-            file_name="data_kandidat_import.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary"
-        )
-        st.markdown("---")
-
         f = st.file_uploader(
-            f"📂 Upload file untuk {tabel}",
+            f"📂 Upload file manual untuk {tabel}",
             type=["csv", "xlsx", "xls", "xlsm", "json", "docx", "pdf", "txt", "tsv"]
         )
 
@@ -1661,9 +1701,9 @@ elif pilihan == "💾 Import, Export & Backup":
                     df_imp = parse_any_file(f, filename)
 
                     if df_imp.empty:
-                        st.warning("⚠️ File terbaca tapi tidak ada data. Cek apakah file berisi tabel/data.")
+                        st.warning("⚠️ File terbaca tapi tidak ada data.")
                     else:
-                        st.success(f"✅ File **{filename}** berhasil dibaca: **{len(df_imp)} baris, {len(df_imp.columns)} kolom**")
+                        st.success(f"✅ File **{filename}** berhasil dibaca: **{len(df_imp)} baris**")
 
                         mapping, kolom_db = map_columns(df_imp, tabel)
 
@@ -1677,10 +1717,6 @@ elif pilihan == "💾 Import, Export & Backup":
                                 tidak_match.append(csv_col)
                                 map_data.append({"Header File": csv_col, "→ Database": "-", "Status": "⚠️ Diabaikan"})
                         st.dataframe(pd.DataFrame(map_data), use_container_width=True, hide_index=True)
-
-                        if tidak_match:
-                            with st.expander(f"⚠️ {len(tidak_match)} kolom tidak cocok"):
-                                st.write(tidak_match)
 
                         wajib_map = {
                             "karyawan": ["employee_id", "full_name"],
@@ -1705,7 +1741,7 @@ elif pilihan == "💾 Import, Export & Backup":
                         df_preview = df_preview.rename(columns=rename_map)
                         st.dataframe(df_preview.head(10), use_container_width=True, hide_index=True)
 
-                        if st.button("✅ PROSES IMPORT", type="primary"):
+                        if st.button("✅ PROSES IMPORT MANUAL", type="primary"):
                             if missing:
                                 st.error(f"❌ Kolom wajib hilang: {', '.join(missing)}")
                             else:
