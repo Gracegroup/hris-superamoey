@@ -614,7 +614,7 @@ elif pilihan == "🔄 Sinkronisasi Uniquip":
                     st.error(f"Terjadi kesalahan: {e}")
         else:
             st.warning("Username dan Password harus diisi!")
-                else: st.warning("⚠️ Nama dan File wajib diisi!")
+    else: st.warning("⚠️ Nama dan File wajib diisi!")
     with tab2:
         st.markdown("### 📦 Universal Import (Bisa untuk semua menu: CI, SKD, Jobdesk, dll)")
         st.info("""
