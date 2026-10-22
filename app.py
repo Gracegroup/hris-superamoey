@@ -448,36 +448,87 @@ elif pilihan == "📋 Rekrutmen & CV":
                     if st.button(f"🗑️ Hapus {s['nama']}", type="primary"):
                         c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,)); conn.commit(); st.rerun()
         else: st.info("Belum ada kandidat")
-    with tab3:
+       with tab3:
         st.markdown("### 📢 Open Vacant")
         with st.form("form_lowongan", clear_on_submit=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                vac_posisi = st.text_input("Posisi *"); vac_dept = st.selectbox("Departemen", ["PRODUCT SUPPORT","AFTER MARKET & INVENTORY WAREHOUSE","PRODUKSI","PLANT","ENGINEERING","LOGISTIC","HRGA","FINANCE","GA","PARTS","Adm.PS","Lainnya"])
+                vac_posisi = st.text_input("Posisi *")
+                vac_dept = st.selectbox("Departemen", ["PRODUCT SUPPORT","AFTER MARKET & INVENTORY WAREHOUSE","PRODUKSI","PLANT","ENGINEERING","LOGISTIC","HRGA","FINANCE","GA","PARTS","Adm.PS","Lainnya"])
             with col2:
-                vac_jumlah = st.number_input("Jumlah *", min_value=1, step=1, value=1); vac_status = st.selectbox("Status", ["Buka", "Tutup"])
+                vac_jumlah = st.number_input("Jumlah *", min_value=1, step=1, value=1)
+                vac_status = st.selectbox("Status", ["Buka", "Tutup"])
             with col3:
-                vac_tgl_buka = st.date_input("Tgl Dibuka", date.today()); vac_tgl_tutup = st.date_input("Batas", date.today() + timedelta(days=30))
+                vac_tgl_buka = st.date_input("Tgl Dibuka", date.today())
+                vac_tgl_tutup = st.date_input("Batas", date.today() + timedelta(days=30))
             vac_deskripsi = st.text_area("Kualifikasi")
             if st.form_submit_button("💾 Tambah", type="primary"):
                 if vac_posisi:
                     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup) VALUES (?,?,?,?,?,?,?)''', (vac_posisi, vac_dept, vac_jumlah, vac_status, vac_deskripsi, str(vac_tgl_buka), str(vac_tgl_tutup)))
                     conn.commit(); st.rerun()
         st.markdown("---")
+        
         df_vac = pd.read_sql_query("SELECT * FROM lowongan ORDER BY id DESC", conn)
         if not df_vac.empty:
             for _, r in df_vac.iterrows():
-                pelamar = c.execute("SELECT COUNT(*) FROM kandidat WHERE posisi_dilamar=?", (r['posisi'],)).fetchone()[0]
-                st.markdown(f"""<div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {'#2a5298' if r['status']=='Buka' else '#eb3349'};"><h4 style="margin:0; color:#1e3c72;">{r['posisi']} <span style="font-size:0.6em; background:#e0e7ff; padding:2px 8px; border-radius:10px;">{r['departemen']}</span></h4><p style="margin:5px 0; font-size:0.9em;">Status: <b>{r['status']}</b> | Batas: {r['tanggal_ditutup']}</p><div style="display:flex; gap:20px; margin-top:10px;"><div><b>Butuh:</b> {r['jumlah_dibutuhkan']}</div><div><b>Pelamar:</b> {pelamar}</div><div style="color:{'#11998e' if pelamar >= r['jumlah_dibutuhkan'] else '#eb3349'};"><b>Sisa:</b> {max(0, r['jumlah_dibutuhkan'] - pelamar)}</div></div></div>""", unsafe_allow_html=True)
-                colA, colB, _ = st.columns([1, 1, 4])
-                with colA:
-                    if r['status'] == 'Buka':
-                        if st.button(f"🔒 Tutup (ID:{r['id']})", key=f"t_{r['id']}"): c.execute("UPDATE lowongan SET status='Tutup' WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
-                    else:
-                        if st.button(f"🔓 Buka (ID:{r['id']})", key=f"b_{r['id']}"): c.execute("UPDATE lowongan SET status='Buka' WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
-                with colB:
-                    if st.button(f"🗑️ Hapus (ID:{r['id']})", key=f"h_{r['id']}"): c.execute("DELETE FROM lowongan WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
-
+                # Cek apakah lowongan ini sedang dalam mode Edit
+                is_editing = st.session_state.get(f"edit_vac_{r['id']}", False)
+                
+                if is_editing:
+                    # ================= MODE EDIT =================
+                    with st.form(f"form_edit_vac_{r['id']}"):
+                        st.markdown(f"**✏️ Edit Lowongan ID: {r['id']}**")
+                        e_col1, e_col2, e_col3 = st.columns(3)
+                        with e_col1:
+                            e_pos = st.text_input("Posisi", value=r['posisi'])
+                            e_dept = st.text_input("Departemen", value=r['departemen'])
+                        with e_col2:
+                            e_jml = st.number_input("Jumlah", min_value=1, step=1, value=int(r['jumlah_dibutuhkan']))
+                            e_status = st.selectbox("Status", ["Buka", "Tutup"], index=0 if r['status']=="Buka" else 1)
+                        with e_col3:
+                            try: dt_buka = datetime.strptime(r['tanggal_dibuka'], "%Y-%m-%d").date()
+                            except: dt_buka = date.today()
+                            try: dt_tutup = datetime.strptime(r['tanggal_ditutup'], "%Y-%m-%d").date()
+                            except: dt_tutup = date.today()
+                            e_tgl_buka = st.date_input("Tgl Dibuka", value=dt_buka)
+                            e_tgl_tutup = st.date_input("Batas", value=dt_tutup)
+                        e_desk = st.text_area("Kualifikasi", value=r['deskripsi'] or "")
+                        
+                        c_save, c_cancel = st.columns(2)
+                        with c_save:
+                            if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                                c.execute('''UPDATE lowongan SET posisi=?, departemen=?, jumlah_dibutuhkan=?, status=?, deskripsi=?, tanggal_dibuka=?, tanggal_ditutup=? WHERE id=?''', 
+                                          (e_pos, e_dept, e_jml, e_status, e_desk, str(e_tgl_buka), str(e_tgl_tutup), r['id']))
+                                conn.commit()
+                                st.session_state[f"edit_vac_{r['id']}"] = False # Matikan mode edit
+                                st.success("✅ Data lowongan diperbarui!")
+                                st.rerun()
+                        with c_cancel:
+                            if st.form_submit_button("❌ Batal", use_container_width=True):
+                                st.session_state[f"edit_vac_{r['id']}"] = False # Matikan mode edit
+                                st.rerun()
+                                
+                else:
+                    # ================= MODE TAMPILAN (CARD) =================
+                    pelamar = c.execute("SELECT COUNT(*) FROM kandidat WHERE posisi_dilamar=?", (r['posisi'],)).fetchone()[0]
+                    st.markdown(f"""<div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {'#2a5298' if r['status']=='Buka' else '#eb3349'};"><h4 style="margin:0; color:#1e3c72;">{r['posisi']} <span style="font-size:0.6em; background:#e0e7ff; padding:2px 8px; border-radius:10px;">{r['departemen']}</span></h4><p style="margin:5px 0; font-size:0.9em;">Status: <b>{r['status']}</b> | Batas: {r['tanggal_ditutup']}</p><div style="display:flex; gap:20px; margin-top:10px;"><div><b>Butuh:</b> {r['jumlah_dibutuhkan']}</div><div><b>Pelamar:</b> {pelamar}</div><div style="color:{'#11998e' if pelamar >= r['jumlah_dibutuhkan'] else '#eb3349'};"><b>Sisa:</b> {max(0, r['jumlah_dibutuhkan'] - pelamar)}</div></div></div>""", unsafe_allow_html=True)
+                    
+                    # Tombol Aksi: Buka/Tutup, Edit, Hapus
+                    colA, colB, colC, _ = st.columns([1, 1, 1, 3])
+                    with colA:
+                        if r['status'] == 'Buka':
+                            if st.button(f"🔒 Tutup", key=f"t_{r['id']}", use_container_width=True): 
+                                c.execute("UPDATE lowongan SET status='Tutup' WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
+                        else:
+                            if st.button(f"🔓 Buka", key=f"b_{r['id']}", use_container_width=True): 
+                                c.execute("UPDATE lowongan SET status='Buka' WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
+                    with colB:
+                        if st.button(f"✏️ Edit", key=f"e_{r['id']}", use_container_width=True):
+                            st.session_state[f"edit_vac_{r['id']}"] = True
+                            st.rerun()
+                    with colC:
+                        if st.button(f"🗑️ Hapus", key=f"h_{r['id']}", use_container_width=True): 
+                            c.execute("DELETE FROM lowongan WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
 elif pilihan == "📁 Arsip Dokumen (E-Filing)":
     st.markdown('<div class="main-header"><h1>📁 Arsip Dokumen (E-Filing)</h1><p>Penyimpanan Dokumen Terpusat</p></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📤 Upload Dokumen", "🗂️ Daftar & Cari Arsip"])
