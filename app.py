@@ -16,7 +16,7 @@ from io import StringIO
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(
-    page_title="HRIS & GA SUPER v3.0",
+    page_title="HRIS & GA Amoeey ",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -27,7 +27,7 @@ os.makedirs("uploads/dokumen", exist_ok=True)
 
 # ==================== FITUR INSTALL APLIKASI ====================
 def create_install_button():
-    bat_content = """@echo off\ntitle Aplikasi HRIS & GA\ncolor 0A\necho ========================================================\necho MENGINSTALL APLIKASI HRIS ^& GA\necho ========================================================\necho.\necho [1/2] Menginstall library yang dibutuhkan (Mohon tunggu)...\npip install -r requirements.txt\necho.\necho [2/2] Menjalankan Aplikasi...\nstreamlit run app.py\npause\n"""
+    bat_content = """@echo off\ntitle Aplikasi HRIS & GA Amoeey \ncolor 0A\necho ========================================================\necho MENGINSTALL APLIKASI HRIS ^& GA\necho ========================================================\necho.\necho [1/2] Menginstall library yang dibutuhkan (Mohon tunggu)...\npip install -r requirements.txt\necho.\necho [2/2] Menjalankan Aplikasi...\nstreamlit run app.py\npause\n"""
     req_content = "streamlit\npandas\naltair\nopenpyxl\n"
     app_content = ""
     try:
