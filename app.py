@@ -1316,48 +1316,93 @@ elif pilihan == "📈 Manpower Report":
         st.dataframe(df_rekap_mp, use_container_width=True, hide_index=True)
 
 elif pilihan == "💾 Import, Export & Backup":
-    st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📥 Import Manpower", "📤 Export Data", "💾 Backup Database"])
+    st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1><p>Universal Import untuk Semua Data (CSV/Excel)</p></div>', unsafe_allow_html=True)
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["📥 Import Manpower", "📦 Universal Import (Excel/CSV)", "📤 Export Data", "💾 Backup Database"])
+    
     with tab1:
         st.markdown("### 📥 Import Data Manpower (Format MELAK)")
-        st.info("File Excel harus memiliki sheet `DATABASE` dengan kolom: NRP, Nama, Jabatan, Departemen, Tgl_Masuk Kerja (DOH), dll.")
-        file_imp = st.file_uploader("Pilih file Excel", type=["xlsx", "xls", "xlsm"])
+        file_imp = st.file_uploader("Pilih file Excel Manpower", type=["xlsx", "xls", "xlsm"], key="imp_manpower")
         if file_imp:
-            if st.button("🚀 Proses Import", type="primary"):
+            if st.button("🚀 Proses Import Manpower", type="primary"):
                 with st.spinner("Mengimpor data..."):
                     try:
                         sukses, gagal, errors = import_data_manpower_melak(file_imp)
                         st.success(f"✅ Sukses: {sukses} baris | Gagal: {gagal} baris")
                         if errors:
-                            with st.expander("⚠️ Detail Error (max 20)"):
-                                for e in errors[:20]:
-                                    st.text(e)
+                            with st.expander("⚠️ Detail Error"): 
+                                for e in errors[:20]: st.text(e)
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Import gagal: {e}")
+
     with tab2:
-        st.markdown("### 📤 Export Tabel ke CSV")
-        tabel_list = ["karyawan", "absensi", "payroll", "cuti", "kandidat", "lowongan", "aset", "utility", "ruko", "tenant", "disiplin", "mutasi", "resign"]
-        table_export = st.selectbox("Pilih Tabel", tabel_list)
+        st.markdown("### 📦 Universal Import (Bisa untuk semua menu: CI, SKD, Jobdesk, dll)")
+        st.info("""
+        **Cara Pakai:**
+        1. Pilih Tabel Tujuan (Misal: `jobdesk`).
+        2. Download Template (kosongkan isinya, lalu isi data Anda di Excel).
+        3. Upload file Excel/CSV yang sudah diisi.
+        """)
+        
+        tabel_list = ["jobdesk", "ci", "skd", "im", "lowongan", "kandidat", "aset", "utility", "disiplin"]
+        target_table = st.selectbox("Pilih Tabel Tujuan", tabel_list)
+        
+        # Ambil struktur kolom dari tabel yang dipilih
+        c.execute(f"PRAGMA table_info({target_table})")
+        columns = [info[1] for info in c.fetchall() if info[1] != 'id'] # Abaikan kolom ID
+        
+        # Tombol Download Template
+        df_template = pd.DataFrame(columns=columns)
+        csv_template = df_template.to_csv(index=False).encode('utf-8')
+        st.download_button(f"📄 Download Template {target_table.upper()} (CSV)", csv_template, f"template_{target_table}.csv", "text/csv")
+        
+        st.markdown("---")
+        file_univ = st.file_uploader(f"Upload file Excel/CSV untuk tabel {target_table.upper()}", type=["xlsx", "csv"])
+        
+        if file_univ is not None:
+            if st.button(f"🚀 Proses Import ke {target_table.upper()}", type="primary"):
+                try:
+                    if file_univ.name.endswith('.csv'):
+                        df_imp = pd.read_csv(file_univ)
+                    else:
+                        df_imp = pd.read_excel(file_univ)
+                    
+                    # Validasi apakah kolom cocok
+                    if not all(col in df_imp.columns for col in columns):
+                        st.error("❌ Format kolom Excel tidak cocok dengan template. Pastikan nama kolom sama persis.")
+                    else:
+                        sukses = 0
+                        for _, row in df_imp.iterrows():
+                            vals = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
+                            ph = ", ".join(["?"] * len(columns))
+                            c.execute(f"INSERT INTO {target_table} ({', '.join(columns)}) VALUES ({ph})", tuple(vals))
+                            sukses += 1
+                        conn.commit()
+                        st.success(f"✅ Berhasil mengimpor {sukses} baris ke tabel {target_table}!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Gagal import: {e}")
+
+    with tab3:
+        st.markdown("### 📤 Export Data ke Excel/CSV")
+        tabel_export = st.selectbox("Pilih Tabel yang akan di-Export", ["karyawan", "absensi", "payroll", "cuti", "kandidat", "lowongan", "aset", "utility", "jobdesk", "ci", "skd"], key="sel_export")
         try:
-            df_exp = pd.read_sql_query(f"SELECT * FROM {table_export}", conn)
-            st.markdown(f"**Preview ({len(df_exp)} baris):**")
-            st.dataframe(df_exp.head(10), use_container_width=True)
+            df_exp = pd.read_sql_query(f"SELECT * FROM {tabel_export}", conn)
+            st.dataframe(df_exp.head(5), use_container_width=True)
             csv_exp = df_exp.to_csv(index=False).encode('utf-8')
-            st.download_button(f"📥 Download {table_export}.csv", csv_exp, f"{table_export}_{date.today()}.csv", "text/csv", type="primary")
+            st.download_button(f"📥 Download {tabel_export.upper()} (CSV)", csv_exp, f"{tabel_export}_{date.today()}.csv", "text/csv", type="primary")
         except Exception as e:
             st.error(f"Gagal export: {e}")
-    with tab3:
+
+    with tab4:
         st.markdown("### 💾 Backup Database")
-        st.info("File `hris_ga.db` berisi seluruh data aplikasi. Simpan file ini untuk backup.")
         try:
             with open('hris_ga.db', 'rb') as f:
                 db_bytes = f.read()
-            st.download_button("📥 Download Backup Database", db_bytes, f"backup_hris_{date.today()}.db", "application/octet-stream", type="primary", use_container_width=True)
-            st.caption(f"Ukuran file: {len(db_bytes) / 1024:.1f} KB")
+            st.download_button("📥 Download Backup Database (SQLite)", db_bytes, f"backup_hris_{date.today()}.db", "application/octet-stream", type="primary", use_container_width=True)
         except Exception as e:
             st.error(f"Gagal membaca database: {e}")
-
 elif pilihan == "👤 Manajemen User":
     st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1><p>Kelola Akses & Keamanan Sistem</p></div>', unsafe_allow_html=True)
 
