@@ -203,22 +203,23 @@ c.execute('''CREATE TABLE IF NOT EXISTS lowongan (
     jumlah_dibutuhkan INTEGER, status TEXT DEFAULT 'Buka',
     deskripsi TEXT, tanggal_dibuka TEXT, tanggal_ditutup TEXT)''')
 
+# === DATA SEEDING LOWONGAN (UPDATE DENGAN KURNIA BANGUN SAMUDERA) ===
 c.execute("SELECT COUNT(*) FROM lowongan")
 if c.fetchone()[0] == 0:
     tgl_buka = date.today().strftime("%Y-%m-%d")
     tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
-              ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 4, "Buka",
-               "Pengganti: La Wajar, Ronald, Herianus, Fahrul", tgl_buka, tgl_tutup))
+              ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 5, "Buka",
+               "Pengganti: La Hajar, Ronald, Herdinus, Galant, Kurnia Bangun Samudera", tgl_buka, tgl_tutup))
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
               ("Mekanik 3 (M3)", "PRODUCT SUPPORT", 4, "Buka",
-               "Pengganti: Indra S, Wardiansyah, Iwan, Salman", tgl_buka, tgl_tutup))
+               "Pengganti: Indra S, Mardiansyah, Fahri A, Ikmal", tgl_buka, tgl_tutup))
     c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
                  VALUES (?,?,?,?,?,?,?)''',
               ("Warehouseman", "AFTER MARKET & INVENTORY WAREHOUSE", 1, "Buka",
-               "Pengganti: PTE_SNB-EBK", tgl_buka, tgl_tutup))
+               "Pengganti: PTE_SNB-EBK / Site PT. SNS-BEK", tgl_buka, tgl_tutup))
     conn.commit()
 
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
