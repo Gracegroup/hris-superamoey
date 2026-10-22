@@ -1393,9 +1393,9 @@ elif pilihan == "💾 Import, Export & Backup":
         st.markdown("### 📦 Universal Import (Bisa untuk semua menu: CI, SKD, Jobdesk, dll)")
         st.info("""
         **Cara Pakai:**
-        1. Pilih Tabel Tujuan (Misal: `jobdesk`).
-        2. Download Template (kosongkan isinya, lalu isi data Anda di Excel).
-        3. Upload file Excel/CSV yang sudah diisi.
+        1. Pilih Tabel Tujuan (Misal: `disiplin`).
+        2. Download Template untuk melihat nama kolom yang benar.
+        3. Upload file Excel/CSV. Sistem akan otomatis menyesuaikan NRP menjadi ID Karyawan.
         """)
         
         tabel_list = ["jobdesk", "ci", "skd", "im", "lowongan", "kandidat", "aset", "utility", "disiplin"]
@@ -1421,19 +1421,46 @@ elif pilihan == "💾 Import, Export & Backup":
                     else:
                         df_imp = pd.read_excel(file_univ)
                     
-                    # Validasi apakah kolom cocok
-                    if not all(col in df_imp.columns for col in columns):
-                        st.error("❌ Format kolom Excel tidak cocok dengan template. Pastikan nama kolom sama persis.")
+                    # 1. Bersihkan nama kolom (jadikan huruf kecil dan ganti spasi dengan underscore)
+                    df_imp.columns = [str(col).lower().strip().replace(' ', '_') for col in df_imp.columns]
+                    
+                    # 2. FITUR PINTAR: Jika user pakai NRP, ubah otomatis jadi karyawan_id
+                    if ('nrp' in df_imp.columns or 'employee_id' in df_imp.columns) and 'karyawan_id' in columns:
+                        nrp_col = 'nrp' if 'nrp' in df_imp.columns else 'employee_id'
+                        def get_kid(nrp):
+                            res = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (str(nrp).strip(),)).fetchone()
+                            return res[0] if res else None
+                        df_imp['karyawan_id'] = df_imp[nrp_col].apply(get_kid)
+                        # Hapus kolom NRP agar tidak mengganggu proses insert
+                        df_imp = df_imp.drop(columns=['nrp', 'employee_id'], errors='ignore')
+                    
+                    # 3. Validasi apakah kolom sudah lengkap
+                    missing_cols = [col for col in columns if col not in df_imp.columns]
+                    if missing_cols:
+                        st.error(f"❌ Kolom berikut tidak ditemukan di file Anda: **{', '.join(missing_cols)}**")
+                        st.info("💡 Pastikan Anda mengisi nama kolom di Excel sesuai dengan Template yang didownload.")
                     else:
-                        sukses = 0
+                        sukses, gagal = 0, 0
                         for _, row in df_imp.iterrows():
-                            vals = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
-                            ph = ", ".join(["?"] * len(columns))
-                            c.execute(f"INSERT INTO {target_table} ({', '.join(columns)}) VALUES ({ph})", tuple(vals))
-                            sukses += 1
+                            try:
+                                # Cek apakah karyawan_id kosong (tidak ditemukan di DB)
+                                if 'karyawan_id' in columns and pd.isna(row['karyawan_id']):
+                                    raise ValueError("NRP tidak ditemukan di Data Karyawan")
+                                
+                                vals = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
+                                ph = ", ".join(["?"] * len(columns))
+                                c.execute(f"INSERT INTO {target_table} ({', '.join(columns)}) VALUES ({ph})", tuple(vals))
+                                sukses += 1
+                            except Exception as row_err:
+                                gagal += 1
+                                
                         conn.commit()
-                        st.success(f"✅ Berhasil mengimpor {sukses} baris ke tabel {target_table}!")
-                        st.rerun()
+                        if sukses > 0:
+                            st.success(f"✅ Berhasil mengimpor {sukses} baris ke tabel {target_table}!")
+                            st.rerun()
+                        if gagal > 0:
+                            st.warning(f"⚠️ {gagal} baris gagal diimport (cek apakah NRP valid).")
+                            
                 except Exception as e:
                     st.error(f"❌ Gagal import: {e}")
 
@@ -1456,6 +1483,7 @@ elif pilihan == "💾 Import, Export & Backup":
             st.download_button("📥 Download Backup Database (SQLite)", db_bytes, f"backup_hris_{date.today()}.db", "application/octet-stream", type="primary", use_container_width=True)
         except Exception as e:
             st.error(f"Gagal membaca database: {e}")
+
 elif pilihan == "👤 Manajemen User":
     st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1><p>Kelola Akses & Keamanan Sistem</p></div>', unsafe_allow_html=True)
 
