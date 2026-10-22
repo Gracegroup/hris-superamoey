@@ -13,7 +13,7 @@ import altair as alt
 import base64
 import zipfile
 from datetime import datetime, timedelta, date
-from urllib.parse  quote
+from urllib.parse import quote
 from io import StringIO
 
 # Instal browser Chromium untuk Playwright di Streamlit Cloud
@@ -202,6 +202,7 @@ def tarik_data_uniquip(user, pwd):
         except Exception as e:
             browser.close()
             return str(e)
+
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
 def format_rp(n):
     try: return f"Rp {float(n):,.0f}".replace(",", ".")
@@ -283,6 +284,7 @@ def parse_any_file(file, filename):
     elif ext in ['xlsx', 'xls', 'xlsm']: return parse_excel(file)
     elif ext in ['txt', 'tsv']: return parse_csv(file)
     else: raise Exception(f"Format .{ext} tidak didukung")
+
 def import_data_manpower_melak(file):
     raw = file.read(); file.seek(0)
     xls = pd.ExcelFile(io.BytesIO(raw))
@@ -328,7 +330,6 @@ def import_data_manpower_melak(file):
                     if xls_col in df.columns and db_col not in data:
                         val = row.get(xls_col)
                         if pd.notna(val) and str(val).strip().lower() not in ['nan', 'none', '']:
-                            # Format tanggal khusus untuk kolom date
                             if db_col in ['join_date','sign_date','end_date','resign_date','birth_date','tanggal_dok_referensi_bukti_potong']:
                                 try: data[db_col] = pd.to_datetime(val).strftime('%Y-%m-%d')
                                 except: data[db_col] = str(val).strip()
@@ -336,7 +337,6 @@ def import_data_manpower_melak(file):
                 
                 if not data.get('full_name'): continue
                 
-                # Simpan ke Database (Cek jika NRP sudah ada, maka Update. Jika belum, Insert)
                 c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,))
                 exists = c.fetchone()
                 if exists:
@@ -355,7 +355,6 @@ def import_data_manpower_melak(file):
 
     # --- JIKA FORMAT LAMA (MELAK) ---
     else:
-        # (Kode lama Anda yang asli, biarkan saja di bawah ini)
         df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet, header=None, skiprows=2)
         df.columns = df.iloc[0].astype(str).str.strip()
         df = df.iloc[1:].reset_index(drop=True)
