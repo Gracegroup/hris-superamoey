@@ -1209,53 +1209,277 @@ elif pilihan == "💾 Import, Export & Backup":
             st.error(f"Gagal membaca database: {e}")
 
 elif pilihan == "👤 Manajemen User":
+    st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1><p>Kelola Akses & Keamanan Sistem</p></div>', unsafe_allow_html=True)
+
+    # ---------- Fungsi helper lokal ----------
+    def cek_kekuatan_password(pwd):
+        """Return (skor 0-4, label, warna)."""
+        skor = 0
+        if len(pwd) >= 8: skor += 1
+        if re.search(r"[A-Z]", pwd): skor += 1
+        if re.search(r"[a-z]", pwd): skor += 1
+        if re.search(r"[0-9]", pwd): skor += 1
+        if re.search(r"[^A-Za-z0-9]", pwd): skor += 1
+        skor = min(skor, 4)
+        label = {0: "Sangat Lemah", 1: "Lemah", 2: "Cukup", 3: "Kuat", 4: "Sangat Kuat"}[skor]
+        warna = {0: "#eb3349", 1: "#f45c43", 2: "#f7971e", 3: "#43e97b", 4: "#11998e"}[skor]
+        return skor, label, warna
+
+    def render_strength_bar(pwd):
+        if not pwd:
+            return
+        skor, label, warna = cek_kekuatan_password(pwd)
+        persen = (skor / 4) * 100
+        st.markdown(f"""
+        <div style="background:#e5e7eb; border-radius:6px; height:8px; overflow:hidden; margin-top:4px;">
+            <div style="width:{persen}%; background:{warna}; height:100%; transition:width .3s;"></div>
+        </div>
+        <div style="font-size:0.8em; color:{warna}; margin-top:3px;">Kekuatan: <b>{label}</b></div>
+        """, unsafe_allow_html=True)
+
+    # ---------- Cek akses ----------
     if st.session_state.role != "admin":
-        st.error("⛔ Hanya admin yang dapat mengakses halaman ini")
+        st.warning("⛔ Anda hanya dapat mengubah password sendiri melalui tab **🔑 Ganti Password**.")
+        tab_self_pwd_only = st.tabs(["🔑 Ganti Password Sendiri"])
+        with tab_self_pwd_only[0]:
+            with st.form("form_self_pwd_limited"):
+                old_p = st.text_input("Password Lama *", type="password", key="sp_old_lim")
+                new_p = st.text_input("Password Baru *", type="password", key="sp_new_lim")
+                conf_p = st.text_input("Konfirmasi Password Baru *", type="password", key="sp_conf_lim")
+                if st.form_submit_button("💾 Simpan", type="primary"):
+                    row = c.execute("SELECT password FROM users WHERE username=?", (st.session_state.username,)).fetchone()
+                    if not row or row[0] != hash_password(old_p):
+                        st.error("❌ Password lama salah")
+                    elif len(new_p) < 6:
+                        st.error("❌ Password baru minimal 6 karakter")
+                    elif new_p != conf_p:
+                        st.error("❌ Konfirmasi password tidak cocok")
+                    else:
+                        c.execute("UPDATE users SET password=? WHERE username=?", (hash_password(new_p), st.session_state.username))
+                        conn.commit(); log_aksi(st.session_state.username, "GANTI PASSWORD SENDIRI")
+                        st.success("✅ Password berhasil diubah"); st.rerun()
     else:
-        st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1></div>', unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["➕ Tambah User", "📋 Daftar User"])
+        # ---------- STATISTIK USER ----------
+        total_user = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        user_aktif = c.execute("SELECT COUNT(*) FROM users WHERE aktif=1").fetchone()[0]
+        user_nonaktif = c.execute("SELECT COUNT(*) FROM users WHERE aktif=0").fetchone()[0]
+        jml_admin = c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+
+        html = '<div class="metric-grid">'
+        html += metric_card("👥 Total User", str(total_user), "terdaftar", "card-blue")
+        html += metric_card("✅ Aktif", str(user_aktif), "bisa login", "card-green")
+        html += metric_card("🚫 Non-Aktif", str(user_nonaktif), "diblokir", "card-red")
+        html += metric_card("🛡️ Admin", str(jml_admin), "role tertinggi", "card-purple")
+        html += '</div>'
+        st.markdown(html, unsafe_allow_html=True)
+
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "➕ Tambah User",
+            "✏️ Edit User",
+            "🔑 Ganti Password Sendiri",
+            "📋 Daftar User",
+            "📜 Log per User"
+        ])
+
+        # ---------- TAB 1: TAMBAH USER ----------
         with tab1:
-            with st.form("form_user", clear_on_submit=True):
+            st.markdown("### ➕ Tambah User Baru")
+            with st.form("form_user_baru", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 with c1:
-                    u_username = st.text_input("Username *")
+                    u_username = st.text_input("Username *", placeholder="min. 3 karakter, tanpa spasi")
                     u_nama = st.text_input("Nama Lengkap *")
                 with c2:
-                    u_password = st.text_input("Password *", type="password")
-                    u_role = st.selectbox("Role", ["admin", "hrd", "ga", "staff"])
-                if st.form_submit_button("💾 Tambah User", type="primary"):
-                    if u_username and u_nama and u_password:
+                    u_password = st.text_input("Password *", type="password", help="min. 6 karakter")
+                    u_password2 = st.text_input("Konfirmasi Password *", type="password")
+                u_role = st.selectbox("Role", ["staff", "hrd", "ga", "admin"], index=0,
+                                      help="admin = akses penuh termasuk manajemen user")
+                if u_password:
+                    render_strength_bar(u_password)
+                if st.form_submit_button("💾 Tambah User", type="primary", use_container_width=True):
+                    error_flag = False
+                    if not u_username or not u_nama or not u_password:
+                        st.error("⚠️ Semua field bertanda * wajib diisi"); error_flag = True
+                    elif len(u_username) < 3:
+                        st.error("⚠️ Username minimal 3 karakter"); error_flag = True
+                    elif " " in u_username:
+                        st.error("⚠️ Username tidak boleh mengandung spasi"); error_flag = True
+                    elif not re.match(r"^[A-Za-z0-9_.]+$", u_username):
+                        st.error("⚠️ Username hanya boleh huruf, angka, titik, underscore"); error_flag = True
+                    elif len(u_password) < 6:
+                        st.error("⚠️ Password minimal 6 karakter"); error_flag = True
+                    elif u_password != u_password2:
+                        st.error("❌ Konfirmasi password tidak cocok"); error_flag = True
+                    if not error_flag:
                         try:
-                            c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hash_password(u_password), u_nama, u_role))
-                            conn.commit(); st.success(f"✅ User {u_username} berhasil ditambahkan!"); st.rerun()
+                            c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)",
+                                      (u_username, hash_password(u_password), u_nama, u_role))
+                            conn.commit()
+                            log_aksi(st.session_state.username, "TAMBAH USER", f"{u_username} ({u_role})")
+                            st.success(f"✅ User `{u_username}` berhasil ditambahkan"); st.rerun()
                         except sqlite3.IntegrityError:
-                            st.error("❌ Username sudah digunakan")
-                    else:
-                        st.error("⚠️ Semua field wajib diisi")
+                            st.error("❌ Username sudah digunakan, pilih yang lain")
+
+        # ---------- TAB 2: EDIT USER ----------
         with tab2:
-            df_users = pd.read_sql_query("SELECT id, username AS Username, nama_lengkap AS 'Nama Lengkap', role AS Role, aktif AS Aktif FROM users ORDER BY id", conn)
+            st.markdown("### ✏️ Edit User")
+            df_users_edit = pd.read_sql_query("SELECT id, username, nama_lengkap, role, aktif FROM users ORDER BY id", conn)
+            if df_users_edit.empty:
+                st.info("Belum ada user")
+            else:
+                opt_edit_user = {f"{r['username']} — {r['nama_lengkap']} ({r['role']})": r['id'] for _, r in df_users_edit.iterrows()}
+                pilih_edit_user = st.selectbox("Pilih User yang Akan Diedit", ["-- Pilih --"] + list(opt_edit_user.keys()), key="sel_edit_user")
+                if pilih_edit_user != "-- Pilih --":
+                    uid = opt_edit_user[pilih_edit_user]
+                    u_row = pd.read_sql_query("SELECT * FROM users WHERE id=?", conn, params=(uid,)).iloc[0]
+                    st.markdown(f"**Mengedit:** `{u_row['username']}` (ID #{uid})")
+                    with st.form("form_edit_user"):
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            e_username = st.text_input("Username", value=u_row['username'])
+                            e_nama_lengkap = st.text_input("Nama Lengkap", value=u_row['nama_lengkap'])
+                        with ec2:
+                            role_list = ["staff", "hrd", "ga", "admin"]
+                            e_role = st.selectbox("Role", role_list,
+                                                  index=role_list.index(u_row['role']) if u_row['role'] in role_list else 0)
+                            e_aktif = st.checkbox("Aktif (bisa login)", value=bool(u_row['aktif']))
+                        st.markdown("---")
+                        st.markdown("**🔐 Reset Password (opsional — biarkan kosong jika tidak diubah)**")
+                        rc1, rc2 = st.columns(2)
+                        with rc1:
+                            e_new_pwd = st.text_input("Password Baru", type="password", key="edit_new_pwd")
+                        with rc2:
+                            e_new_pwd2 = st.text_input("Konfirmasi Password Baru", type="password", key="edit_new_pwd2")
+                        if e_new_pwd:
+                            render_strength_bar(e_new_pwd)
+                        if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                            err = False
+                            if not e_username or not e_nama_lengkap:
+                                st.error("⚠️ Username & Nama wajib diisi"); err = True
+                            elif " " in e_username:
+                                st.error("⚠️ Username tidak boleh ada spasi"); err = True
+                            elif e_new_pwd and len(e_new_pwd) < 6:
+                                st.error("⚠️ Password baru minimal 6 karakter"); err = True
+                            elif e_new_pwd and e_new_pwd != e_new_pwd2:
+                                st.error("❌ Konfirmasi password baru tidak cocok"); err = True
+                            # Proteksi: jangan sampai admin terakhir dinonaktifkan/di-demote
+                            if not err:
+                                if u_row['role'] == 'admin' and (e_role != 'admin' or not e_aktif):
+                                    admin_aktif = c.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND aktif=1").fetchone()[0]
+                                    if admin_aktif <= 1:
+                                        st.error("⛔ Tidak bisa — ini admin aktif terakhir. Buat admin lain dulu.")
+                                        err = True
+                            if not err:
+                                try:
+                                    if e_new_pwd:
+                                        c.execute("UPDATE users SET username=?, nama_lengkap=?, role=?, aktif=?, password=? WHERE id=?",
+                                                  (e_username, e_nama_lengkap, e_role, 1 if e_aktif else 0, hash_password(e_new_pwd), uid))
+                                    else:
+                                        c.execute("UPDATE users SET username=?, nama_lengkap=?, role=?, aktif=? WHERE id=?",
+                                                  (e_username, e_nama_lengkap, e_role, 1 if e_aktif else 0, uid))
+                                    conn.commit()
+                                    log_aksi(st.session_state.username, "EDIT USER",
+                                             f"ID#{uid} → {e_username} ({e_role}){' + reset pwd' if e_new_pwd else ''}")
+                                    # Kalau yang diedit adalah diri sendiri → update session
+                                    if u_row['username'] == st.session_state.username:
+                                        st.session_state.username = e_username
+                                        st.session_state.nama = e_nama_lengkap
+                                        st.session_state.role = e_role
+                                    st.success("✅ Perubahan tersimpan"); st.rerun()
+                                except sqlite3.IntegrityError:
+                                    st.error("❌ Username sudah dipakai user lain")
+                    if uid != 1:
+                        if st.button(f"🗑️ Hapus User `{u_row['username']}`", type="primary"):
+                            c.execute("DELETE FROM users WHERE id=?", (uid,))
+                            conn.commit(); log_aksi(st.session_state.username, "HAPUS USER", f"{u_row['username']}")
+                            st.success("User dihapus"); st.rerun()
+                    else:
+                        st.info("ℹ️ User admin default (ID #1) tidak dapat dihapus — hanya bisa diedit.")
+
+        # ---------- TAB 3: GANTI PASSWORD SENDIRI ----------
+        with tab3:
+            st.markdown("### 🔑 Ganti Password Sendiri")
+            st.caption(f"Anda login sebagai: **{st.session_state.username}** ({st.session_state.role})")
+            with st.form("form_self_pwd"):
+                old_self = st.text_input("Password Lama *", type="password", key="self_old")
+                new_self = st.text_input("Password Baru *", type="password", key="self_new")
+                new_self2 = st.text_input("Konfirmasi Password Baru *", type="password", key="self_new2")
+                if new_self:
+                    render_strength_bar(new_self)
+                if st.form_submit_button("💾 Ubah Password", type="primary", use_container_width=True):
+                    row = c.execute("SELECT password FROM users WHERE username=?", (st.session_state.username,)).fetchone()
+                    if not row or row[0] != hash_password(old_self):
+                        st.error("❌ Password lama salah")
+                    elif len(new_self) < 6:
+                        st.error("❌ Password baru minimal 6 karakter")
+                    elif new_self != new_self2:
+                        st.error("❌ Konfirmasi tidak cocok")
+                    elif new_self == old_self:
+                        st.error("❌ Password baru harus berbeda dari yang lama")
+                    else:
+                        c.execute("UPDATE users SET password=? WHERE username=?", (hash_password(new_self), st.session_state.username))
+                        conn.commit(); log_aksi(st.session_state.username, "GANTI PASSWORD SENDIRI")
+                        st.success("✅ Password berhasil diubah. Gunakan password baru saat login berikutnya.")
+
+        # ---------- TAB 4: DAFTAR USER ----------
+        with tab4:
+            st.markdown("### 📋 Daftar User")
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                filter_role = st.selectbox("Filter Role", ["Semua", "admin", "hrd", "ga", "staff"])
+            with fc2:
+                filter_status_user = st.selectbox("Filter Status", ["Semua", "Aktif", "Non-Aktif"])
+            q_users = """SELECT u.id, u.username, u.nama_lengkap, u.role, u.aktif,
+                            (SELECT COUNT(*) FROM log_aktivitas l WHERE l.username = u.username) AS total_aktivitas,
+                            (SELECT MAX(waktu) FROM log_aktivitas l WHERE l.username = u.username) AS login_terakhir
+                         FROM users u WHERE 1=1"""
+            p_users = []
+            if filter_role != "Semua":
+                q_users += " AND u.role = ?"; p_users.append(filter_role)
+            if filter_status_user == "Aktif":
+                q_users += " AND u.aktif = 1"
+            elif filter_status_user == "Non-Aktif":
+                q_users += " AND u.aktif = 0"
+            q_users += " ORDER BY u.role DESC, u.username"
+            df_users = pd.read_sql_query(q_users, conn, params=p_users)
             if not df_users.empty:
-                st.dataframe(df_users.drop(columns=['id']), use_container_width=True, hide_index=True)
-                opt_user = {f"{r['Username']} ({r['Role']})": r['id'] for _, r in df_users.iterrows()}
-                pilih_user = st.selectbox("Pilih User untuk Aksi", ["-- Pilih --"] + list(opt_user.keys()))
-                if pilih_user != "-- Pilih --":
-                    uid = opt_user[pilih_user]
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        if st.button("🔄 Reset Password", use_container_width=True):
-                            c.execute("UPDATE users SET password=? WHERE id=?", (hash_password("password123"), uid))
-                            conn.commit(); st.success("Password direset ke: password123"); st.rerun()
-                    with c2:
-                        if st.button("🔒 Toggle Aktif", use_container_width=True):
-                            c.execute("UPDATE users SET aktif = 1 - aktif WHERE id=?", (uid,))
-                            conn.commit(); st.success("Status aktif diubah"); st.rerun()
-                    with c3:
-                        if st.button("🗑️ Hapus User", type="primary", use_container_width=True):
-                            if uid == 1:
-                                st.error("❌ User admin default tidak boleh dihapus")
-                            else:
-                                c.execute("DELETE FROM users WHERE id=?", (uid,))
-                                conn.commit(); st.success("User dihapus"); st.rerun()
+                df_users['aktif'] = df_users['aktif'].apply(lambda x: "✅ Aktif" if x == 1 else "🚫 Non-Aktif")
+                df_users.columns = ['ID', 'Username', 'Nama Lengkap', 'Role', 'Status', 'Total Aktivitas', 'Aktivitas Terakhir']
+                st.dataframe(df_users.style.set_properties(**{'text-align': 'left'}),
+                             use_container_width=True, hide_index=True)
+                st.download_button("📥 Export CSV", df_users.to_csv(index=False).encode('utf-8'),
+                                   f"users_{date.today()}.csv", "text/csv")
+            else:
+                st.info("Tidak ada user sesuai filter")
+
+        # ---------- TAB 5: LOG PER USER ----------
+        with tab5:
+            st.markdown("### 📜 Log Aktivitas per User")
+            df_users_log = pd.read_sql_query("SELECT username FROM users ORDER BY username", conn)
+            if not df_users_log.empty:
+                opt_log_user = ["Semua"] + df_users_log['username'].tolist()
+                sel_log_user = st.selectbox("Pilih User", opt_log_user, key="log_per_user")
+                limit_log = st.slider("Tampilkan N baris terakhir", 10, 500, 100, 10)
+                q_ulog = "SELECT waktu AS Waktu, username AS User, aksi AS Aksi, detail AS Detail FROM log_aktivitas"
+                p_ulog = []
+                if sel_log_user != "Semua":
+                    q_ulog += " WHERE username = ?"
+                    p_ulog.append(sel_log_user)
+                q_ulog += f" ORDER BY id DESC LIMIT {int(limit_log)}"
+                df_ulog = pd.read_sql_query(q_ulog, conn, params=p_ulog)
+                if not df_ulog.empty:
+                    st.dataframe(df_ulog, use_container_width=True, hide_index=True)
+                    # Ringkasan aksi
+                    if sel_log_user != "Semua":
+                        st.markdown(f"**Ringkasan aksi user `{sel_log_user}`:**")
+                        df_rekap_log = pd.read_sql_query(
+                            "SELECT aksi AS Aksi, COUNT(*) AS Jumlah FROM log_aktivitas WHERE username=? GROUP BY aksi ORDER BY Jumlah DESC",
+                            conn, params=(sel_log_user,))
+                        st.dataframe(df_rekap_log, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Belum ada log untuk user ini")
+            else:
+                st.info("Belum ada user terdaftar")
 
 elif pilihan == "📝 Log Aktivitas":
     if st.session_state.role != "admin":
