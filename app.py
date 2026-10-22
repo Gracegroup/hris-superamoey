@@ -27,26 +27,9 @@ os.makedirs("uploads/dokumen", exist_ok=True)
 
 # ==================== FITUR INSTALL APLIKASI (POJOK KANAN) ====================
 def create_install_button():
-    # 1. Siapkan isi file run.bat (untuk Windows)
-    bat_content = """@echo off
-title Aplikasi HRIS & GA
-color 0A
-echo ========================================================
-echo MENGINSTALL APLIKASI HRIS ^& GA
-echo ========================================================
-echo.
-echo [1/2] Menginstall library yang dibutuhkan (Mohon tunggu)...
-pip install -r requirements.txt
-echo.
-echo [2/2] Menjalankan Aplikasi...
-streamlit run app.py
-pause
-"""
-    
-    # 2. Siapkan isi file requirements.txt
+    bat_content = """@echo off\ntitle Aplikasi HRIS & GA\ncolor 0A\necho ========================================================\necho MENGINSTALL APLIKASI HRIS ^& GA\necho ========================================================\necho.\necho [1/2] Menginstall library yang dibutuhkan (Mohon tunggu)...\npip install -r requirements.txt\necho.\necho [2/2] Menjalankan Aplikasi...\nstreamlit run app.py\npause\n"""
     req_content = "streamlit\npandas\naltair\nopenpyxl\n"
     
-    # 3. Baca kode app.py saat ini
     app_content = ""
     try:
         with open(__file__, "r", encoding="utf-8") as f:
@@ -54,58 +37,81 @@ pause
     except:
         app_content = "# Silakan copy-paste kode utama Anda di sini\n"
 
-    # 4. Buat file ZIP di memori
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         zip_file.writestr("app.py", app_content)
         zip_file.writestr("requirements.txt", req_content)
         zip_file.writestr("run.bat", bat_content)
-        zip_file.writestr("CARA_INSTALL.txt", "CARA INSTALL:\n1. Ekstrak file ZIP ini.\n2. Klik 2x file 'run.bat'.\n3. Browser akan otomatis terbuka.\n\n*Pastikan Python sudah terinstall di laptop Anda.")
+        zip_file.writestr("CARA_INSTALL.txt", "CARA INSTALL:\n1. Ekstrak file ZIP ini.\n2. Klik 2x file 'run.bat'.\n3. Browser akan otomatis terbuka.")
         
-    # 5. Konversi ke Base64 untuk link download
     b64 = base64.b64encode(zip_buffer.getvalue()).decode()
     
-    # 6. Buat Tombol HTML/CSS di Pojok Kanan Atas
     html_button = f"""
     <style>
         .install-btn {{
-            position: fixed;
-            top: 70px; /* Posisi di bawah menu Streamlit */
-            right: 20px;
-            z-index: 9999;
+            position: fixed; top: 70px; right: 20px; z-index: 9999;
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white !important;
-            padding: 12px 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 700;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            color: white !important; padding: 12px 20px; border-radius: 10px;
+            text-decoration: none; font-weight: 700; font-family: 'Segoe UI', sans-serif;
+            font-size: 14px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;
         }}
-        .install-btn:hover {{
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6);
-            color: white !important;
-        }}
+        .install-btn:hover {{ transform: translateY(-3px) scale(1.02); box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6); color: white !important; }}
     </style>
     <a href="data:application/zip;base64,{b64}" download="Aplikasi_HRIS_GA.zip" class="install-btn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-          <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-          <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
         Install Aplikasi
     </a>
     """
     st.markdown(html_button, unsafe_allow_html=True)
 
-# Panggil fungsinya
 create_install_button()
 # ==============================================================================
+
+
+# ==================== FITUR FLYER MELAYANG-LAYANG ====================
+def get_image_base64(path):
+    try:
+        with open(path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except:
+        return ""
+
+def show_floating_flyers():
+    img_mekanik = get_image_base64("flyer_mekanik.png")
+    img_warehouse = get_image_base64("flyer_warehouse.png")
+    
+    html_flyers = """
+    <style>
+        @keyframes floatBounce {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+        .flyer-container {
+            position: fixed;
+            bottom: 30px;
+            z-index: 999;
+            width: 220px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            animation: floatBounce 4s ease-in-out infinite;
+            transition: transform 0.3s;
+        }
+        .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
+        .flyer-left { left: 30px; animation-delay: 0s; }
+        .flyer-right { right: 30px; animation-delay: 2s; }
+        @media (max-width: 768px) { .flyer-container { display: none; } } /* Sembunyikan di HP agar tidak menutupi layar */
+    </style>
+    """
+    
+    if img_mekanik:
+        html_flyers += f'<div class="flyer-container flyer-left"><img src="data:image/png;base64,{img_mekanik}" style="width:100%; border-radius:12px;"></div>'
+    if img_warehouse:
+        html_flyers += f'<div class="flyer-container flyer-right"><img src="data:image/png;base64,{img_warehouse}" style="width:100%; border-radius:12px;"></div>'
+    
+    st.markdown(html_flyers, unsafe_allow_html=True)
+# =====================================================================
 
 # ==================== CUSTOM CSS ====================
 st.markdown("""
@@ -787,13 +793,11 @@ with st.sidebar:
         "🏖️ Cuti & Izin",
         "💰 Payroll & Slip Gaji",
         "📋 Rekrutmen & CV",
-        # === MENU BARU DISISIPKAN DI SINI ===
         "📋 Jobdesk",
         "💡 CI Report",
         "🏥 SKD",
         "📝 Internal Memo",
         "🔄 Mutasi & PKWT",
-        # ====================================
         "📉 Resign & Turnover",
         "⚠️ Disiplin & SP",
         "📤 Exit Clearance",
@@ -809,6 +813,11 @@ with st.sidebar:
         menu += ["👤 Manajemen User", "📝 Log Aktivitas"]
 
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
+    
+    st.markdown("---")
+    # Toggle untuk menampilkan / menyembunyikan Flyer
+    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
+    
     st.markdown("---")
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
@@ -816,7 +825,12 @@ with st.sidebar:
             st.session_state[k] = False if k == "logged_in" else ""
         st.rerun()
 
-# ==================== 1. DASHBOARD ====================
+# ==================== KONTEN MENU ====================
+
+# TAMPILKAN FLYER JIKA DICENTANG DAN SEDANG DI DASHBOARD
+if pilihan == "🏠 Dashboard HRIS" and tampilkan_flyer:
+    show_floating_flyers()
+
 if pilihan == "🏠 Dashboard HRIS":
     st.markdown(f"""
     <div class="main-header">
