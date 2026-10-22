@@ -179,13 +179,44 @@ c.execute('''CREATE TABLE IF NOT EXISTS kandidat (
     telepon TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT,
     status TEXT, catatan TEXT, jadwal_interview TEXT, status_berkas TEXT, catatan_berkas TEXT)''')
 
-# Migrasi Otomatis untuk tabel kandidat (jika kolom baru belum ada di database lama)
+# Tabel Lowongan (Open Vacant)
+c.execute('''CREATE TABLE IF NOT EXISTS lowongan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, departemen TEXT,
+    jumlah_dibutuhkan INTEGER, status TEXT DEFAULT 'Buka',
+    deskripsi TEXT, tanggal_dibuka TEXT, tanggal_ditutup TEXT)''')
+
+# === SEED DATA LOWONGAN DARI FPK MELAK ===
+c.execute("SELECT COUNT(*) FROM lowongan")
+if c.fetchone()[0] == 0:
+    tgl_buka = date.today().strftime("%Y-%m-%d")
+    tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    # 1. Mekanik M2
+    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
+                 VALUES (?,?,?,?,?,?,?)''',
+              ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 4, "Buka", 
+               "Pengganti: La Wajar, Ronald, Herianus, Fahrul", tgl_buka, tgl_tutup))
+    
+    # 2. Mekanik M3
+    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
+                 VALUES (?,?,?,?,?,?,?)''',
+              ("Mekanik 3 (M3)", "PRODUCT SUPPORT", 4, "Buka", 
+               "Pengganti: Indra S, Wardiansyah, Iwan, Salman", tgl_buka, tgl_tutup))
+               
+    # 3. Warehouseman
+    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
+                 VALUES (?,?,?,?,?,?,?)''',
+              ("Warehouseman", "AFTER MARKET & INVENTORY WAREHOUSE", 1, "Buka", 
+               "Pengganti: PTE_SNB-EBK", tgl_buka, tgl_tutup))
+    conn.commit()
+
+# Migrasi Otomatis untuk tabel kandidat
 try:
     c.execute("ALTER TABLE kandidat ADD COLUMN jadwal_interview TEXT")
     c.execute("ALTER TABLE kandidat ADD COLUMN status_berkas TEXT")
     c.execute("ALTER TABLE kandidat ADD COLUMN catatan_berkas TEXT")
 except sqlite3.OperationalError:
-    pass # Kolom sudah ada
+    pass 
 
 c.execute('''CREATE TABLE IF NOT EXISTS resign (
     id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT,
@@ -556,6 +587,8 @@ if pilihan == "🏠 Dashboard HRIS":
 
     aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
+    lowongan_buka = c.execute("SELECT SUM(jumlah_dibutuhkan) FROM lowongan WHERE status='Buka'").fetchone()[0]
+    lowongan_buka = lowongan_buka if lowongan_buka else 0
     diterima = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Diterima'").fetchone()[0]
     ditolak = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Ditolak'").fetchone()[0]
     proses = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Proses'").fetchone()[0]
@@ -565,6 +598,7 @@ if pilihan == "🏠 Dashboard HRIS":
 
     html = '<div class="metric-grid">'
     html += metric_card("👥 Karyawan Aktif", f"{aktif}", "belum resign", "card-blue")
+    html += metric_card("📢 Open Vacant", f"{lowongan_buka}", "kebutuhan kandidat", "card-pink")
     html += metric_card("📋 Kandidat CV", f"{kandidat}", "screening", "card-purple")
     html += metric_card("📝 Kontrak Habis", f"{kontrak_habis}", "30 hari", "card-orange")
     html += metric_card("✅ Diterima", f"{diterima}", "lolos rekrutmen", "card-green")
@@ -1041,7 +1075,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
 
-    tab1, tab2 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Aksi"])
+    tab1, tab2, tab3 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Aksi", "📢 Open Vacant"])
 
     with tab1:
         with st.form("form_kandidat", clear_on_submit=True):
@@ -1077,7 +1111,6 @@ elif pilihan == "📋 Rekrutmen & CV":
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         
         if not df_k.empty:
-            # 1. Tampilkan Metrik Atas
             html = '<div class="metric-grid">'
             html += metric_card("Total", str(len(df_k)), "", "card-blue")
             html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
@@ -1087,11 +1120,9 @@ elif pilihan == "📋 Rekrutmen & CV":
             html += '</div>'
             st.markdown(html, unsafe_allow_html=True)
 
-            # 2. Tampilkan Tabel
             st.markdown("---")
             st.dataframe(df_k[['id', 'nama', 'posisi_dilamar', 'status', 'jadwal_interview', 'status_berkas', 'catatan_berkas', 'telepon']], use_container_width=True, hide_index=True)
 
-            # 3. Area Kelola Data
             st.markdown("### ⚙️ Kelola Data Kandidat")
             opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_k.iterrows()}
             
@@ -1103,7 +1134,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                 df_sel = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,))
                 selected_data = df_sel.iloc[0]
 
-                # === BANNER JADWAL INTERVIEW (Muncul jika sudah ada jadwal) ===
                 if selected_data['jadwal_interview']:
                     st.success(f"📅 **JADWAL INTERVIEW TERJADWAL:** {selected_data['jadwal_interview']} WITA")
                 elif selected_data['status'] == "Wawancara" and not selected_data['jadwal_interview']:
@@ -1111,7 +1141,6 @@ elif pilihan == "📋 Rekrutmen & CV":
 
                 col_edit, col_delete = st.columns([3, 1])
 
-                # === FITUR EDIT & SAVE ===
                 with col_edit:
                     with st.form("form_edit_kandidat"):
                         st.markdown(f"**✏️ Form Edit Kandidat: {selected_data['nama']}**")
@@ -1121,7 +1150,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                         except:
                             db_tgl = date.today()
 
-                        # Parsing Tanggal & Jam Interview dari database
                         jadwal_interview_val = selected_data['jadwal_interview'] if selected_data['jadwal_interview'] else ""
                         try:
                             if jadwal_interview_val:
@@ -1172,9 +1200,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         
                         edit_catatan = st.text_area("Catatan Tambahan", value=selected_data['catatan'], height=80)
 
-                        # TOMBOL SAVE
                         if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
-                            # Simpan jadwal hanya jika statusnya Wawancara
                             jadwal_baru = f"{edit_tgl_int} {edit_jam_int.strftime('%H:%M')}" if edit_status == "Wawancara" else ""
                             
                             c.execute('''UPDATE kandidat 
@@ -1188,7 +1214,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                             st.success("✅ Data berhasil diupdate dan disimpan!")
                             st.rerun()
 
-                # === FITUR DELETE ===
                 with col_delete:
                     st.markdown("**🗑️ Hapus Data**")
                     st.write("Klik tombol di bawah untuk menghapus kandidat ini secara permanen.")
@@ -1200,6 +1225,83 @@ elif pilihan == "📋 Rekrutmen & CV":
                         st.rerun()
         else:
             st.info("Belum ada kandidat")
+
+    # === TAB 3: OPEN VACANT (LOWONGAN) ===
+    with tab3:
+        st.markdown("### 📢 Daftar Kebutuhan Kandidat (Open Vacant)")
+        st.info("Data di bawah ini di-generate otomatis dari dokumen **Outstanding FPK Melak**. Total Kebutuhan: 9 Orang.")
+        
+        with st.form("form_lowongan", clear_on_submit=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                vac_posisi = st.text_input("Posisi / Jabatan *")
+                vac_dept = st.selectbox("Departemen", ["PRODUCT SUPPORT","AFTER MARKET & INVENTORY WAREHOUSE","SALES & OPERATION","HRD","FINANCE","GA","PARTS","Adm.PS", "Lainnya"])
+            with col2:
+                vac_jumlah = st.number_input("Jumlah Dibutuhkan *", min_value=1, step=1, value=1)
+                vac_status = st.selectbox("Status", ["Buka", "Tutup"])
+            with col3:
+                vac_tgl_buka = st.date_input("Tanggal Dibuka", date.today())
+                vac_tgl_tutup = st.date_input("Batas Pendaftaran", date.today() + timedelta(days=30))
+            
+            vac_deskripsi = st.text_area("Deskripsi Pekerjaan / Kualifikasi")
+
+            if st.form_submit_button("💾 Tambah Lowongan", type="primary"):
+                if vac_posisi:
+                    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup)
+                                 VALUES (?,?,?,?,?,?,?)''',
+                              (vac_posisi, vac_dept, vac_jumlah, vac_status, vac_deskripsi, str(vac_tgl_buka), str(vac_tgl_tutup)))
+                    conn.commit()
+                    log_aksi(st.session_state.username, "TAMBAH_LOWONGAN", vac_posisi)
+                    st.success(f"✅ Lowongan untuk posisi {vac_posisi} berhasil dibuka!")
+                    st.rerun()
+                else:
+                    st.warning("Posisi wajib diisi!")
+
+        st.markdown("---")
+        df_vac = pd.read_sql_query("SELECT * FROM lowongan ORDER BY id DESC", conn)
+        
+        if not df_vac.empty:
+            for _, r in df_vac.iterrows():
+                c.execute("SELECT COUNT(*) FROM kandidat WHERE posisi_dilamar=?", (r['posisi'],))
+                pelamar = c.fetchone()[0]
+                
+                st.markdown(f"""
+                <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {'#2a5298' if r['status']=='Buka' else '#eb3349'};">
+                    <h4 style="margin:0; color:#1e3c72;">{r['posisi']} <span style="font-size:0.6em; background:#e0e7ff; padding:2px 8px; border-radius:10px;">{r['departemen']}</span></h4>
+                    <p style="margin:5px 0; font-size:0.9em; color:#555;">Status: <b>{r['status']}</b> | Batas: {r['tanggal_ditutup']}</p>
+                    <p style="margin:5px 0; font-size:0.9em; color:#555;"><i>{r['deskripsi']}</i></p>
+                    <div style="display:flex; gap:20px; margin-top:10px;">
+                        <div><b>Dibutuhkan:</b> {r['jumlah_dibutuhkan']} orang</div>
+                        <div><b>Pelamar Masuk:</b> {pelamar} orang</div>
+                        <div style="color:{'#11998e' if pelamar >= r['jumlah_dibutuhkan'] else '#eb3349'};">
+                            <b>Sisa Kuota:</b> {max(0, r['jumlah_dibutuhkan'] - pelamar)} orang
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                colA, colB, _ = st.columns([1, 1, 4])
+                with colA:
+                    if r['status'] == 'Buka':
+                        if st.button(f"🔒 Tutup Lowongan (ID: {r['id']})", key=f"tutup_{r['id']}"):
+                            c.execute("UPDATE lowongan SET status='Tutup' WHERE id=?", (r['id'],))
+                            conn.commit()
+                            st.rerun()
+                    else:
+                        if st.button(f"🔓 Buka Kembali (ID: {r['id']})", key=f"buka_{r['id']}"):
+                            c.execute("UPDATE lowongan SET status='Buka' WHERE id=?", (r['id'],))
+                            conn.commit()
+                            st.rerun()
+                with colB:
+                    if st.button(f"🗑️ Hapus (ID: {r['id']})", key=f"hapus_{r['id']}"):
+                        c.execute("DELETE FROM lowongan WHERE id=?", (r['id'],))
+                        conn.commit()
+                        st.rerun()
+            
+            st.markdown("### 📋 Tabel Rekap Lowongan")
+            st.dataframe(df_vac, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada data lowongan. Silakan tambahkan di atas.")
 
 # ==================== 7. RESIGN ====================
 elif pilihan == "📉 Resign & Turnover":
@@ -1453,12 +1555,11 @@ elif pilihan == "💾 Import, Export & Backup":
     tab1, tab2, tab3 = st.tabs(["📤 Export", "📥 Import (Multi-Format)", "🗄️ Backup"])
 
     with tab1:
-        tabel = st.selectbox("Tabel", ["karyawan","absensi","cuti","payroll","kandidat","resign","aset","ruko","tenant","log_aktivitas"])
+        tabel = st.selectbox("Tabel", ["karyawan","absensi","cuti","payroll","kandidat","lowongan","resign","aset","ruko","tenant","log_aktivitas"])
         df = pd.read_sql_query(f"SELECT * FROM {tabel}", conn)
         if not df.empty:
             st.dataframe(df.head(100), use_container_width=True, hide_index=True)
 
-            # Export ke Excel, CSV, JSON
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.download_button(f"📥 Download CSV", df.to_csv(index=False).encode(),
@@ -1490,7 +1591,7 @@ elif pilihan == "💾 Import, Export & Backup":
         | 📄 Text | `.txt`, `.tsv` | Delimiter otomatis |
         """)
 
-        tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "aset", "absensi", "cuti"])
+        tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "lowongan", "aset", "absensi", "cuti"])
 
         with st.expander("📖 Panduan Kolom"):
             st.markdown("""
@@ -1499,19 +1600,19 @@ elif pilihan == "💾 Import, Export & Backup":
             **🔥 Kolom WAJIB:**
             - `karyawan`: **Employee ID** & **Full Name**
             - `kandidat`: **nama**
+            - `lowongan`: **posisi** & **jumlah_dibutuhkan**
             - `aset`: **kode** & **nama**
             - `absensi`: **karyawan_id** & **tanggal**
             - `cuti`: **karyawan_id** & **jenis_cuti**
             """)
 
         # ==========================================
-        # FITUR DOWNLOAD TEMPLATE EXCEL (TAMBAHAN BARU)
+        # FITUR DOWNLOAD TEMPLATE EXCEL
         # ==========================================
         st.markdown("---")
         st.markdown("### 📥 Download Template Excel Kandidat")
         st.info("Gunakan template ini untuk mempermudah import data kandidat.")
         
-        # Data kandidat dari CV Anda
         data_kandidat = {
             'nama': ['Muhammad Rizki Fahrozi', 'Nugroho Isnan Pamungkas', 'Imran Deriawan', 'Agrey Surya Nugraha'],
             'posisi_dilamar': ['Warehouseman site', 'Mekanik', 'Mekanik', 'Warehouseman Site'],
@@ -1533,12 +1634,10 @@ elif pilihan == "💾 Import, Export & Backup":
         
         df_template = pd.DataFrame(data_kandidat)
         
-        # Membuat file Excel di memori
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df_template.to_excel(writer, index=False, sheet_name='Data Kandidat')
         
-        # Tombol Download
         st.download_button(
             label="📥 Download Excel Kandidat (4 Data)",
             data=buffer.getvalue(),
@@ -1547,8 +1646,6 @@ elif pilihan == "💾 Import, Export & Backup":
             type="primary"
         )
         st.markdown("---")
-        # ==========================================
-
 
         f = st.file_uploader(
             f"📂 Upload file untuk {tabel}",
@@ -1588,6 +1685,7 @@ elif pilihan == "💾 Import, Export & Backup":
                         wajib_map = {
                             "karyawan": ["employee_id", "full_name"],
                             "kandidat": ["nama"],
+                            "lowongan": ["posisi", "jumlah_dibutuhkan"],
                             "aset": ["kode", "nama"],
                             "absensi": ["karyawan_id", "tanggal"],
                             "cuti": ["karyawan_id", "jenis_cuti"],
