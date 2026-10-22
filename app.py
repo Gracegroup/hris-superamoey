@@ -990,9 +990,13 @@ elif pilihan == "📉 Resign & Turnover":
             st.info("Belum ada data resign")
 
 elif pilihan == "⚠️ Disiplin & SP":
+    import re
+    from pypdf import PdfReader
+    from io import BytesIO
+    
     st.markdown('<div class="main-header"><h1>⚠️ Disiplin & Surat Peringatan (SP)</h1></div>', unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["➕ Input Manual", "📋 Daftar SP", "📥 Import Excel"])
+    tab1, tab2, tab3 = st.tabs(["➕ Input Manual", "📋 Daftar SP", "📥 Import Excel/PDF"])
     
     with tab1:
         list_kar_sp = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
@@ -1030,73 +1034,95 @@ elif pilihan == "⚠️ Disiplin & SP":
             st.info("Belum ada data SP")
 
     with tab3:
-        st.markdown("### 📥 Import Data SP dari Excel/CSV")
-        st.info("""
-        **Panduan Format Excel:**
-        Buat file Excel dengan kolom persis seperti ini (baris pertama adalah judul):
-        *   `NRP` (wajib)
-        *   `Jenis_Sanksi` (Contoh: SP1, SP2, Teguran Lisan)
-        *   `Tanggal_Mulai` (Format: YYYY-MM-DD, cth: 2026-03-11)
-        *   `Tanggal_Akhir` (Format: YYYY-MM-DD, cth: 2026-09-10)
-        *   `Rincian_Pelanggaran`
-        *   `Status` (Aktif / Berakhir / Dibatalkan)
-        *   `Periode` (Contoh: 2026)
-        """)
+        st.markdown("### 📥 Import Data SP (Excel / PDF)")
         
-        # Tombol Download Template
-        template_df = pd.DataFrame(columns=["NRP", "Jenis_Sanksi", "Tanggal_Mulai", "Tanggal_Akhir", "Rincian_Pelanggaran", "Status", "Periode"])
-        template_df.loc[0] = ["MELAK001", "SP1", "2026-03-11", "2026-09-10", "Tidak mentaati ketentuan hari kerja", "Berakhir", "2026"]
-        csv_template = template_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📄 Download Template Excel/CSV", csv_template, "template_import_sp.csv", "text/csv")
-        
-        st.markdown("---")
-        file_sp = st.file_uploader("Pilih file Excel/CSV yang sudah diisi", type=["xlsx", "csv"])
+        file_sp = st.file_uploader("Pilih file Excel (.xlsx/.csv) atau PDF Surat Peringatan", type=["xlsx", "csv", "pdf"])
         
         if file_sp is not None:
             if st.button("🚀 Proses Import", type="primary"):
                 try:
-                    if file_sp.name.endswith('.csv'):
-                        df_imp = pd.read_csv(file_sp)
-                    else:
-                        df_imp = pd.read_excel(file_sp)
+                    if file_sp.name.lower().endswith('.pdf'):
+                        # ================= LOGIKA BACA PDF =================
+                        reader = PdfReader(BytesIO(file_sp.read()))
+                        text = ""
+                        for page in reader.pages:
+                            text += page.extract_text() + "\n"
                         
-                    sukses, gagal = 0, 0
-                    errors = []
-                    
-                    for index, row in df_imp.iterrows():
-                        try:
-                            nrp = str(row['NRP']).strip()
-                            # Cari ID karyawan berdasarkan NRP
-                            karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
-                            
+                        # Regex untuk mencari data di dalam PDF
+                        match_nama = re.search(r"Nama\s*:\s*(.*)", text, re.IGNORECASE)
+                        match_hal = re.search(r"Hal\s*:\s*(Surat Peringatan\s*\d+)", text, re.IGNORECASE)
+                        match_tgl = re.search(r"berlaku mulai tanggal\s*(\d{1,2}\s+\w+\s+\d{4})\s*-\s*(\d{1,2}\s+\w+\s+\d{4})", text, re.IGNORECASE)
+                        match_kesalahan = re.search(r"Kesalahan\s*:\s*(.*?)(?=Demikian|$)", text, re.IGNORECASE | re.DOTALL)
+                        
+                        nama_pdf = match_nama.group(1).strip() if match_nama else None
+                        jenis_pdf = match_hal.group(1).strip().replace(" ", "") if match_hal else "SP1" # default SP1
+                        
+                        # Fungsi bantu untuk format tanggal Indonesia ke YYYY-MM-DD
+                        def parse_tgl_ind(tgl_str):
+                            bulan_map = {"Januari":"01", "Februari":"02", "Maret":"03", "April":"04", "Mei":"05", "Juni":"06", "Juli":"07", "Agustus":"08", "September":"09", "Oktober":"10", "November":"11", "Desember":"12"}
+                            parts = tgl_str.strip().split()
+                            if len(parts) == 3:
+                                return f"{parts[2]}-{bulan_map.get(parts[1].capitalize(), '01')}-{parts[0].zfill(2)}"
+                            return str(date.today())
+
+                        tgl_mulai_pdf = parse_tgl_ind(match_tgl.group(1)) if match_tgl else str(date.today())
+                        tgl_akhir_pdf = parse_tgl_ind(match_tgl.group(2)) if match_tgl else str(date.today())
+                        pelanggaran_pdf = match_kesalahan.group(1).strip().replace('\n', ' ') if match_kesalahan else "Pelanggaran (Ekstrak PDF)"
+                        
+                        # Cari ID Karyawan berdasarkan nama yang diekstrak
+                        if nama_pdf:
+                            # Cari nama yang mirip di database
+                            karyawan_row = c.execute("SELECT id FROM karyawan WHERE full_name LIKE ?", (f"%{nama_pdf}%",)).fetchone()
                             if karyawan_row:
                                 kid = karyawan_row[0]
                                 c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
-                                          (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
-                                sukses += 1
+                                          (kid, jenis_pdf, tgl_mulai_pdf, tgl_akhir_pdf, pelanggaran_pdf, "Berakhir", tgl_mulai_pdf[:4]))
+                                conn.commit()
+                                st.success(f"✅ PDF berhasil dibaca! SP untuk **{nama_pdf}** telah diimport.")
+                                st.info(f"**Detail Ekstraksi:**\n- Sanksi: {jenis_pdf}\n- Mulai: {tgl_mulai_pdf}\n- Akhir: {tgl_akhir_pdf}\n- Pelanggaran: {pelanggaran_pdf}")
+                                st.rerun()
                             else:
-                                gagal += 1
-                                errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan di Data Karyawan.")
-                        except Exception as e:
-                            gagal += 1
-                            errors.append(f"Baris {index+2}: Format data salah ({str(e)})")
+                                st.error(f"❌ Nama '{nama_pdf}' tidak ditemukan di Data Karyawan.")
+                        else:
+                            st.error("❌ Gagal mengekstrak nama dari PDF. Pastikan PDF bukan hasil scan (foto).")
                             
-                    conn.commit()
-                    
-                    if sukses > 0:
-                        st.success(f"✅ Berhasil import {sukses} data SP!")
-                    if gagal > 0:
-                        st.warning(f"⚠️ Gagal import {gagal} baris.")
-                        with st.expander("Lihat Detail Error"):
-                            for err in errors:
-                                st.write(err)
+                    else:
+                        # ================= LOGIKA BACA EXCEL =================
+                        if file_sp.name.endswith('.csv'):
+                            df_imp = pd.read_csv(file_sp)
+                        else:
+                            df_imp = pd.read_excel(file_sp)
+                            
+                        sukses, gagal = 0, 0
+                        errors = []
+                        
+                        for index, row in df_imp.iterrows():
+                            try:
+                                nrp = str(row['NRP']).strip()
+                                karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
                                 
-                    if sukses > 0:
-                        st.rerun()
+                                if karyawan_row:
+                                    kid = karyawan_row[0]
+                                    c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
+                                              (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
+                                    sukses += 1
+                                else:
+                                    gagal += 1
+                                    errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan.")
+                            except Exception as e:
+                                gagal += 1
+                                errors.append(f"Baris {index+2}: Format salah ({str(e)})")
+                                
+                        conn.commit()
+                        if sukses > 0: st.success(f"✅ Berhasil import {sukses} data Excel!")
+                        if gagal > 0:
+                            st.warning(f"⚠️ Gagal import {gagal} baris.")
+                            with st.expander("Lihat Error"): 
+                                for err in errors: st.write(err)
+                        if sukses > 0: st.rerun()
                         
                 except Exception as e:
-                    st.error(f"❌ Gagal membaca file: {e}")
-
+                    st.error(f"❌ Gagal memproses file: {e}")
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1><p>Checklist Serah Terima Karyawan Resign</p></div>', unsafe_allow_html=True)
     df_exit = pd.read_sql_query("SELECT r.id, k.employee_id AS NRP, k.full_name AS Nama, r.tanggal_resign AS 'Tanggal Resign', r.jenis AS Jenis, r.clearance_status AS Clearance, r.exit_interview AS 'Exit Interview' FROM resign r JOIN karyawan k ON r.karyawan_id=k.id ORDER BY r.id DESC", conn)
