@@ -1108,6 +1108,7 @@ elif pilihan == "📋 Rekrutmen & CV":
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         
         if not df_k.empty:
+            # 1. Tampilkan Metrik Atas
             html = '<div class="metric-grid">'
             html += metric_card("Total", str(len(df_k)), "", "card-blue")
             html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
@@ -1118,108 +1119,137 @@ elif pilihan == "📋 Rekrutmen & CV":
             st.markdown(html, unsafe_allow_html=True)
 
             st.markdown("---")
-            st.dataframe(df_k[['id', 'nama', 'posisi_dilamar', 'status', 'jadwal_interview', 'status_berkas', 'catatan_berkas', 'telepon']], use_container_width=True, hide_index=True)
-
-            st.markdown("### ⚙️ Kelola Data Kandidat")
-            opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_k.iterrows()}
             
-            pilihan_edit = st.selectbox("Pilih kandidat yang ingin diedit/dihapus:", ["-- Pilih Kandidat --"] + list(opsi_kandidat.keys()))
+            # 2. Filter Status
+            col_filter, _ = st.columns([1, 2])
+            with col_filter:
+                filter_status = st.selectbox("🔍 Filter Berdasarkan Status:", ["Semua", "Proses", "Wawancara", "Diterima", "Ditolak"])
+            
+            if filter_status != "Semua":
+                df_filtered = df_k[df_k['status'] == filter_status]
+            else:
+                df_filtered = df_k
 
-            if pilihan_edit != "-- Pilih Kandidat --":
-                kandidat_id = opsi_kandidat[pilihan_edit]
-                
-                df_sel = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,))
-                selected_data = df_sel.iloc[0]
+            # 3. Tampilkan Tabel dengan Pewarnaan (Highlight Hijau)
+            def highlight_diterima(row):
+                if row['status'] == 'Diterima':
+                    return ['background-color: #d4edda'] * len(row)  # Warna hijau muda
+                return [''] * len(row)
 
-                if selected_data['jadwal_interview']:
-                    st.success(f"📅 **JADWAL INTERVIEW TERJADWAL:** {selected_data['jadwal_interview']} WITA")
-                elif selected_data['status'] == "Wawancara" and not selected_data['jadwal_interview']:
-                    st.warning("⚠️ Status kandidat sudah 'Wawancara', namun jadwal belum diisi. Silakan isi di form di bawah.")
+            st.write("💡 **Info:** Baris dengan status **Diterima** akan berwarna hijau.")
+            
+            # Terapkan styling
+            st.dataframe(
+                df_filtered[['id', 'nama', 'posisi_dilamar', 'status', 'jadwal_interview', 'status_berkas', 'catatan', 'telepon']].style.apply(highlight_diterima, axis=1), 
+                use_container_width=True, 
+                hide_index=True
+            )
 
-                col_edit, col_delete = st.columns([3, 1])
+            # 4. Area Kelola Data
+            st.markdown("### ⚙️ Kelola Data Kandidat")
+            
+            # Gunakan df_filtered untuk dropdown agar sinkron dengan filter
+            opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_filtered.iterrows()}
+            
+            if not opsi_kandidat:
+                st.info("Tidak ada data yang cocok dengan filter.")
+            else:
+                pilihan_edit = st.selectbox("Pilih kandidat yang ingin diedit/dihapus:", ["-- Pilih Kandidat --"] + list(opsi_kandidat.keys()))
 
-                with col_edit:
-                    with st.form("form_edit_kandidat"):
-                        st.markdown(f"**✏️ Form Edit Kandidat: {selected_data['nama']}**")
-                        
-                        try:
-                            db_tgl = datetime.strptime(selected_data['tanggal_lamar'], "%Y-%m-%d").date()
-                        except:
-                            db_tgl = date.today()
+                if pilihan_edit != "-- Pilih Kandidat --":
+                    kandidat_id = opsi_kandidat[pilihan_edit]
+                    
+                    df_sel = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,))
+                    selected_data = df_sel.iloc[0]
 
-                        jadwal_interview_val = selected_data['jadwal_interview'] if selected_data['jadwal_interview'] else ""
-                        try:
-                            if jadwal_interview_val:
-                                dt_int = datetime.strptime(jadwal_interview_val, "%Y-%m-%d %H:%M")
-                                tgl_int_default = dt_int.date()
-                                jam_int_default = dt_int.time()
-                            else:
+                    if selected_data['jadwal_interview']:
+                        st.success(f"📅 **JADWAL INTERVIEW TERJADWAL:** {selected_data['jadwal_interview']} WITA")
+                    elif selected_data['status'] == "Wawancara" and not selected_data['jadwal_interview']:
+                        st.warning("⚠️ Status kandidat sudah 'Wawancara', namun jadwal belum diisi. Silakan isi di form di bawah.")
+
+                    col_edit, col_delete = st.columns([3, 1])
+
+                    with col_edit:
+                        with st.form("form_edit_kandidat"):
+                            st.markdown(f"**✏️ Form Edit Kandidat: {selected_data['nama']}**")
+                            
+                            try:
+                                db_tgl = datetime.strptime(selected_data['tanggal_lamar'], "%Y-%m-%d").date()
+                            except:
+                                db_tgl = date.today()
+
+                            jadwal_interview_val = selected_data['jadwal_interview'] if selected_data['jadwal_interview'] else ""
+                            try:
+                                if jadwal_interview_val:
+                                    dt_int = datetime.strptime(jadwal_interview_val, "%Y-%m-%d %H:%M")
+                                    tgl_int_default = dt_int.date()
+                                    jam_int_default = dt_int.time()
+                                else:
+                                    tgl_int_default = date.today()
+                                    jam_int_default = datetime.strptime("09:00", "%H:%M").time()
+                            except:
                                 tgl_int_default = date.today()
                                 jam_int_default = datetime.strptime("09:00", "%H:%M").time()
-                        except:
-                            tgl_int_default = date.today()
-                            jam_int_default = datetime.strptime("09:00", "%H:%M").time()
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            edit_nama = st.text_input("Nama Kandidat", value=selected_data['nama'])
-                            edit_posisi = st.text_input("Posisi Dilamar", value=selected_data['posisi_dilamar'])
-                            edit_telepon = st.text_input("Telepon/WA", value=selected_data['telepon'])
-                        with col2:
-                            edit_email = st.text_input("Email", value=selected_data['email'])
-                            list_sumber = ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"]
-                            idx_sumber = list_sumber.index(selected_data['sumber']) if selected_data['sumber'] in list_sumber else 0
-                            edit_sumber = st.selectbox("Sumber", list_sumber, index=idx_sumber)
-                            edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
-                        
-                        st.markdown("---")
-                        st.markdown("**📅 Jadwal Interview (Wajib jika status = Wawancara)**")
-                        st.info("💡 **Info:** Agar jadwal interview tersimpan dan muncul di tabel, Anda **WAJIB** mengubah **Status** menjadi **'Wawancara'**.")
-                        colA, colB, colC = st.columns(3)
-                        with colA:
-                            list_status = ["Proses","Wawancara","Diterima","Ditolak"]
-                            idx_status = list_status.index(selected_data['status']) if selected_data['status'] in list_status else 0
-                            edit_status = st.selectbox("Status", list_status, index=idx_status)
-                        with colB:
-                            edit_tgl_int = st.date_input("Tanggal Interview", value=tgl_int_default)
-                        with colC:
-                            edit_jam_int = st.time_input("Jam Interview", value=jam_int_default)
-                        
-                        st.markdown("---")
-                        st.markdown("**📁 Kelengkapan Berkas**")
-                        colD, colE = st.columns(2)
-                        with colD:
-                            list_berkas = ["Lengkap", "Kurang", "Belum Ada"]
-                            idx_berkas = list_berkas.index(selected_data['status_berkas']) if selected_data['status_berkas'] in list_berkas else 0
-                            edit_status_berkas = st.selectbox("Status Kelengkapan", list_berkas, index=idx_berkas)
-                        with colE:
-                            edit_catatan_berkas = st.text_input("Berkas yang kurang (jika ada)", value=selected_data['catatan_berkas'] or "")
-                        
-                        edit_catatan = st.text_area("Catatan Tambahan", value=selected_data['catatan'], height=80)
-
-                        if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
-                            jadwal_baru = f"{edit_tgl_int} {edit_jam_int.strftime('%H:%M')}" if edit_status == "Wawancara" else ""
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                edit_nama = st.text_input("Nama Kandidat", value=selected_data['nama'])
+                                edit_posisi = st.text_input("Posisi Dilamar", value=selected_data['posisi_dilamar'])
+                                edit_telepon = st.text_input("Telepon/WA", value=selected_data['telepon'])
+                            with col2:
+                                edit_email = st.text_input("Email", value=selected_data['email'])
+                                list_sumber = ["Job Portal","Referral","Walk-in","LinkedIn","Job Fair"]
+                                idx_sumber = list_sumber.index(selected_data['sumber']) if selected_data['sumber'] in list_sumber else 0
+                                edit_sumber = st.selectbox("Sumber", list_sumber, index=idx_sumber)
+                                edit_tgl = st.date_input("Tanggal Lamar", value=db_tgl)
                             
-                            c.execute('''UPDATE kandidat 
-                                         SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, 
-                                             status=?, catatan=?, jadwal_interview=?, status_berkas=?, catatan_berkas=?
-                                         WHERE id=?''',
-                                      (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), 
-                                       edit_status, edit_catatan, jadwal_baru, edit_status_berkas, edit_catatan_berkas, kandidat_id))
-                            conn.commit()
-                            log_aksi(st.session_state.username, "EDIT_KANDIDAT", f"ID: {kandidat_id}")
-                            st.success("✅ Data berhasil diupdate dan disimpan!")
-                            st.rerun()
+                            st.markdown("---")
+                            st.markdown("**📅 Jadwal Interview (Wajib jika status = Wawancara)**")
+                            colA, colB, colC = st.columns(3)
+                            with colA:
+                                list_status = ["Proses","Wawancara","Diterima","Ditolak"]
+                                idx_status = list_status.index(selected_data['status']) if selected_data['status'] in list_status else 0
+                                edit_status = st.selectbox("Status", list_status, index=idx_status)
+                            with colB:
+                                edit_tgl_int = st.date_input("Tanggal Interview", value=tgl_int_default)
+                            with colC:
+                                edit_jam_int = st.time_input("Jam Interview", value=jam_int_default)
+                            
+                            st.markdown("---")
+                            st.markdown("**📁 Kelengkapan Berkas**")
+                            colD, colE = st.columns(2)
+                            with colD:
+                                list_berkas = ["Lengkap", "Kurang", "Belum Ada"]
+                                idx_berkas = list_berkas.index(selected_data['status_berkas']) if selected_data['status_berkas'] in list_berkas else 0
+                                edit_status_berkas = st.selectbox("Status Kelengkapan", list_berkas, index=idx_berkas)
+                            with colE:
+                                edit_catatan_berkas = st.text_input("Berkas yang kurang (jika ada)", value=selected_data['catatan_berkas'] or "")
+                            
+                            edit_catatan = st.text_area("Catatan Tambahan", value=selected_data['catatan'], height=80)
 
-                with col_delete:
-                    st.markdown("**🗑️ Hapus Data**")
-                    st.write("Klik tombol di bawah untuk menghapus kandidat ini secara permanen.")
-                    if st.button("🗑️ Hapus Kandidat", type="primary", use_container_width=True):
-                        c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,))
-                        conn.commit()
-                        log_aksi(st.session_state.username, "HAPUS_KANDIDAT", f"ID: {kandidat_id}")
-                        st.success(f"✅ Kandidat berhasil dihapus!")
-                        st.rerun()
+                            if st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                                jadwal_baru = f"{edit_tgl_int} {edit_jam_int.strftime('%H:%M')}" if edit_status == "Wawancara" else ""
+                                
+                                c.execute('''UPDATE kandidat 
+                                             SET nama=?, posisi_dilamar=?, telepon=?, email=?, sumber=?, tanggal_lamar=?, 
+                                                 status=?, catatan=?, jadwal_interview=?, status_berkas=?, catatan_berkas=?
+                                             WHERE id=?''',
+                                          (edit_nama, edit_posisi, edit_telepon, edit_email, edit_sumber, str(edit_tgl), 
+                                           edit_status, edit_catatan, jadwal_baru, edit_status_berkas, edit_catatan_berkas, kandidat_id))
+                                conn.commit()
+                                log_aksi(st.session_state.username, "EDIT_KANDIDAT", f"ID: {kandidat_id}")
+                                st.success("✅ Data berhasil diupdate dan disimpan!")
+                                st.rerun()
+
+                    with col_delete:
+                        st.markdown("**🗑️ Hapus Data**")
+                        st.write("Klik tombol di bawah untuk menghapus kandidat ini secara permanen.")
+                        if st.button("🗑️ Hapus Kandidat", type="primary", use_container_width=True):
+                            c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,))
+                            conn.commit()
+                            log_aksi(st.session_state.username, "HAPUS_KANDIDAT", f"ID: {kandidat_id}")
+                            st.success(f"✅ Kandidat berhasil dihapus!")
+                            st.rerun()
         else:
             st.info("Belum ada kandidat")
 
@@ -1580,7 +1610,7 @@ elif pilihan == "💾 Import, Export & Backup":
         tabel = st.selectbox("Tabel Target", ["karyawan", "kandidat", "lowongan", "aset", "absensi", "cuti"])
 
         # ==========================================
-        # FITUR KHUSUS: IMPORT DATA OPEN INTERVIEW EXCEL DENGAN CEK DUPLIKAT
+        # FITUR KHUSUS: IMPORT DATA OPEN INTERVIEW EXCEL
         # ==========================================
         if tabel == "kandidat":
             st.markdown("---")
@@ -1593,16 +1623,13 @@ elif pilihan == "💾 Import, Export & Backup":
                 if st.button("🚀 Proses Import Open Interview", type="primary"):
                     try:
                         with st.spinner("Membaca dan memproses data..."):
-                            # Baca semua sheet untuk berjaga-jaga, tapi fokus ke MASTER DATA
                             xls = pd.ExcelFile(f_excel)
                             if 'MASTER DATA' in xls.sheet_names:
                                 df_open = pd.read_excel(xls, sheet_name='MASTER DATA')
                             else:
-                                # Fallback jika MASTER DATA tidak ada, gabungkan semua
                                 dfs = [pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names if not pd.read_excel(xls, sheet_name=s).empty]
                                 df_open = pd.concat(dfs, ignore_index=True)
                             
-                            # Normalisasi nama kolom (lowercase, hapus spasi)
                             df_open.columns = [str(c).lower().strip() for c in df_open.columns]
                             
                             sukses = 0
@@ -1618,12 +1645,11 @@ elif pilihan == "💾 Import, Export & Backup":
                                 if pd.isna(telepon) or telepon.lower() == 'nan':
                                     telepon = ''
                                 
-                                # Cek Duplikat berdasarkan Nama DAN No HP
+                                # Cek Duplikat
                                 c.execute("SELECT id FROM kandidat WHERE nama = ?", (nama,))
                                 existing = c.fetchone()
                                 
                                 if existing:
-                                    # Jika nama sama, cek no HP (jika no HP kosong di excel, anggap duplikat by nama)
                                     if telepon == '':
                                         skip += 1
                                         continue
@@ -1644,7 +1670,6 @@ elif pilihan == "💾 Import, Export & Backup":
                                 if pd.isna(hasil_interview) or hasil_interview.lower() == 'nan': 
                                     status_kandidat = 'Proses'
                                 else:
-                                    # Mapping status agar sesuai sistem
                                     if 'APPROVE' in hasil_interview.upper() or 'DITERIMA' in hasil_interview.upper():
                                         status_kandidat = 'Diterima'
                                     elif 'REJECT' in hasil_interview.upper() or 'DITOLAK' in hasil_interview.upper():
@@ -1652,22 +1677,25 @@ elif pilihan == "💾 Import, Export & Backup":
                                     else:
                                         status_kandidat = 'Proses'
                                 
-                                # Insert
+                                # Insert sebagai New-Proses
                                 try:
+                                    catatan_baru = "Data Baru (Import Open Interview)"
                                     c.execute('''INSERT INTO kandidat (nama, posisi_dilamar, telepon, email, sumber, tanggal_lamar, status, catatan)
                                                  VALUES (?,?,?,?,?,?,?,?)''',
-                                              (nama, posisi, telepon, email, 'Import Open Interview', str(date.today()), status_kandidat, 'Data dari file Excel Open Interview'))
+                                              (nama, posisi, telepon, email, 'Import Open Interview', str(date.today()), status_kandidat, catatan_baru))
                                     sukses += 1
                                 except Exception as e:
                                     gagal += 1
                             
                             conn.commit()
                             
-                            st.success(f"🎉 **Import Selesai!**")
-                            st.info(f"✅ Berhasil masuk: **{sukses}** data baru")
-                            st.warning(f"⏭️ Dilewati (Sudah ada/Duplikat): **{skip}** data")
+                            if skip > 0:
+                                st.warning(f"⚠️ Terdapat **{skip}** data yang **sudah masuk database** dan otomatis dilewati.")
+                            if sukses > 0:
+                                st.success(f"🎉 **{sukses}** data baru berhasil diimport dengan status **New-Proses**!")
+                                st.balloons()
                             if gagal > 0:
-                                st.error(f"❌ Gagal: **{gagal}** data")
+                                st.error(f"❌ Gagal: **{gagal}** data.")
                                 
                     except Exception as e:
                         st.error(f"❌ Error membaca file: {e}")
