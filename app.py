@@ -20,6 +20,10 @@ import zipfile
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 from io import StringIO
+import os
+
+# Instal browser Chromium untuk Playwright di Streamlit Cloud
+os.system("playwright install chromium")
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(
