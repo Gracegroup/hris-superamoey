@@ -187,7 +187,7 @@ def tarik_data_uniquip(user, pwd):
             page.goto("https://files.uniquip.co.id/asetuniquip/app_Login/")
             page.wait_for_load_state('networkidle')
             
-            page.fill('input[name="user"]', user)
+           page.locator('input[type="text"]').first.fill(username)
             page.fill('input[type="password"]', pwd)
             page.click('input[value="Sign In"]')
             page.wait_for_load_state('networkidle')
@@ -589,33 +589,8 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
                         c.execute('''INSERT INTO arsip_dokumen (tanggal_upload, nama_dokumen, kategori, keterangan, file_data, file_name, file_type) VALUES (?,?,?,?,?,?,?)''', (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nama_dok, kategori, keterangan, file_bytes, file_name, file_type))
                         conn.commit(); st.success("✅ Dokumen berhasil disimpan!"); st.rerun()
                     except Exception as e: st.error(f"❌ Gagal: {e}")
-elif pilihan == "🔄 Sinkronisasi Uniquip":
-    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1><p>Tarik Data Aset Otomatis dari Uniquip</p></div>', unsafe_allow_html=True)
-    
-    with st.form("login_form_uniquip"):
-        st.subheader("Login Uniquip")
-        user = st.text_input("User Uniquip", value="okana") # Opsional: langsung isi username
-        pwd = st.text_input("Password Uniquip", type="password")
-        submit = st.form_submit_button("Tarik Data Aset", type="primary")
-
-    if submit:
-        if user and pwd:
-            with st.spinner("Robot sedang login dan mengambil data dari Uniquip (Proses ini butuh waktu 15-30 detik)..."):
-                try:
-                    # Panggil fungsi robot yang sudah Anda buat
-                    df = tarik_data_uniquip(user, pwd)
-                    
-                    if isinstance(df, pd.DataFrame):
-                        st.success("✅ Data berhasil ditarik!")
-                        st.dataframe(df, use_container_width=True)
-                    else:
-                        st.error(f"Gagal: {df}")
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan: {e}")
-        else:
-            st.warning("Username dan Password harus diisi!")
     else: st.warning("⚠️ Nama dan File wajib diisi!")
-    with tab2:
+with tab2:
         st.markdown("### 📦 Universal Import (Bisa untuk semua menu: CI, SKD, Jobdesk, dll)")
         st.info("""
         **Cara Pakai:**
@@ -1885,6 +1860,29 @@ elif pilihan == "📝 Log Aktivitas":
         else:
             st.info("Belum ada log aktivitas")
 
+elif pilihan == "🔄 Sinkronisasi Uniquip":
+    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1><p>Tarik Data Aset Otomatis dari Uniquip</p></div>', unsafe_allow_html=True)
+    
+    with st.form("login_form_uniquip"):
+        st.subheader("Login Uniquip")
+        user = st.text_input("User Uniquip", value="okana")
+        pwd = st.text_input("Password Uniquip", type="password")
+        submit = st.form_submit_button("Tarik Data Aset", type="primary")
+
+    if submit:
+        if user and pwd:
+            with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
+                try:
+                    df = tarik_data_uniquip(user, pwd)
+                    if isinstance(df, pd.DataFrame):
+                        st.success("✅ Data berhasil ditarik!")
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.error(f"Gagal: {df}")
+                except Exception as e:
+                    st.error(f"Terjadi kesalahan: {e}")
+        else:
+            st.warning("Username dan Password harus diisi!")
 else:
     st.warning(f"⚠️ Menu `{pilihan}` belum diimplementasikan.")
 
