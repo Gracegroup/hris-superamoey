@@ -547,7 +547,7 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
                         conn.commit(); st.success("✅ Dokumen berhasil disimpan!"); st.rerun()
                     except Exception as e: st.error(f"❌ Gagal: {e}")
                 else: st.warning("⚠️ Nama dan File wajib diisi!")
-       with tab2:
+    with tab2:
         st.markdown("### 📦 Universal Import (Bisa untuk semua menu: CI, SKD, Jobdesk, dll)")
         st.info("""
         **Cara Pakai:**
