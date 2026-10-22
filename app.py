@@ -69,9 +69,8 @@ create_install_button()
 # ==============================================================================
 
 
-# ==================== FITUR FLYER MELAYANG-LAYANG ====================
+# ==================== FITUR FLYER MELAYANG-LAYANG (DIPERBARUI) ====================
 def get_image_base64(path_options):
-    """Mencoba membaca file berdasarkan list nama yang diberikan (untuk handle double ekstensi)"""
     for path in path_options:
         try:
             with open(path, "rb") as img_file:
@@ -81,11 +80,11 @@ def get_image_base64(path_options):
     return ""
 
 def show_floating_flyers():
-    # Deteksi fleksibel: Mencari file .png, .jpeg, atau .png.jpeg
-    img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg"])
-    img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg"])
+    # Deteksi fleksibel (handle ekstensi ganda atau typo)
+    img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg", "flyer_mekanik.jpg"])
+    img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg", "flyer_warehouse.jpg"])
     
-    # Tentukan sumber gambar (Gunakan file lokal jika ada, jika tidak gunakan Placeholder URL)
+    # Placeholder jika gambar tidak ada
     src_mekanik = f"data:image/png;base64,{img_mekanik_b64}" if img_mekanik_b64 else "https://placehold.co/400x600/FFD700/000000.png?text=Flyer+Mekanik"
     src_warehouse = f"data:image/png;base64,{img_warehouse_b64}" if img_warehouse_b64 else "https://placehold.co/400x600/1e3a8a/FFFFFF.png?text=Flyer+Warehouse"
     
@@ -98,9 +97,9 @@ def show_floating_flyers():
         }
         .flyer-container {
             position: fixed;
-            bottom: 30px;
+            top: 130px; /* Dipindah ke atas layar */
             z-index: 999;
-            width: 220px;
+            width: 160px; /* Ukuran sedikit lebih kecil agar tidak menutupi layar */
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             animation: floatBounce 4s ease-in-out infinite;
@@ -109,8 +108,10 @@ def show_floating_flyers():
             padding: 5px;
         }
         .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
-        .flyer-left { left: 30px; animation-delay: 0s; }
-        .flyer-right { right: 30px; animation-delay: 2s; }
+        /* Posisi Kiri dan Kanan */
+        .flyer-left { left: 260px; animation-delay: 0s; } 
+        .flyer-right { right: 20px; animation-delay: 2s; }
+        
         @media (max-width: 768px) { .flyer-container { display: none; } }
     </style>
     """
