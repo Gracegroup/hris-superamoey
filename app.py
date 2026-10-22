@@ -1035,59 +1035,59 @@ elif pilihan == "⚠️ Disiplin & SP":
 
     with tab3:
         st.markdown("### 📥 Import Data SP (Excel / PDF)")
-        
         file_sp = st.file_uploader("Pilih file Excel (.xlsx/.csv) atau PDF Surat Peringatan", type=["xlsx", "csv", "pdf"])
         
         if file_sp is not None:
             if st.button("🚀 Proses Import", type="primary"):
                 try:
                     if file_sp.name.lower().endswith('.pdf'):
-                        # ================= LOGIKA BACA PDF =================
                         reader = PdfReader(BytesIO(file_sp.read()))
                         text = ""
                         for page in reader.pages:
                             text += page.extract_text() + "\n"
                         
-                        # Regex untuk mencari data di dalam PDF
-                        match_nama = re.search(r"Nama\s*:\s*(.*)", text, re.IGNORECASE)
-                        match_hal = re.search(r"Hal\s*:\s*(Surat Peringatan\s*\d+)", text, re.IGNORECASE)
-                        match_tgl = re.search(r"berlaku mulai tanggal\s*(\d{1,2}\s+\w+\s+\d{4})\s*-\s*(\d{1,2}\s+\w+\s+\d{4})", text, re.IGNORECASE)
-                        match_kesalahan = re.search(r"Kesalahan\s*:\s*(.*?)(?=Demikian|$)", text, re.IGNORECASE | re.DOTALL)
+                        # FITUR DEBUG: TAMPILKAN TEKS YANG DIBACA
+                        with st.expander("🔍 Lihat Teks yang dibaca dari PDF (Klik disini jika error)"):
+                            st.text_area("Isi PDF:", text, height=200, disabled=True)
                         
-                        nama_pdf = match_nama.group(1).strip() if match_nama else None
-                        jenis_pdf = match_hal.group(1).strip().replace(" ", "") if match_hal else "SP1" # default SP1
-                        
-                        # Fungsi bantu untuk format tanggal Indonesia ke YYYY-MM-DD
-                        def parse_tgl_ind(tgl_str):
-                            bulan_map = {"Januari":"01", "Februari":"02", "Maret":"03", "April":"04", "Mei":"05", "Juni":"06", "Juli":"07", "Agustus":"08", "September":"09", "Oktober":"10", "November":"11", "Desember":"12"}
-                            parts = tgl_str.strip().split()
-                            if len(parts) == 3:
-                                return f"{parts[2]}-{bulan_map.get(parts[1].capitalize(), '01')}-{parts[0].zfill(2)}"
-                            return str(date.today())
-
-                        tgl_mulai_pdf = parse_tgl_ind(match_tgl.group(1)) if match_tgl else str(date.today())
-                        tgl_akhir_pdf = parse_tgl_ind(match_tgl.group(2)) if match_tgl else str(date.today())
-                        pelanggaran_pdf = match_kesalahan.group(1).strip().replace('\n', ' ') if match_kesalahan else "Pelanggaran (Ekstrak PDF)"
-                        
-                        # Cari ID Karyawan berdasarkan nama yang diekstrak
-                        if nama_pdf:
-                            # Cari nama yang mirip di database
-                            karyawan_row = c.execute("SELECT id FROM karyawan WHERE full_name LIKE ?", (f"%{nama_pdf}%",)).fetchone()
-                            if karyawan_row:
-                                kid = karyawan_row[0]
-                                c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
-                                          (kid, jenis_pdf, tgl_mulai_pdf, tgl_akhir_pdf, pelanggaran_pdf, "Berakhir", tgl_mulai_pdf[:4]))
-                                conn.commit()
-                                st.success(f"✅ PDF berhasil dibaca! SP untuk **{nama_pdf}** telah diimport.")
-                                st.info(f"**Detail Ekstraksi:**\n- Sanksi: {jenis_pdf}\n- Mulai: {tgl_mulai_pdf}\n- Akhir: {tgl_akhir_pdf}\n- Pelanggaran: {pelanggaran_pdf}")
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Nama '{nama_pdf}' tidak ditemukan di Data Karyawan.")
+                        if not text.strip():
+                            st.error("❌ File PDF ini tidak memiliki teks (kemungkinan hasil scan/foto). Silakan gunakan Input Manual.")
                         else:
-                            st.error("❌ Gagal mengekstrak nama dari PDF. Pastikan PDF bukan hasil scan (foto).")
+                            match_nama = re.search(r"Nama\s*:?\s*(.*)", text, re.IGNORECASE)
+                            match_hal = re.search(r"Hal\s*:?\s*(Surat Peringatan\s*\d+)", text, re.IGNORECASE)
+                            match_tgl = re.search(r"berlaku mulai tanggal\s*(\d{1,2}\s+\w+\s+\d{4})\s*-\s*(\d{1,2}\s+\w+\s+\d{4})", text, re.IGNORECASE)
+                            match_kesalahan = re.search(r"Kesalahan\s*:?\s*(.*?)(?=Demikian|$)", text, re.IGNORECASE | re.DOTALL)
                             
+                            nama_pdf = match_nama.group(1).strip() if match_nama else None
+                            jenis_pdf = match_hal.group(1).strip().replace(" ", "") if match_hal else "SP1"
+                            
+                            def parse_tgl_ind(tgl_str):
+                                bulan_map = {"Januari":"01", "Februari":"02", "Maret":"03", "April":"04", "Mei":"05", "Juni":"06", "Juli":"07", "Agustus":"08", "September":"09", "Oktober":"10", "November":"11", "Desember":"12"}
+                                parts = tgl_str.strip().split()
+                                if len(parts) == 3:
+                                    return f"{parts[2]}-{bulan_map.get(parts[1].capitalize(), '01')}-{parts[0].zfill(2)}"
+                                return str(date.today())
+
+                            tgl_mulai_pdf = parse_tgl_ind(match_tgl.group(1)) if match_tgl else str(date.today())
+                            tgl_akhir_pdf = parse_tgl_ind(match_tgl.group(2)) if match_tgl else str(date.today())
+                            pelanggaran_pdf = match_kesalahan.group(1).strip().replace('\n', ' ') if match_kesalahan else "Pelanggaran (Ekstrak PDF)"
+                            
+                            if nama_pdf:
+                                nama_pdf_bersih = re.sub(r'[^a-zA-Z\s]', '', nama_pdf).strip()
+                                karyawan_row = c.execute("SELECT id FROM karyawan WHERE full_name LIKE ?", (f"%{nama_pdf_bersih}%",)).fetchone()
+                                if karyawan_row:
+                                    kid = karyawan_row[0]
+                                    c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
+                                              (kid, jenis_pdf, tgl_mulai_pdf, tgl_akhir_pdf, pelanggaran_pdf, "Berakhir", tgl_mulai_pdf[:4]))
+                                    conn.commit()
+                                    st.success(f"✅ PDF berhasil dibaca! SP untuk **{nama_pdf_bersih}** telah diimport.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Nama '{nama_pdf_bersih}' tidak ditemukan di Data Karyawan.")
+                            else:
+                                st.error("❌ Gagal menemukan kata 'Nama :'. Silakan cek kotak '🔍 Lihat Teks yang dibaca dari PDF' di atas.")
                     else:
-                        # ================= LOGIKA BACA EXCEL =================
+                        # LOGIKA BACA EXCEL
                         if file_sp.name.endswith('.csv'):
                             df_imp = pd.read_csv(file_sp)
                         else:
@@ -1123,6 +1123,8 @@ elif pilihan == "⚠️ Disiplin & SP":
                         
                 except Exception as e:
                     st.error(f"❌ Gagal memproses file: {e}")
+
+elif pilihan == "📤 Exit Clearance":
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1><p>Checklist Serah Terima Karyawan Resign</p></div>', unsafe_allow_html=True)
     df_exit = pd.read_sql_query("SELECT r.id, k.employee_id AS NRP, k.full_name AS Nama, r.tanggal_resign AS 'Tanggal Resign', r.jenis AS Jenis, r.clearance_status AS Clearance, r.exit_interview AS 'Exit Interview' FROM resign r JOIN karyawan k ON r.karyawan_id=k.id ORDER BY r.id DESC", conn)
