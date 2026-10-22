@@ -1,3 +1,10 @@
+import time
+from playwright.sync_api import sync_playwright
+import streamlit as st
+import pandas as pd
+import io
+import time
+from playwright.sync_api import sync_playwright
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -167,6 +174,38 @@ if c.fetchone()[0] == 0:
     conn.commit()
 
 # ==================== HELPER FUNCTIONS ====================
+def tarik_data_uniquip(user, pwd):
+    with sync_playwright() as p:
+        # headless=True agar berjalan diam-diam
+        browser = p.chromium.launch(headless=True) 
+        page = browser.new_page()
+        try:
+            page.goto("https://files.uniquip.co.id/asetuniquip/app_Login/")
+            page.wait_for_load_state('networkidle')
+            
+            page.fill('input[name="user"]', user)
+            page.fill('input[type="password"]', pwd)
+            page.click('input[value="Sign In"]')
+            page.wait_for_load_state('networkidle')
+            time.sleep(2)
+            
+            page.goto("https://files.uniquip.co.id/asetuniquip/menu_aset/")
+            page.wait_for_load_state('networkidle')
+            
+            page.click('text="Inventory Management"')
+            time.sleep(1)
+            page.click('text="List Aset"')
+            
+            page.wait_for_selector('table', timeout=15000)
+            time.sleep(3)
+            
+            html_content = page.content()
+            tables = pd.read_html(io.StringIO(html_content))
+            browser.close()
+            return tables[0] if tables else None
+        except Exception as e:
+            browser.close()
+            return str(e)
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
 def format_rp(n):
     try: return f"Rp {float(n):,.0f}".replace(",", ".")
@@ -1497,7 +1536,29 @@ elif pilihan == "💾 Import, Export & Backup":
             st.download_button("📥 Download Backup Database (SQLite)", db_bytes, f"backup_hris_{date.today()}.db", "application/octet-stream", type="primary", use_container_width=True)
         except Exception as e:
             st.error(f"Gagal membaca database: {e}")
+elif pilihan == "🔄 Sinkronisasi Uniquip":
+    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1><p>Tarik Data Aset Otomatis dari Uniquip</p></div>', unsafe_allow_html=True)
+    
+    with st.form("login_form_uniquip"):
+        st.subheader("Login Uniquip")
+        user = st.text_input("User Uniquip")
+        pwd = st.text_input("Password Uniquip", type="password")
+        submit = st.form_submit_button("Tarik Data Aset", type="primary")
 
+    if submit:
+        if user and pwd:
+            with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
+                try:
+                    df = tarik_data_uniquip(user, pwd)
+                    if isinstance(df, pd.DataFrame):
+                        st.success("✅ Data berhasil ditarik!")
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.error(f"Gagal: {df}")
+                except Exception as e:
+                    st.error(f"Gagal: {e}")
+        else:
+            st.warning("Username dan Password harus diisi!")
 elif pilihan == "👤 Manajemen User":
     st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1><p>Kelola Akses & Keamanan Sistem</p></div>', unsafe_allow_html=True)
 
@@ -1803,88 +1864,7 @@ else:
 # =====================================================================
 st.markdown("""
 <div style="text-align:center; padding: 25px 0 15px 0; color: #64748b; font-size: 0.85em; border-top: 1px solid #cbd5e1; margin-top: 30px;">
-    ⚡ <b>HRIS, GA & ASET SUPER v3.0</b> — Sistem Manajemen SDM Terpadu<br>
+    ⚡ <b>HRIS, GA & Amoey</b> — Sistem Manajemen SDM Terpadu<br>
     © 2024 — All Rights Reserved
 </div>
 """, unsafe_allow_html=True)
-import streamlit as st
-from playwright.sync_api import sync_playwright
-import pandas as pd
-import io
-import time
-
-def tarik_data_uniquip(username, password):
-    with sync_playwright() as p:
-        # Buka browser (headless=False agar Anda bisa melihat prosesnya)
-        browser = p.chromium.launch(headless=False) 
-        page = browser.new_page()
-        
-        try:
-            # 1. BUKA HALAMAN LOGIN
-            page.goto("https://files.uniquip.co.id/asetuniquip/app_Login/")
-            page.wait_for_load_state('networkidle')
-            
-            # 2. ISI FORM LOGIN
-            # Catatan: Jika kolom tidak terisi, cek F12 di kolom User/Password untuk melihat atribut 'name' atau 'id' aslinya.
-            page.fill('input[name="user"]', username) # Ganti jika atribut name-nya berbeda
-            page.fill('input[type="password"]', password)
-            
-            # 3. KLIK TOMBOL SIGN IN
-            # Kita gunakan target berdasarkan 'value="Sign In"' sesuai gambar Anda
-            page.click('input[value="Sign In"]')
-            
-            # Tunggu proses login selesai
-            page.wait_for_load_state('networkidle')
-            time.sleep(2) # Jeda ekstra untuk memastikan dashboard termuat
-            
-            # 4. BUKA HALAMAN ASET
-            page.goto("https://files.uniquip.co.id/asetuniquip/menu_aset/")
-            page.wait_for_load_state('networkidle')
-            
-            # 5. KLIK MENU INVENTORY & LIST ASET
-            page.click('text="Inventory Management"')
-            time.sleep(1) # Tunggu menu dropdown muncul
-            
-            page.click('text="List Aset"')
-            
-            # 6. TUNGGU TABEL MUNCUL DAN AMBIL DATA
-            page.wait_for_selector('table', timeout=15000)
-            time.sleep(3) # Beri waktu agar data tabel termuat sempurna
-            
-            html_content = page.content()
-            tables = pd.read_html(io.StringIO(html_content))
-            
-            browser.close()
-            
-            if len(tables) > 0:
-                return tables[0] # Ambil tabel pertama
-            else:
-                return None
-                
-        except Exception as e:
-            browser.close()
-            raise Exception(f"Error saat robot berjalan: {e}")
-
-# --- TAMPILAN STREAMLIT ---
-st.title("Auto-Sync Data Aset Uniquip")
-
-with st.form("login_form"):
-    st.subheader("Login Uniquip")
-    user = st.text_input("User")
-    pwd = st.text_input("Password", type="password")
-    submit = st.form_submit_button("Tarik Data Aset")
-
-if submit:
-    if user and pwd:
-        with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
-            try:
-                df = tarik_data_uniquip(user, pwd)
-                if df is not None:
-                    st.success("Data berhasil ditarik!")
-                    st.dataframe(df) 
-                else:
-                    st.warning("Tabel tidak ditemukan di halaman.")
-            except Exception as e:
-                st.error(f"Gagal: {e}")
-    else:
-        st.warning("Username dan Password harus diisi!")
