@@ -13,7 +13,7 @@ import altair as alt
 import base64
 import zipfile
 from datetime import datetime, timedelta, date
-from urllib.parse import quote
+from urllib.parse  quote
 from io import StringIO
 
 # Instal browser Chromium untuk Playwright di Streamlit Cloud
@@ -287,46 +287,114 @@ def import_data_manpower_melak(file):
     raw = file.read(); file.seek(0)
     xls = pd.ExcelFile(io.BytesIO(raw))
     sheet = 'DATABASE' if 'DATABASE' in xls.sheet_names else xls.sheet_names[0]
-    df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet, header=None, skiprows=2)
-    df.columns = df.iloc[0].astype(str).str.strip()
-    df = df.iloc[1:].reset_index(drop=True)
-    mask_skip = df['No'].astype(str).str.contains('DATA KARYAWAN|DEPARTEMENT|DEPARTEMEN|PLANT DEPARTEMENT', na=False, case=False)
-    df = df[~mask_skip].copy()
-    df = df[df['NRP'].notna()].copy()
-    df = df[df['NRP'].astype(str).str.strip() != ''].copy()
-    df = df[df['NRP'].astype(str) != 'nan'].copy()
-    if df.empty: return 0, 0, ["Tidak ada baris data valid"]
-    col_map = {'NRP': 'employee_id', 'Nama': 'full_name', 'Jabatan': 'job_position', 'Departemen': 'organization', 'Golongan': 'grade', 'GOL GJ': 'grade', 'No . HP': 'mobile_phone', 'No. HP': 'mobile_phone', 'Tgl_Masuk Kerja (DOH)': 'join_date', 'Tgl. Mulai PKWT': 'sign_date', 'Tgl. Akhir PKWT': 'end_date', 'Status kontrak': 'status_employee', 'Pendidikan terakhir': 'pendidikan_terakhir', 'Asal Sekolah': 'asal_sekolah', 'Jenis Kelamin': 'gender', 'Agama': 'religion', 'Golongan Darah': 'blood_type', 'Tempat Lahir': 'birth_place', 'Tanggal Lahir': 'birth_date', 'Status Keluarga': 'marital_status', 'No Rekening': 'bank_account', 'Nama Rekening': 'bank_account_holder', 'Bank': 'bank_name', 'Alamat Sesuai KTP': 'citizen_id_address', 'POH': 'poh', 'Status POH': 'status_poh', 'Tempat Tinggal': 'residential_address', 'Tgl. Keluar': 'resign_date', 'No KTP': 'no_ktp', 'NO KK': 'no_kk', 'No_BPJS Kesehatan': 'bpjs_kesehatan', 'No_BPJS ketenaga kerjaan': 'bpjs_ketenagakerjaan', 'Tgl. Awal Mine permit': 'mine_permit_start', 'Tgl. Akhir Mine Permit': 'mine_permit_end', 'Status Mine Permit': 'status_mine_permit', 'Versality': 'versatility', 'Versatility': 'versatility', 'Peringatan jatuh tempo PKWT': 'peringatan_pkwt', 'Keterangan karyawan': 'keterangan'}
+    df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
+    
     sukses, gagal, errors = 0, 0, []
-    for idx, row in df.iterrows():
-        try:
-            nrp = str(row.get('NRP', '')).strip()
-            if nrp.lower() in ['nan', '', 'none']: continue
-            data = {'employee_id': nrp}
-            for xls_col, db_col in col_map.items():
-                if xls_col in df.columns and db_col not in data:
-                    val = row.get(xls_col)
-                    if pd.notna(val) and str(val).strip().lower() not in ['nan', 'none', '']:
-                        if isinstance(val, (datetime, pd.Timestamp)): data[db_col] = val.strftime('%Y-%m-%d')
-                        elif db_col in ['join_date','sign_date','end_date','resign_date','mine_permit_start','mine_permit_end']:
-                            try: data[db_col] = pd.to_datetime(val).strftime('%Y-%m-%d')
-                            except: data[db_col] = str(val).strip()
-                        else: data[db_col] = str(val).strip()
-            if not data.get('full_name'): continue
-            c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,))
-            exists = c.fetchone()
-            if exists:
-                set_clause = ", ".join([f"{k}=?" for k in data.keys() if k != 'employee_id'])
-                vals = [v for k, v in data.items() if k != 'employee_id']; vals.append(exists[0])
-                c.execute(f"UPDATE karyawan SET {set_clause} WHERE id=?", vals)
-            else:
-                cols = ", ".join(data.keys()); phs = ", ".join(["?"] * len(data))
-                c.execute(f"INSERT INTO karyawan ({cols}) VALUES ({phs})", list(data.values()))
-            sukses += 1
-        except Exception as e:
-            gagal += 1; errors.append(f"Baris {idx+3}: {str(e)[:100]}")
-    conn.commit()
-    return sukses, gagal, errors
+    
+    # --- DETEKSI FORMAT BARU (EMPLOYEE ID) ---
+    if 'Employee ID' in df.columns:
+        col_map = {
+            'Employee ID': 'employee_id', 'Full Name': 'full_name', 'Barcode': 'barcode',
+            'Organization': 'organization', 'Job Position': 'job_position', 'Job Level': 'job_level',
+            'Join Date': 'join_date', 'Resign Date': 'resign_date', 'Status Employee': 'status_employee',
+            'End Date': 'end_date', 'Sign Date': 'sign_date', 'Email': 'email',
+            'Birth Date': 'birth_date', 'Age': 'age', 'Birth Place': 'birth_place',
+            'Citizen ID Address': 'citizen_id_address', 'Residential Address': 'residential_address',
+            'NPWP': 'npwp', 'PTKP Status': 'ptkp_status', 'Employee Tax Status': 'employee_tax_status',
+            'Tax Config': 'tax_config', 'Bank Name': 'bank_name', 'Bank Account': 'bank_account',
+            'Bank Account Holder': 'bank_account_holder', 'BPJS Ketenagakerjaan': 'bpjs_ketenagakerjaan',
+            'BPJS Kesehatan': 'bpjs_kesehatan', 'NIK (NPWP 16 Digit)': 'nik_npwp_16',
+            'Mobile Phone': 'mobile_phone', 'Phone': 'phone', 'Branch Name': 'branch_name',
+            'Parent Branch Name': 'parent_branch_name', 'Religion': 'religion', 'Gender': 'gender',
+            'Marital Status': 'marital_status', 'Blood Type': 'blood_type', 'Nationality Code': 'nationality_code',
+            'Currency': 'currency', 'Length Of Service': 'length_of_service', 'Payment Schedule': 'payment_schedule',
+            'Approval Line': 'approval_line', 'Manager': 'manager', 'Grade': 'grade',
+            'Class': 'class', 'Profile Picture': 'profile_picture', 'Cost Center': 'cost_center',
+            'Cost Center Category': 'cost_center_category', 'SBU': 'sbu', 'NPWP 16 digit (new)': 'npwp_16_new',
+            'Passport': 'passport', 'Passport Expiration Date': 'passport_expiration_date',
+            'Jenis Dok. Referensi Bukti Potong': 'jenis_dok_referensi_bukti_potong',
+            'Nomor Dok. Referensi Bukti Potong': 'nomor_dok_referensi_bukti_potong',
+            'Tanggal Dok. Referensi Bukti Potong': 'tanggal_dok_referensi_bukti_potong',
+            'TIN (Taxpayer Identification Number)': 'tin', 'Divisi': 'divisi', 'Keterangan': 'keterangan'
+        }
+        
+        for idx, row in df.iterrows():
+            try:
+                nrp = str(row.get('Employee ID', '')).strip()
+                if nrp.lower() in ['nan', '', 'none']: continue
+                data = {'employee_id': nrp}
+                
+                for xls_col, db_col in col_map.items():
+                    if xls_col in df.columns and db_col not in data:
+                        val = row.get(xls_col)
+                        if pd.notna(val) and str(val).strip().lower() not in ['nan', 'none', '']:
+                            # Format tanggal khusus untuk kolom date
+                            if db_col in ['join_date','sign_date','end_date','resign_date','birth_date','tanggal_dok_referensi_bukti_potong']:
+                                try: data[db_col] = pd.to_datetime(val).strftime('%Y-%m-%d')
+                                except: data[db_col] = str(val).strip()
+                            else: data[db_col] = str(val).strip()
+                
+                if not data.get('full_name'): continue
+                
+                # Simpan ke Database (Cek jika NRP sudah ada, maka Update. Jika belum, Insert)
+                c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,))
+                exists = c.fetchone()
+                if exists:
+                    set_clause = ", ".join([f"{k}=?" for k in data.keys() if k != 'employee_id'])
+                    vals = [v for k, v in data.items() if k != 'employee_id']; vals.append(exists[0])
+                    c.execute(f"UPDATE karyawan SET {set_clause} WHERE id=?", vals)
+                else:
+                    cols = ", ".join(data.keys()); phs = ", ".join(["?"] * len(data))
+                    c.execute(f"INSERT INTO karyawan ({cols}) VALUES ({phs})", list(data.values()))
+                sukses += 1
+            except Exception as e:
+                gagal += 1; errors.append(f"Baris {idx+2}: {str(e)[:100]}")
+        
+        conn.commit()
+        return sukses, gagal, errors
+
+    # --- JIKA FORMAT LAMA (MELAK) ---
+    else:
+        # (Kode lama Anda yang asli, biarkan saja di bawah ini)
+        df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet, header=None, skiprows=2)
+        df.columns = df.iloc[0].astype(str).str.strip()
+        df = df.iloc[1:].reset_index(drop=True)
+        mask_skip = df['No'].astype(str).str.contains('DATA KARYAWAN|DEPARTEMENT|DEPARTEMEN|PLANT DEPARTEMENT', na=False, case=False)
+        df = df[~mask_skip].copy()
+        df = df[df['NRP'].notna()].copy()
+        df = df[df['NRP'].astype(str).str.strip() != ''].copy()
+        df = df[df['NRP'].astype(str) != 'nan'].copy()
+        if df.empty: return 0, 0, ["Tidak ada baris data valid"]
+        col_map = {'NRP': 'employee_id', 'Nama': 'full_name', 'Jabatan': 'job_position', 'Departemen': 'organization', 'Golongan': 'grade', 'GOL GJ': 'grade', 'No . HP': 'mobile_phone', 'No. HP': 'mobile_phone', 'Tgl_Masuk Kerja (DOH)': 'join_date', 'Tgl. Mulai PKWT': 'sign_date', 'Tgl. Akhir PKWT': 'end_date', 'Status kontrak': 'status_employee', 'Pendidikan terakhir': 'pendidikan_terakhir', 'Asal Sekolah': 'asal_sekolah', 'Jenis Kelamin': 'gender', 'Agama': 'religion', 'Golongan Darah': 'blood_type', 'Tempat Lahir': 'birth_place', 'Tanggal Lahir': 'birth_date', 'Status Keluarga': 'marital_status', 'No Rekening': 'bank_account', 'Nama Rekening': 'bank_account_holder', 'Bank': 'bank_name', 'Alamat Sesuai KTP': 'citizen_id_address', 'POH': 'poh', 'Status POH': 'status_poh', 'Tempat Tinggal': 'residential_address', 'Tgl. Keluar': 'resign_date', 'No KTP': 'no_ktp', 'NO KK': 'no_kk', 'No_BPJS Kesehatan': 'bpjs_kesehatan', 'No_BPJS ketenaga kerjaan': 'bpjs_ketenagakerjaan', 'Tgl. Awal Mine permit': 'mine_permit_start', 'Tgl. Akhir Mine Permit': 'mine_permit_end', 'Status Mine Permit': 'status_mine_permit', 'Versality': 'versatility', 'Versatility': 'versatility', 'Peringatan jatuh tempo PKWT': 'peringatan_pkwt', 'Keterangan karyawan': 'keterangan'}
+        for idx, row in df.iterrows():
+            try:
+                nrp = str(row.get('NRP', '')).strip()
+                if nrp.lower() in ['nan', '', 'none']: continue
+                data = {'employee_id': nrp}
+                for xls_col, db_col in col_map.items():
+                    if xls_col in df.columns and db_col not in data:
+                        val = row.get(xls_col)
+                        if pd.notna(val) and str(val).strip().lower() not in ['nan', 'none', '']:
+                            if isinstance(val, (datetime, pd.Timestamp)): data[db_col] = val.strftime('%Y-%m-%d')
+                            elif db_col in ['join_date','sign_date','end_date','resign_date','mine_permit_start','mine_permit_end']:
+                                try: data[db_col] = pd.to_datetime(val).strftime('%Y-%m-%d')
+                                except: data[db_col] = str(val).strip()
+                            else: data[db_col] = str(val).strip()
+                if not data.get('full_name'): continue
+                c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,))
+                exists = c.fetchone()
+                if exists:
+                    set_clause = ", ".join([f"{k}=?" for k in data.keys() if k != 'employee_id'])
+                    vals = [v for k, v in data.items() if k != 'employee_id']; vals.append(exists[0])
+                    c.execute(f"UPDATE karyawan SET {set_clause} WHERE id=?", vals)
+                else:
+                    cols = ", ".join(data.keys()); phs = ", ".join(["?"] * len(data))
+                    c.execute(f"INSERT INTO karyawan ({cols}) VALUES ({phs})", list(data.values()))
+                sukses += 1
+            except Exception as e:
+                gagal += 1; errors.append(f"Baris {idx+3}: {str(e)[:100]}")
+        conn.commit()
+        return sukses, gagal, errors
 
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
