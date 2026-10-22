@@ -589,7 +589,7 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
                         c.execute('''INSERT INTO arsip_dokumen (tanggal_upload, nama_dokumen, kategori, keterangan, file_data, file_name, file_type) VALUES (?,?,?,?,?,?,?)''', (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nama_dok, kategori, keterangan, file_bytes, file_name, file_type))
                         conn.commit(); st.success("✅ Dokumen berhasil disimpan!"); st.rerun()
                     except Exception as e: st.error(f"❌ Gagal: {e}")
-                        elif pilihan == "🔄 Sinkronisasi Uniquip":
+elif pilihan == "🔄 Sinkronisasi Uniquip":
     st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1><p>Tarik Data Aset Otomatis dari Uniquip</p></div>', unsafe_allow_html=True)
     
     with st.form("login_form_uniquip"):
