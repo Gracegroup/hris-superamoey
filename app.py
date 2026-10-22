@@ -1456,16 +1456,71 @@ elif pilihan == "💾 Import, Export & Backup":
                 except Exception as e:
                     st.error(f"❌ Gagal import: {e}")
 
-    with tab3:
-        st.markdown("### 📤 Export Data ke Excel/CSV")
-        tabel_export = st.selectbox("Pilih Tabel yang akan di-Export", ["karyawan", "absensi", "payroll", "cuti", "kandidat", "lowongan", "aset", "utility", "jobdesk", "ci", "skd"], key="sel_export")
-        try:
-            df_exp = pd.read_sql_query(f"SELECT * FROM {tabel_export}", conn)
-            st.dataframe(df_exp.head(5), use_container_width=True)
-            csv_exp = df_exp.to_csv(index=False).encode('utf-8')
-            st.download_button(f"📥 Download {tabel_export.upper()} (CSV)", csv_exp, f"{tabel_export}_{date.today()}.csv", "text/csv", type="primary")
-        except Exception as e:
-            st.error(f"Gagal export: {e}")
+      with tab3:
+        st.markdown("### 📥 Import Data SP (Excel / PDF)")
+        file_sp = st.file_uploader("Pilih file Excel (.xlsx/.csv) atau PDF Surat Peringatan", type=["xlsx", "csv", "pdf"])
+        
+        if file_sp is not None:
+            if st.button("🚀 Proses Import", type="primary"):
+                try:
+                    if file_sp.name.lower().endswith('.pdf'):
+                        # --- LOGIKA PDF (TETAP) ---
+                        from pypdf import PdfReader
+                        from io import BytesIO
+                        import re
+                        reader = PdfReader(BytesIO(file_sp.read()))
+                        text = ""
+                        for page in reader.pages: text += page.extract_text() + "\n"
+                        
+                        if not text.strip():
+                            st.error("❌ File PDF ini tidak memiliki teks (kemungkinan hasil scan/foto). Silakan gunakan Input Manual atau Excel.")
+                        else:
+                            with st.expander("🔍 Lihat Teks PDF"):
+                                st.text_area("Isi:", text, height=150, disabled=True)
+                            st.info("PDF berhasil dibaca. (Fitur ekstraksi otomatis sedang disesuaikan dengan format PDF Anda).")
+                            
+                    else:
+                        # --- LOGIKA EXCEL / CSV ---
+                        if file_sp.name.endswith('.csv'):
+                            df_imp = pd.read_csv(file_sp)
+                        else:
+                            df_imp = pd.read_excel(file_sp)
+                        
+                        # Cek jika file hanya berisi header (kosong)
+                        if df_imp.empty:
+                            st.warning("⚠️ File yang Anda upload kosong. Silakan isi datanya terlebih dahulu di Excel/CSV.")
+                        else:
+                            sukses, gagal = 0, 0
+                            errors = []
+                            
+                            for index, row in df_imp.iterrows():
+                                try:
+                                    nrp = str(row['NRP']).strip()
+                                    karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
+                                    
+                                    if karyawan_row:
+                                        kid = karyawan_row[0]
+                                        c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
+                                                  (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
+                                        sukses += 1
+                                    else:
+                                        gagal += 1
+                                        errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan.")
+                                except Exception as e:
+                                    gagal += 1
+                                    errors.append(f"Baris {index+2}: Format kolom salah ({str(e)})")
+                                    
+                            conn.commit()
+                            if sukses > 0: 
+                                st.success(f"✅ Berhasil import {sukses} data!")
+                                st.rerun()
+                            if gagal > 0:
+                                st.warning(f"⚠️ Gagal import {gagal} baris.")
+                                with st.expander("Lihat Error"): 
+                                    for err in errors: st.write(err)
+                        
+                except Exception as e:
+                    st.error(f"❌ Gagal memproses file: {e}")
 
     with tab4:
         st.markdown("### 💾 Backup Database")
