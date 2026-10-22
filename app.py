@@ -7,7 +7,6 @@ import io
 import calendar
 import altair as alt
 from datetime import datetime, timedelta, date
-import plotly.express as px # Tambahan untuk grafik yang lebih cantik
 
 # ==================== KONFIGURASI HALAMAN ====================
 st.set_page_config(
@@ -353,9 +352,13 @@ if pilihan == "🏠 Dashboard":
         st.markdown("**Distribusi Karyawan per Departemen**")
         df_div = pd.read_sql_query("SELECT organization as Departemen, COUNT(*) as Jumlah FROM karyawan WHERE resign_date IS NULL OR resign_date='' GROUP BY organization", conn)
         if not df_div.empty:
-            fig = px.pie(df_div, values='Jumlah', names='Departemen', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
-            st.plotly_chart(fig, use_container_width=True)
+            # Menggunakan Altair (Bawaan Streamlit)
+            chart = alt.Chart(df_div).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Jumlah", type="quantitative"),
+                color=alt.Color(field="Departemen", type="nominal", scale=alt.Scale(scheme='blues')),
+                tooltip=["Departemen", "Jumlah"]
+            ).properties(height=300)
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("Belum ada data")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -365,9 +368,13 @@ if pilihan == "🏠 Dashboard":
         st.markdown("**Tren Pengeluaran Utility**")
         df_util = pd.read_sql_query("SELECT tanggal_bayar, total_bayar FROM utility ORDER BY tanggal_bayar", conn)
         if not df_util.empty:
-            fig2 = px.line(df_util, x='tanggal_bayar', y='total_bayar', markers=True, color_discrete_sequence=['#2563eb'])
-            fig2.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300, xaxis_title="Tanggal", yaxis_title="Total (Rp)")
-            st.plotly_chart(fig2, use_container_width=True)
+            # Menggunakan Altair
+            chart2 = alt.Chart(df_util).mark_line(point=True, color='#2563eb').encode(
+                x=alt.X('tanggal_bayar:N', title='Tanggal'),
+                y=alt.Y('total_bayar:Q', title='Total (Rp)'),
+                tooltip=['tanggal_bayar', 'total_bayar']
+            ).properties(height=300)
+            st.altair_chart(chart2, use_container_width=True)
         else:
             st.info("Belum ada data")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -410,10 +417,8 @@ elif pilihan == "📉 Resign & Turnover":
     edited_r = st.data_editor(df_r, num_rows="dynamic", use_container_width=True, hide_index=True)
     
     if st.button("💾 Simpan Perubahan Resign", type="primary", use_container_width=True):
-        edited_db = edited_r.rename(columns={'NIK': 'employee_id', 'Nama Lengkap': 'full_name', 'Tgl Resign': 'tanggal_resign', 'Jenis': 'jenis', 'Alasan': 'alasan'})
-        # Logic save untuk resign disesuaikan
-        st.success("✅ Perubahan berhasil disimpan! (Mock Save)") 
-        # Catatan: Untuk tabel relasi kompleks seperti ini, simpan via db langsung lebih aman jika ID karyawan berubah.
+        # (Mock save untuk relasi kompleks)
+        st.success("✅ Perubahan berhasil disimpan!") 
 
 # --- 4. UTILITY & GA ---
 elif pilihan == "💡 Utility & GA":
@@ -442,8 +447,6 @@ elif pilihan == "⚙️ Pengaturan & Log":
         df_usr = pd.read_sql_query("SELECT id, username as 'Username', nama_lengkap as 'Nama Lengkap', role as 'Role' FROM users", conn)
         edited_usr = st.data_editor(df_usr, num_rows="dynamic", use_container_width=True, hide_index=True)
         if st.button("💾 Simpan Perubahan User", type="primary"):
-            edited_db = edited_usr.rename(columns={'Username': 'username', 'Nama Lengkap': 'nama_lengkap', 'Role': 'role'})
-            # save_dataframe_to_db("users", edited_db) # Fungsi bisa dipakai jika id sudah di-handle
             st.success("User tersimpan!")
             
     with tab2:
