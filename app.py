@@ -186,8 +186,7 @@ def tarik_data_uniquip(user, pwd):
         try:
             page.goto("https://files.uniquip.co.id/asetuniquip/app_Login/")
             page.wait_for_load_state('networkidle')
-            
-           page.locator('input[type="text"]').first.fill(username)
+            page.locator('input[type="text"]').first.fill(username)
             page.fill('input[type="password"]', pwd)
             page.click('input[value="Sign In"]')
             page.wait_for_load_state('networkidle')
