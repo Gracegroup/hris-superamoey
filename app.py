@@ -991,10 +991,12 @@ elif pilihan == "📉 Resign & Turnover":
 
 elif pilihan == "⚠️ Disiplin & SP":
     st.markdown('<div class="main-header"><h1>⚠️ Disiplin & Surat Peringatan (SP)</h1></div>', unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["➕ Input SP", "📋 Daftar SP"])
-    list_kar_sp = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
-    opt_sp = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_sp.iterrows()}
+    
+    tab1, tab2, tab3 = st.tabs(["➕ Input Manual", "📋 Daftar SP", "📥 Import Excel"])
+    
     with tab1:
+        list_kar_sp = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
+        opt_sp = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_sp.iterrows()}
         with st.form("form_sp", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
@@ -1012,6 +1014,7 @@ elif pilihan == "⚠️ Disiplin & SP":
                     conn.commit(); st.success("✅ SP tersimpan!"); st.rerun()
                 else:
                     st.error("⚠️ Karyawan & rincian wajib diisi")
+
     with tab2:
         filter_sp = st.selectbox("Filter Status", ["Semua", "Aktif", "Berakhir", "Dibatalkan"])
         q_sp = "SELECT d.id, k.employee_id AS NRP, k.full_name AS Nama, d.jenis_sanksi AS Sanksi, d.tanggal_mulai AS Mulai, d.tanggal_akhir AS Akhir, d.rincian_pelanggaran AS Pelanggaran, d.status AS Status FROM disiplin d JOIN karyawan k ON d.karyawan_id=k.id"
@@ -1025,6 +1028,74 @@ elif pilihan == "⚠️ Disiplin & SP":
             st.dataframe(df_sp.drop(columns=['id']), use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada data SP")
+
+    with tab3:
+        st.markdown("### 📥 Import Data SP dari Excel/CSV")
+        st.info("""
+        **Panduan Format Excel:**
+        Buat file Excel dengan kolom persis seperti ini (baris pertama adalah judul):
+        *   `NRP` (wajib)
+        *   `Jenis_Sanksi` (Contoh: SP1, SP2, Teguran Lisan)
+        *   `Tanggal_Mulai` (Format: YYYY-MM-DD, cth: 2026-03-11)
+        *   `Tanggal_Akhir` (Format: YYYY-MM-DD, cth: 2026-09-10)
+        *   `Rincian_Pelanggaran`
+        *   `Status` (Aktif / Berakhir / Dibatalkan)
+        *   `Periode` (Contoh: 2026)
+        """)
+        
+        # Tombol Download Template
+        template_df = pd.DataFrame(columns=["NRP", "Jenis_Sanksi", "Tanggal_Mulai", "Tanggal_Akhir", "Rincian_Pelanggaran", "Status", "Periode"])
+        template_df.loc[0] = ["MELAK001", "SP1", "2026-03-11", "2026-09-10", "Tidak mentaati ketentuan hari kerja", "Berakhir", "2026"]
+        csv_template = template_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📄 Download Template Excel/CSV", csv_template, "template_import_sp.csv", "text/csv")
+        
+        st.markdown("---")
+        file_sp = st.file_uploader("Pilih file Excel/CSV yang sudah diisi", type=["xlsx", "csv"])
+        
+        if file_sp is not None:
+            if st.button("🚀 Proses Import", type="primary"):
+                try:
+                    if file_sp.name.endswith('.csv'):
+                        df_imp = pd.read_csv(file_sp)
+                    else:
+                        df_imp = pd.read_excel(file_sp)
+                        
+                    sukses, gagal = 0, 0
+                    errors = []
+                    
+                    for index, row in df_imp.iterrows():
+                        try:
+                            nrp = str(row['NRP']).strip()
+                            # Cari ID karyawan berdasarkan NRP
+                            karyawan_row = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,)).fetchone()
+                            
+                            if karyawan_row:
+                                kid = karyawan_row[0]
+                                c.execute('''INSERT INTO disiplin (karyawan_id, jenis_sanksi, tanggal_mulai, tanggal_akhir, rincian_pelanggaran, status, periode) VALUES (?,?,?,?,?,?,?)''', 
+                                          (kid, str(row['Jenis_Sanksi']), str(row['Tanggal_Mulai']), str(row['Tanggal_Akhir']), str(row['Rincian_Pelanggaran']), str(row['Status']), str(row['Periode'])))
+                                sukses += 1
+                            else:
+                                gagal += 1
+                                errors.append(f"Baris {index+2}: NRP {nrp} tidak ditemukan di Data Karyawan.")
+                        except Exception as e:
+                            gagal += 1
+                            errors.append(f"Baris {index+2}: Format data salah ({str(e)})")
+                            
+                    conn.commit()
+                    
+                    if sukses > 0:
+                        st.success(f"✅ Berhasil import {sukses} data SP!")
+                    if gagal > 0:
+                        st.warning(f"⚠️ Gagal import {gagal} baris.")
+                        with st.expander("Lihat Detail Error"):
+                            for err in errors:
+                                st.write(err)
+                                
+                    if sukses > 0:
+                        st.rerun()
+                        
+                except Exception as e:
+                    st.error(f"❌ Gagal membaca file: {e}")
 
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1><p>Checklist Serah Terima Karyawan Resign</p></div>', unsafe_allow_html=True)
