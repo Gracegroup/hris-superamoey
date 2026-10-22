@@ -1503,6 +1503,52 @@ elif pilihan == "💾 Import, Export & Backup":
             - `cuti`: **karyawan_id** & **jenis_cuti**
             """)
 
+        # ==========================================
+        # FITUR DOWNLOAD TEMPLATE EXCEL (TAMBAHAN BARU)
+        # ==========================================
+        st.markdown("---")
+        st.markdown("### 📥 Download Template Excel Kandidat")
+        st.info("Gunakan template ini untuk mempermudah import data kandidat.")
+        
+        # Data kandidat dari CV Anda
+        data_kandidat = {
+            'nama': ['Muhammad Rizki Fahrozi', 'Nugroho Isnan Pamungkas', 'Imran Deriawan', 'Agrey Surya Nugraha'],
+            'posisi_dilamar': ['Warehouseman site', 'Mekanik', 'Mekanik', 'Warehouseman Site'],
+            'telepon': ['082199293734', '081326222734', '085342600393', '085348493230'],
+            'email': ['mrizkifahrozi@gmail.com', 'nugrohoisnan211104@gmail.com', 'imrannautika19@gmail.com', 'agreynugraha@gmail.com'],
+            'sumber': ['Job Portal', 'Job Portal', 'Job Portal', 'LinkedIn'],
+            'tanggal_lamar': ['2026-10-17', '2026-10-19', '2026-10-20', '2026-10-19'],
+            'status': ['Proses', 'Proses', 'Proses', 'Proses'],
+            'catatan': [
+                'Lulusan S1 Teknik Informatika. Berpengalaman sebagai Warehouseman di PT Hexindo.',
+                'Lulusan SMK Teknik Kendaraan Ringan. Berpengalaman maintenance heavy equipment di PT Bumi Citra Tractor.',
+                'Mekanik Alat Berat (4+ tahun). Berpengalaman di PT Bumi Citra Tractor Nusantara dan PT Eka Karya Cipta Simpatik.',
+                'Berpengalaman sebagai Admin Workshop, Fueltruck Driver, dan Teknisi. Memiliki SIM B2 Umum.'
+            ],
+            'jadwal_interview': ['', '', '', ''],
+            'status_berkas': ['Lengkap', 'Lengkap', 'Lengkap', 'Lengkap'],
+            'catatan_berkas': ['', '', '', '']
+        }
+        
+        df_template = pd.DataFrame(data_kandidat)
+        
+        # Membuat file Excel di memori
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_template.to_excel(writer, index=False, sheet_name='Data Kandidat')
+        
+        # Tombol Download
+        st.download_button(
+            label="📥 Download Excel Kandidat (4 Data)",
+            data=buffer.getvalue(),
+            file_name="data_kandidat_import.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+        st.markdown("---")
+        # ==========================================
+
+
         f = st.file_uploader(
             f"📂 Upload file untuk {tabel}",
             type=["csv", "xlsx", "xls", "xlsm", "json", "docx", "pdf", "txt", "tsv"]
