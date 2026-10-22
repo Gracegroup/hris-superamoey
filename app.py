@@ -16,8 +16,8 @@ from io import StringIO
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(
-    page_title="HRIS & GA SUPER v3.0",
-    page_icon="⚡",
+    page_title="❤️ HRIS & GA Amoey ❤️ ",
+    page_icon="❤️ ",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -760,7 +760,7 @@ if pilihan == "🏠 Dashboard HRIS" and tampilkan_flyer:
     show_floating_flyers()
 
 if pilihan == "🏠 Dashboard HRIS":
-    st.markdown(f'<div class="main-header"><h1>⚡ HRIS, GA & ASET DASHBOARD</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="main-header"><h1>❤️  HRIS & GA ❤️ Amoey Dashboard</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
     
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
     aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
