@@ -81,6 +81,10 @@ def show_floating_flyers():
     img_mekanik = get_image_base64("flyer_mekanik.png")
     img_warehouse = get_image_base64("flyer_warehouse.png")
     
+    # JIKA FILE GAMBAR TIDAK DITEMUKAN, JANGAN TAMPILKAN APA-APA (Mencegah ikon rusak)
+    if not img_mekanik and not img_warehouse:
+        return
+        
     html_flyers = """
     <style>
         @keyframes floatBounce {
@@ -101,7 +105,7 @@ def show_floating_flyers():
         .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
         .flyer-left { left: 30px; animation-delay: 0s; }
         .flyer-right { right: 30px; animation-delay: 2s; }
-        @media (max-width: 768px) { .flyer-container { display: none; } } /* Sembunyikan di HP agar tidak menutupi layar */
+        @media (max-width: 768px) { .flyer-container { display: none; } }
     </style>
     """
     
@@ -685,160 +689,77 @@ def hitung_pph21(bruto_bulanan, ptkp_setahun, iuran_pensiun_bulanan):
 PTKP_MAP = {"TK/0": 54000000, "TK/1": 58500000, "TK/2": 63000000, "TK/3": 67500000,
             "K/0": 58500000, "K/1": 63000000, "K/2": 67500000, "K/3": 72000000}
 
-# ==================== NEW HELPER: UNIVERSAL CRUD ====================
 def render_crud_table(table_name, title, original_df):
-    """Fungsi untuk menampilkan tabel yang bisa di-edit, dihapus, dan disimpan"""
     st.markdown(f"### 📋 Data {title}")
-    
-    # Tampilkan tabel interaktif
-    edited_df = st.data_editor(
-        original_df, 
-        num_rows="dynamic", 
-        use_container_width=True, 
-        hide_index=True
-    )
-    
-    # Tombol Save
+    edited_df = st.data_editor(original_df, num_rows="dynamic", use_container_width=True, hide_index=True)
     if st.button(f"💾 Simpan Perubahan {title}", type="primary", use_container_width=True):
         cur = conn.cursor()
-        
-        # Bersihkan ID agar menjadi integer
         edited_df['id'] = pd.to_numeric(edited_df['id'], errors='coerce').fillna(0).astype(int)
         old_ids = set(original_df['id'].dropna().astype(int).tolist()) if not original_df.empty else set()
         new_ids = set(edited_df[edited_df['id'] > 0]['id'].tolist())
-        
-        # 1. Proses HAPUS (Baris yang hilang dari tabel)
-        for did in (old_ids - new_ids):
-            cur.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
-            
-        # 2. Proses TAMBAH & EDIT
+        for did in (old_ids - new_ids): cur.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
         cols = [col for col in edited_df.columns if col != 'id']
         for _, row in edited_df.iterrows():
-            # Tangani nilai NaN (kosong) menjadi None (NULL di SQLite)
             vals = [None if pd.isna(row[col]) else row[col] for col in cols]
-            
             if row['id'] == 0:
-                # INSERT DATA BARU
-                ph = ", ".join(["?"] * len(cols))
-                cur.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({ph})", tuple(vals))
+                ph = ", ".join(["?"] * len(cols)); cur.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({ph})", tuple(vals))
             else:
-                # UPDATE DATA LAMA
-                set_c = ", ".join([f"{col}=?" for col in cols])
-                cur.execute(f"UPDATE {table_name} SET {set_c} WHERE id=?", tuple(vals) + (row['id'],))
-                
-        conn.commit()
-        st.success(f"✅ Perubahan data {title} berhasil disimpan!")
-        st.rerun()
+                set_c = ", ".join([f"{col}=?" for col in cols]); cur.execute(f"UPDATE {table_name} SET {set_c} WHERE id=?", tuple(vals) + (row['id'],))
+        conn.commit(); st.success(f"✅ Perubahan data {title} berhasil disimpan!"); st.rerun()
 
 # ==================== SEED USER ====================
 c.execute("SELECT COUNT(*) FROM users")
 if c.fetchone()[0] == 0:
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)",
-              ("admin", hash_password("admin123"), "OKANAHARIANTO", "admin"))
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)",
-              ("hrd", hash_password("hrd123"), "HRD Staff", "hrd"))
+    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hash_password("admin123"), "OKANAHARIANTO", "admin"))
+    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hash_password("hrd123"), "HRD Staff", "hrd"))
     conn.commit()
 
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.nama = ""
-    st.session_state.role = ""
+    st.session_state.logged_in = False; st.session_state.username = ""; st.session_state.nama = ""; st.session_state.role = ""
 
 if not st.session_state.logged_in:
-    st.markdown("""
-    <div class="main-header">
-        <h1>⚡ HRIS, GA & ASET SUPER v3.0</h1>
-        <p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility<br>
-        <span style="font-size:0.8em;">Terintegrasi DATA MANPOWER SITE MELAK & Utility Melak</span></p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA & ASET SUPER v3.0</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility<br><span style="font-size:0.8em;">Terintegrasi DATA MANPOWER SITE MELAK & Utility Melak</span></p></div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         with st.form("login"):
             st.subheader("🔐 Login Sistem")
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
+            u = st.text_input("Username"); p = st.text_input("Password", type="password")
             if st.form_submit_button("Masuk"):
                 row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
                 if row and row[1] == hash_password(p) and row[4] == 1:
-                    st.session_state.logged_in = True
-                    st.session_state.username = row[0]
-                    st.session_state.nama = row[2]
-                    st.session_state.role = row[3]
-                    log_aksi(u, "LOGIN")
-                    st.rerun()
-                else:
-                    st.error("❌ Username / password salah")
+                    st.session_state.logged_in = True; st.session_state.username = row[0]; st.session_state.nama = row[2]; st.session_state.role = row[3]
+                    log_aksi(u, "LOGIN"); st.rerun()
+                else: st.error("❌ Username / password salah")
         st.info("🔑 Default: **admin** / **admin123**  •  **hrd** / **hrd123**")
     st.stop()
 
 # ==================== SIDEBAR MENU ====================
 with st.sidebar:
-    st.markdown(f"""
-    <div style="text-align:center; padding: 15px 0;">
-        <div style="font-size:3em;">👤</div>
-        <h3 style="margin:5px 0;">{st.session_state.nama}</h3>
-        <p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p>
-        <p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
-
-    menu = [
-        "🏠 Dashboard HRIS",
-        "👥 Data Karyawan",
-        "📅 Absensi & Kehadiran",
-        "🏖️ Cuti & Izin",
-        "💰 Payroll & Slip Gaji",
-        "📋 Rekrutmen & CV",
-        "📋 Jobdesk",
-        "💡 CI Report",
-        "🏥 SKD",
-        "📝 Internal Memo",
-        "🔄 Mutasi & PKWT",
-        "📉 Resign & Turnover",
-        "⚠️ Disiplin & SP",
-        "📤 Exit Clearance",
-        "📱 WhatsApp Reminder",
-        "🚛 Aset & Properti",
-        "🏪 Ruko & Tenant",
-        "💡 Utility Melak",
-        "📊 Laporan & Analitik",
-        "📈 Manpower Report",
-        "💾 Import, Export & Backup",
-    ]
-    if st.session_state.role == "admin":
-        menu += ["👤 Manajemen User", "📝 Log Aktivitas"]
-
+    
+    menu = ["🏠 Dashboard HRIS", "👥 Data Karyawan", "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", "🏥 SKD", "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"]
+    if st.session_state.role == "admin": menu += ["👤 Manajemen User", "📝 Log Aktivitas"]
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
     
     st.markdown("---")
-    # Toggle untuk menampilkan / menyembunyikan Flyer
     tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
     
     st.markdown("---")
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
-        for k in ["logged_in", "username", "nama", "role"]:
-            st.session_state[k] = False if k == "logged_in" else ""
+        for k in ["logged_in", "username", "nama", "role"]: st.session_state[k] = False if k == "logged_in" else ""
         st.rerun()
 
 # ==================== KONTEN MENU ====================
 
-# TAMPILKAN FLYER JIKA DICENTANG DAN SEDANG DI DASHBOARD
 if pilihan == "🏠 Dashboard HRIS" and tampilkan_flyer:
     show_floating_flyers()
 
 if pilihan == "🏠 Dashboard HRIS":
-    st.markdown(f"""
-    <div class="main-header">
-        <h1>⚡ HRIS, GA & ASET DASHBOARD</h1>
-        <p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime('%d/%m/%Y, %H.%M.%S')}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown(f'<div class="main-header"><h1>⚡ HRIS, GA & ASET DASHBOARD</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
+    
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
     aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
@@ -863,19 +784,11 @@ if pilihan == "🏠 Dashboard HRIS":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-    # --- TAMBAHAN BARU: DETAIL OPEN VACANT ---
     st.markdown('<div class="section-header"><h3>📢 Detail Kebutuhan (Open Vacant)</h3></div>', unsafe_allow_html=True)
-    df_vacant = pd.read_sql_query("""
-        SELECT posisi AS 'Posisi / Level', departemen AS 'Departemen', jumlah_dibutuhkan AS 'Jumlah Dibutuhkan', deskripsi AS 'Keterangan'
-        FROM lowongan WHERE status='Buka' ORDER BY id DESC
-    """, conn)
-    if not df_vacant.empty:
-        st.dataframe(df_vacant, use_container_width=True, hide_index=True)
-    else:
-        st.info("✅ Tidak ada posisi yang sedang open vacant saat ini.")
-    # -----------------------------------------
+    df_vacant = pd.read_sql_query("SELECT posisi AS 'Posisi / Level', departemen AS 'Departemen', jumlah_dibutuhkan AS 'Jumlah Dibutuhkan', deskripsi AS 'Keterangan' FROM lowongan WHERE status='Buka' ORDER BY id DESC", conn)
+    if not df_vacant.empty: st.dataframe(df_vacant, use_container_width=True, hide_index=True)
+    else: st.info("✅ Tidak ada posisi yang sedang open vacant saat ini.")
 
-    # Utility KPI
     st.markdown('<div class="section-header"><h3>💡 KPI Utility Melak</h3></div>', unsafe_allow_html=True)
     total_util = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility").fetchone()[0]
     util_belum = c.execute("SELECT COUNT(*) FROM utility WHERE status!='Lunas'").fetchone()[0]
