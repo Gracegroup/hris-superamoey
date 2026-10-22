@@ -390,6 +390,7 @@ if pilihan == "🏠 Dashboard HRIS":
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input", "📋 Pipeline", "📢 Open Vacant"])
+    
     with tab1:
         with st.form("form_kandidat", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -406,6 +407,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                     jadwal_str = f"{tgl_interview} {jam_interview.strftime('%H:%M')}"
                     c.execute('''INSERT INTO kandidat (nama,posisi_dilamar,telepon,email,sumber,tanggal_lamar,status,catatan,jadwal_interview,status_berkas,tgl_interview) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan, jadwal_str, status_berkas, str(tgl_interview)))
                     conn.commit(); st.success(f"✅ Kandidat {nama} disimpan!"); st.rerun()
+                    
     with tab2:
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         if not df_k.empty:
@@ -447,8 +449,10 @@ elif pilihan == "📋 Rekrutmen & CV":
                             conn.commit(); st.success("✅ Diperbarui!"); st.rerun()
                     if st.button(f"🗑️ Hapus {s['nama']}", type="primary"):
                         c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,)); conn.commit(); st.rerun()
-        else: st.info("Belum ada kandidat")
-       with tab3:
+        else: 
+            st.info("Belum ada kandidat")
+            
+    with tab3:
         st.markdown("### 📢 Open Vacant")
         with st.form("form_lowongan", clear_on_submit=True):
             col1, col2, col3 = st.columns(3)
@@ -471,11 +475,9 @@ elif pilihan == "📋 Rekrutmen & CV":
         df_vac = pd.read_sql_query("SELECT * FROM lowongan ORDER BY id DESC", conn)
         if not df_vac.empty:
             for _, r in df_vac.iterrows():
-                # Cek apakah lowongan ini sedang dalam mode Edit
                 is_editing = st.session_state.get(f"edit_vac_{r['id']}", False)
                 
                 if is_editing:
-                    # ================= MODE EDIT =================
                     with st.form(f"form_edit_vac_{r['id']}"):
                         st.markdown(f"**✏️ Edit Lowongan ID: {r['id']}**")
                         e_col1, e_col2, e_col3 = st.columns(3)
@@ -500,20 +502,18 @@ elif pilihan == "📋 Rekrutmen & CV":
                                 c.execute('''UPDATE lowongan SET posisi=?, departemen=?, jumlah_dibutuhkan=?, status=?, deskripsi=?, tanggal_dibuka=?, tanggal_ditutup=? WHERE id=?''', 
                                           (e_pos, e_dept, e_jml, e_status, e_desk, str(e_tgl_buka), str(e_tgl_tutup), r['id']))
                                 conn.commit()
-                                st.session_state[f"edit_vac_{r['id']}"] = False # Matikan mode edit
+                                st.session_state[f"edit_vac_{r['id']}"] = False 
                                 st.success("✅ Data lowongan diperbarui!")
                                 st.rerun()
                         with c_cancel:
                             if st.form_submit_button("❌ Batal", use_container_width=True):
-                                st.session_state[f"edit_vac_{r['id']}"] = False # Matikan mode edit
+                                st.session_state[f"edit_vac_{r['id']}"] = False 
                                 st.rerun()
                                 
                 else:
-                    # ================= MODE TAMPILAN (CARD) =================
                     pelamar = c.execute("SELECT COUNT(*) FROM kandidat WHERE posisi_dilamar=?", (r['posisi'],)).fetchone()[0]
                     st.markdown(f"""<div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {'#2a5298' if r['status']=='Buka' else '#eb3349'};"><h4 style="margin:0; color:#1e3c72;">{r['posisi']} <span style="font-size:0.6em; background:#e0e7ff; padding:2px 8px; border-radius:10px;">{r['departemen']}</span></h4><p style="margin:5px 0; font-size:0.9em;">Status: <b>{r['status']}</b> | Batas: {r['tanggal_ditutup']}</p><div style="display:flex; gap:20px; margin-top:10px;"><div><b>Butuh:</b> {r['jumlah_dibutuhkan']}</div><div><b>Pelamar:</b> {pelamar}</div><div style="color:{'#11998e' if pelamar >= r['jumlah_dibutuhkan'] else '#eb3349'};"><b>Sisa:</b> {max(0, r['jumlah_dibutuhkan'] - pelamar)}</div></div></div>""", unsafe_allow_html=True)
                     
-                    # Tombol Aksi: Buka/Tutup, Edit, Hapus
                     colA, colB, colC, _ = st.columns([1, 1, 1, 3])
                     with colA:
                         if r['status'] == 'Buka':
