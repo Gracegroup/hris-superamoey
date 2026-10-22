@@ -1149,6 +1149,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         
                         st.markdown("---")
                         st.markdown("**📅 Jadwal Interview (Wajib jika status = Wawancara)**")
+                        st.info("💡 **Info:** Agar jadwal interview tersimpan dan muncul di tabel, Anda **WAJIB** mengubah **Status** menjadi **'Wawancara'**.")
                         colA, colB, colC = st.columns(3)
                         with colA:
                             list_status = ["Proses","Wawancara","Diterima","Ditolak"]
