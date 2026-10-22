@@ -69,7 +69,7 @@ create_install_button()
 # ==============================================================================
 
 
-# ==================== FITUR FLYER MELAYANG-LAYANG (DIPERBARUI) ====================
+# ==================== FITUR FLYER MELAYANG-LAYANG ====================
 def get_image_base64(path_options):
     for path in path_options:
         try:
@@ -80,11 +80,10 @@ def get_image_base64(path_options):
     return ""
 
 def show_floating_flyers():
-    # Deteksi fleksibel (handle ekstensi ganda atau typo)
+    # Deteksi fleksibel
     img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg", "flyer_mekanik.jpg"])
     img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg", "flyer_warehouse.jpg"])
     
-    # Placeholder jika gambar tidak ada
     src_mekanik = f"data:image/png;base64,{img_mekanik_b64}" if img_mekanik_b64 else "https://placehold.co/400x600/FFD700/000000.png?text=Flyer+Mekanik"
     src_warehouse = f"data:image/png;base64,{img_warehouse_b64}" if img_warehouse_b64 else "https://placehold.co/400x600/1e3a8a/FFFFFF.png?text=Flyer+Warehouse"
     
@@ -92,32 +91,34 @@ def show_floating_flyers():
     <style>
         @keyframes floatBounce {
             0% { transform: translateY(0px); }
-            50% { transform: translateY(-15px); }
+            50% { transform: translateY(-10px); }
             100% { transform: translateY(0px); }
         }
         .flyer-container {
             position: fixed;
-            top: 130px; /* Dipindah ke atas layar */
+            right: 20px; /* Berjejer di Kanan */
             z-index: 999;
-            width: 160px; /* Ukuran sedikit lebih kecil agar tidak menutupi layar */
+            width: 260px; /* Ukuran Lebih Besar */
             border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
             animation: floatBounce 4s ease-in-out infinite;
             transition: transform 0.3s;
             background-color: #fff;
-            padding: 5px;
+            padding: 6px;
+            border: 2px solid #f59e0b; /* Bingkai emas */
         }
         .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
-        /* Posisi Kiri dan Kanan */
-        .flyer-left { left: 260px; animation-delay: 0s; } 
-        .flyer-right { right: 20px; animation-delay: 2s; }
         
-        @media (max-width: 768px) { .flyer-container { display: none; } }
+        /* Posisi Atas dan Bawah di Kanan */
+        .flyer-top { top: 150px; animation-delay: 0s; }
+        .flyer-bottom { top: 550px; animation-delay: 2s; } /* Jarak dari atas */
+        
+        @media (max-width: 1024px) { .flyer-container { display: none; } }
     </style>
     """
     
-    html_flyers += f'<div class="flyer-container flyer-left"><img src="{src_mekanik}" style="width:100%; border-radius:8px;"></div>'
-    html_flyers += f'<div class="flyer-container flyer-right"><img src="{src_warehouse}" style="width:100%; border-radius:8px;"></div>'
+    html_flyers += f'<div class="flyer-container flyer-top"><img src="{src_mekanik}" style="width:100%; border-radius:8px;"></div>'
+    html_flyers += f'<div class="flyer-container flyer-bottom"><img src="{src_warehouse}" style="width:100%; border-radius:8px;"></div>'
     
     st.markdown(html_flyers, unsafe_allow_html=True)
 # =====================================================================
