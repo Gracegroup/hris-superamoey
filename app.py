@@ -709,17 +709,49 @@ elif pilihan == "⚠️ Disiplin & SP":
                     conn.commit(); st.success(f"✅ {jenis} disimpan!"); st.rerun()
 
 # ==================== 13. EXIT CLEARANCE ====================
+# ==================== 13. EXIT CLEARANCE ====================
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1></div>', unsafe_allow_html=True)
-    df_r = pd.read_sql_query("""SELECT r.id, k.full_name, k.job_position, r.tanggal_resign, r.clearance_status FROM resign r JOIN karyawan k ON r.karyawan_id = k.id ORDER BY r.id DESC""", conn)
-    if df_r.empty: st.info("Belum ada data")
+    
+    # Ambil data dari database
+    df_r = pd.read_sql_query("""
+        SELECT r.id, k.full_name, k.job_position, r.tanggal_resign, r.clearance_status 
+        FROM resign r 
+        JOIN karyawan k ON r.karyawan_id = k.id 
+        ORDER BY r.id DESC
+    """, conn)
+    
+    if df_r.empty: 
+        st.info("Belum ada data")
     else:
         st.dataframe(df_r, use_container_width=True, hide_index=True)
+        
+        # Form untuk Pilih Data
         opsi = {f"{r['full_name']} ({r['tanggal_resign']})": r['id'] for _, r in df_r.iterrows()}
-        pilih = st.selectbox("Pilih", list(opsi.keys()))
-        ns = st.selectbox("Status", ["Proses", "Selesai"])
-        if st.button("💾 Update"):
-            c.execute("UPDATE resign SET clearance_status=? WHERE id=?", (ns, opsi[pilih])); conn.commit(); st.rerun()
+        pilih = st.selectbox("Pilih Karyawan", list(opsi.keys()))
+        id_resign = opsi[pilih]
+        
+        # Kolom untuk Update dan Hapus
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Ubah Status Clearance**")
+            ns = st.selectbox("Status", ["Proses", "Selesai"], key="status_clearance")
+            if st.button("💾 Update Status", use_container_width=True):
+                c.execute("UPDATE resign SET clearance_status=? WHERE id=?", (ns, id_resign))
+                conn.commit()
+                st.success("✅ Status berhasil diupdate!")
+                st.rerun()
+                
+        with col2:
+            st.markdown("**Hapus Data (Danger Zone)**")
+            st.write("Menghapus data ini tidak akan menghapus data karyawan di menu Data Karyawan.")
+            if st.button("🗑️ Hapus dari Exit Clearance", type="primary", use_container_width=True):
+                c.execute("DELETE FROM resign WHERE id=?", (id_resign,))
+                conn.commit()
+                log_aksi(st.session_state.username, "HAPUS_EXIT_CLEARANCE", f"ID: {id_resign}")
+                st.success("✅ Data Exit Clearance berhasil dihapus!")
+                st.rerun()
 
 # ==================== 14. WHATSAPP REMINDER ====================
 elif pilihan == "📱 WhatsApp Reminder":
