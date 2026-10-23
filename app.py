@@ -1942,10 +1942,10 @@ with st.sidebar:
     st.markdown("Role: **HRD**")
     st.divider()
     st.markdown("### 📌 Menu Navigasi")
-    st.button("📥 Import, Export & Backup", use_container_width=True)
-    st.button("📱 WhatsApp Reminder", type="primary", use_container_width=True)
+    st.button("📥 Import, Export & Backup", key="btn_import_utama")
+    st.button("📱 WhatsApp Reminder", key="btn_wa_utama")
     st.divider()
-    st.button("🚪 Logout", use_container_width=True)
+    st.button("🚪 Logout", key="btn_logout_utama")
 
 # ==========================================
 # MAIN PAGE
