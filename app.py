@@ -1265,17 +1265,20 @@ elif pilihan == "📤 Exit Clearance":
 
 elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan"])
+    
+    # Membuat 4 Tab
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
+    
     tgl_skrg_wa = date.today().strftime("%Y-%m-%d")
     tgl_30_wa = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    
     with tab1:
         df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
         if not df_wa.empty:
             for _, r in df_wa.iterrows():
                 pesan = f"Halo {r['full_name']}, kontrak kerja Anda sebagai {r['job_position'] or 'Karyawan'} akan berakhir pada {r['end_date']}. Mohon hubungi HR untuk proses perpanjangan. Terima kasih."
                 hp = str(r['mobile_phone'] or '').replace('-', '').replace(' ', '').replace('+', '')
-                if hp.startswith('0'):
-                    hp = '62' + hp[1:]
+                if hp.startswith('0'): hp = '62' + hp[1:]
                 if hp and hp != '62':
                     wa_link = f"https://wa.me/{hp}?text={quote(pesan, safe='')}"
                     st.markdown(f"**{r['full_name']}** ({r['employee_id']}) — Habis: `{r['end_date']}` — [📱 Kirim WA]({wa_link})", unsafe_allow_html=True)
@@ -1283,6 +1286,7 @@ elif pilihan == "📱 WhatsApp Reminder":
                     st.text(f"{r['full_name']} - Nomor HP tidak tersedia")
         else:
             st.info("Tidak ada PKWT yang habis dalam 30 hari")
+            
     with tab2:
         df_wa_util = pd.read_sql_query("SELECT id, kategori, periode, label, total_bayar, status FROM utility WHERE status!='Lunas' ORDER BY id DESC", conn)
         if not df_wa_util.empty:
@@ -1291,13 +1295,128 @@ elif pilihan == "📱 WhatsApp Reminder":
                 st.markdown(f"**{r['kategori']}** — {r['label'] or '-'} — `{format_rp(r['total_bayar'])}` — [📋 Copy Pesan](https://wa.me/?text={quote(pesan, safe='')})", unsafe_allow_html=True)
         else:
             st.success("✅ Semua tagihan utility sudah lunas")
+            
     with tab3:
         st.markdown("### ✉️ Template Pesan")
         st.text_area("Template PKWT", value="Halo [Nama], kontrak kerja Anda sebagai [Jabatan] akan berakhir pada [Tanggal]. Mohon hubungi HR untuk proses perpanjangan. Terima kasih.", height=100)
         st.text_area("Template Utility", value="Pengingat: Tagihan [Kategori] periode [Periode] sebesar [Nominal] belum lunas. Mohon segera diselesaikan. Terima kasih.", height=100)
         st.text_area("Template Interview", value="Halo [Nama], Anda diundang untuk interview pada [Tanggal] pukul [Jam]. Mohon hadir tepat waktu. Terima kasih.", height=100)
+        
+    with tab4:
+        st.subheader("Kirim Undangan Interview ke Kandidat")
+        
+        # Pilihan Mode Online / Offline
+        mode_interview = st.radio("Pilih Mode Interview:", ["Offline (Tatap Muka)", "Online (Zoom/Meet)"], horizontal=True)
+        
+        # Template Berdasarkan Pilihan
+        if mode_interview == "Offline (Tatap Muka)":
+            default_template = """PT UNITED EQUIPMENT INDONESIA 
 
-elif pilihan == "🚛 Aset & Properti":
+Dear [Nama],
+
+Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Offline (Tatap Muka)*, sesuai jadwal di bawah ini:
+
+- Hari, Tanggal: [Hari], [Tanggal]
+- Waktu: [Jam] WITA - Selesai
+- Agenda: Interview User
+- Lokasi: PT. UNITED EQUIPMENT INDONESIA – Melak Reps 
+  (Komplek Business Centre Tinggi Diraja Sendawar Blok A-04, Jl. Sendawar Raya, Barong Tongkok, Kutai Barat)
+
+- Mohon mengonfirmasi kehadiran dengan membalas pesan ini.
+
+*Notes!*
+1. Wajib hadir 15-30 menit sebelum acara dimulai.
+2. Berpakaian rapih dan sopan (Kemeja).
+3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung.
+
+Good Luck !!!
+
+Thank you & Best regards,
+HR Recruitment
+Mobile : 082299548411"""
+        else:
+            default_template = """PT UNITED EQUIPMENT INDONESIA 
+
+Dear [Nama],
+
+Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Online*, sesuai jadwal di bawah ini:
+
+- Hari, Tanggal: [Hari], [Tanggal]
+- Waktu: [Jam] WITA - Selesai
+- Agenda: Interview User 
+- Link: [Link_Meeting]
+- Mohon mengonfirmasi kehadiran dengan membalas pesan ini
+
+Notes!
+1. Join setelah instruksi
+2. Wajib oncam
+3. Berpakaian rapih
+4. Siapkan Koneksi & Device (Hp/Laptop)
+  
+Good Luck !!!
+
+Thank you & Best regards,
+HR Recruitment
+Mobile : 082299548411"""
+
+        # Kotak Edit Template
+        with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
+            template_pesan = st.text_area("Template Pesan", value=default_template, height=350, key="tpl_interview_dynamic")
+            st.info("Variabel yang tersedia: `[Nama]`, `[Hari]`, `[Tanggal]`, `[Jam]`, `[Link_Meeting]`")
+            
+            if mode_interview == "Online (Zoom/Meet)":
+                link_meeting = st.text_input("Masukkan Link Meeting (Untuk Mode Online):", value="https://meet.google.com/xxx-xxxx-xxx")
+            else:
+                link_meeting = "-"
+        
+        st.divider()
+        
+        # AMBIL DATA DARI DATABASE SQLITE (Bukan Dummy Data lagi)
+        df_kandidat_db = pd.read_sql_query("SELECT * FROM kandidat WHERE jadwal_interview IS NOT NULL AND jadwal_interview != '' ORDER BY jadwal_interview ASC", conn)
+        
+        if df_kandidat_db.empty:
+            st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Pastikan jadwal interview diisi di menu Rekrutmen.")
+        else:
+            # Looping Data Kandidat dari Database
+            for index, row in df_kandidat_db.iterrows():
+                try:
+                    dt = datetime.strptime(str(row['jadwal_interview']), "%Y-%m-%d %H:%M")
+                    hari = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
+                    bulan = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
+                    hari_str = hari[dt.weekday()]
+                    tgl_str = f"{dt.day} {bulan[dt.month]} {dt.year}"
+                    jam_str = dt.strftime("%H:%M")
+                except:
+                    hari_str, tgl_str, jam_str = "Hari", str(row['jadwal_interview']), "-"
+                    
+                # Ganti Variabel di Template
+                pesan_final = template_pesan.replace("[Nama]", str(row['nama']))
+                pesan_final = pesan_final.replace("[Hari]", hari_str)
+                pesan_final = pesan_final.replace("[Tanggal]", tgl_str)
+                pesan_final = pesan_final.replace("[Jam]", jam_str)
+                
+                # Jika mode online, masukkan link
+                if mode_interview == "Online (Zoom/Meet)":
+                    pesan_final = pesan_final.replace("[Link_Meeting]", link_meeting)
+                
+                # Encode ke URL WhatsApp
+                pesan_url = quote(pesan_final, safe='')
+                wa_link = f"https://wa.me/{row['telepon']}?text={pesan_url}"
+                
+                # TAMPILAN TABEL
+                col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
+                with col1:
+                    st.write(f"**{row['nama']}**")
+                    st.caption(f"Posisi: {row['posisi_dilamar']}")
+                with col2:
+                    st.write(f"📅 {hari_str}, {tgl_str}")
+                    st.write(f"⏰ {jam_str} WITA")
+                with col3:
+                    st.write(f"📱 +{row['telepon']}")
+                with col4:
+                    st.link_button("Kirim WA 💬", wa_link, type="primary", use_container_width=True)
+                st.divider()
+        elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1></div>', unsafe_allow_html=True)
     df_aset = pd.read_sql_query("SELECT id, kode, nama, kategori, lokasi, kondisi, nilai, tanggal_perolehan, penanggung_jawab, status, catatan FROM aset ORDER BY id DESC", conn)
     total_nilai_aset = c.execute("SELECT COALESCE(SUM(nilai),0) FROM aset").fetchone()[0]
