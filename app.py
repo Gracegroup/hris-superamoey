@@ -2022,3 +2022,166 @@ with tab2:
     st.info("Data Tagihan Utility ada di sini.")
 with tab3:
     st.info("Pengaturan Template PKWT dan Utility ada di sini.")
+import streamlit as st
+import pandas as pd
+import urllib.parse
+from datetime import datetime
+
+# ==========================================
+# KONFIGURASI HALAMAN
+# ==========================================
+st.set_page_config(page_title="HRIS - WhatsApp Reminder", page_icon="📱", layout="wide")
+
+# ==========================================
+# FUNGSI BANTU UNTUK FORMAT TANGGAL INDONESIA
+# ==========================================
+def format_tanggal_indonesia(tanggal_str):
+    try:
+        # Asumsi input format: YYYY-MM-DD HH:MM
+        dt = datetime.strptime(tanggal_str, "%Y-%m-%d %H:%M")
+        
+        # Kamus hari dan bulan
+        hari = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
+        bulan = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 
+                 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
+        
+        nama_hari = hari[dt.weekday()]
+        nama_bulan = bulan[dt.month]
+        
+        tgl_format = f"{dt.day} {nama_bulan} {dt.year}"
+        jam_format = dt.strftime("%H:%M")
+        
+        return nama_hari, tgl_format, jam_format
+    except Exception as e:
+        # Fallback jika format tidak sesuai
+        return "Hari", tanggal_str, "-"
+
+# ==========================================
+# DUMMY DATA KANDIDAT (Simulasi Database)
+# ==========================================
+@st.cache_data
+def load_data():
+    data = {
+        "nama": ["Muhammad Rifqy Fachrial", "Rio Ongki Saputra", "Basri Alam", "Muhammad Rizki Fahrozi"],
+        "telepon": ["6289655507060", "6285342600393", "6285242894786", "6282199293734"],
+        "posisi_dilamar": ["Mechanic", "Mekanik", "Mekanik", "Warehouseman site"],
+        # Format harus YYYY-MM-DD HH:MM
+        "jadwal_interview": ["2026-10-23 10:00", "2026-10-26 13:00", "2026-10-27 09:00", ""] 
+    }
+    return pd.DataFrame(data)
+
+df_kandidat = load_data()
+
+# ==========================================
+# SIDEBAR MENU
+# ==========================================
+with st.sidebar:
+    st.markdown("### 👤 HRD Staff")
+    st.markdown("Role: **HRD**")
+    st.divider()
+    st.markdown("### 📌 Menu Navigasi")
+    st.button("📥 Import, Export & Backup", use_container_width=True)
+    st.button("📱 WhatsApp Reminder", type="primary", use_container_width=True)
+    st.divider()
+    st.button("🚪 Logout", use_container_width=True)
+
+# ==========================================
+# MAIN PAGE
+# ==========================================
+st.title("📱 WhatsApp Reminder")
+st.write("Kirim pengingat via WhatsApp")
+
+# Membuat Tab
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📄 PKWT Habis", 
+    "💰 Utility Belum Lunas", 
+    "📝 Template Pesan", 
+    "👨‍💼 Jadwal Interview"
+])
+
+# ---------------------------------------------------------
+# TAB 4: JADWAL INTERVIEW (Versi Offline)
+# ---------------------------------------------------------
+with tab4:
+    st.subheader("Kirim Undangan Interview (Offline)")
+    
+    # Template Default Offline
+    default_template = """PT UNITED EQUIPMENT INDONESIA 
+
+Dear [Nama],
+
+Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Offline (Tatap Muka)*, sesuai jadwal di bawah ini:
+
+- Hari, Tanggal: [Hari], [Tanggal]
+- Waktu: [Jam] WITA - Selesai
+- Agenda: Interview User
+- Lokasi: PT. UNITED EQUIPMENT INDONESIA – Melak Reps 
+  (Komplek Business Centre Tinggi Diraja Sendawar Blok A-04, Jl. Sendawar Raya, Barong Tongkok, Kutai Barat)
+
+- Mohon mengonfirmasi kehadiran dengan membalas pesan ini.
+
+*Notes!*
+1. Wajib hadir 15-30 menit sebelum acara dimulai.
+2. Berpakaian rapih dan sopan (Kemeja).
+3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung (KTP, Ijazah, dll).
+4. Menjaga kesehatan dan protokol yang berlaku.
+
+Good Luck !!!
+
+Thank you & Best regards,
+HR Recruitment
+
+PT. UNITED EQUIPMENT INDONESIA – Melak Reps
+Komplek Business Centre Tinggi Diraja Sendawar Blok A-04 
+Jl. Sendawar Raya, Barong Tongkok Sendawar, Kabupaten Kutai Barat, Kalimantan Timur – Indonesia.
+Mobile : 082299548411"""
+
+    with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
+        template_pesan = st.text_area("Template Pesan", value=default_template, height=400, key="tpl_interview")
+        st.info("Variabel yang tersedia: `[Nama]`, `[Hari]`, `[Tanggal]`, `[Jam]`")
+    
+    st.divider()
+    
+    # Filter kandidat yang punya jadwal
+    df_filter = df_kandidat[df_kandidat['jadwal_interview'].notna() & (df_kandidat['jadwal_interview'] != "")]
+    
+    if df_filter.empty:
+        st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Silakan isi kolom jadwal_interview di database.")
+    else:
+        for index, row in df_filter.iterrows():
+            # Ambil data & Format
+            hari_str, tgl_str, jam_str = format_tanggal_indonesia(row['jadwal_interview'])
+                
+            # Format pesan
+            pesan_final = template_pesan.replace("[Nama]", str(row['nama']))
+            pesan_final = pesan_final.replace("[Hari]", hari_str)
+            pesan_final = pesan_final.replace("[Tanggal]", tgl_str)
+            pesan_final = pesan_final.replace("[Jam]", jam_str)
+            
+            # Encode URL untuk WA
+            pesan_url = urllib.parse.quote(pesan_final)
+            wa_link = f"https://wa.me/{row['telepon']}?text={pesan_url}"
+            
+            # UI Tampilan per baris
+            col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
+            with col1:
+                st.write(f"**{row['nama']}**")
+                st.caption(f"{row['posisi_dilamar']}")
+            with col2:
+                st.write(f"📅 {hari_str}, {tgl_str}")
+                st.write(f"⏰ {jam_str} WITA")
+            with col3:
+                st.write(f"📱 +{row['telepon']}")
+            with col4:
+                st.link_button("Kirim WA 💬", wa_link, type="primary")
+            st.divider()
+
+# ---------------------------------------------------------
+# PLACEHOLDER UNTUK TAB LAINNYA
+# ---------------------------------------------------------
+with tab1:
+    st.info("Data PKWT Habis ada di sini.")
+with tab2:
+    st.info("Data Tagihan Utility ada di sini.")
+with tab3:
+    st.info("Pengaturan Template PKWT dan Utility ada di sini.")
