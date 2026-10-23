@@ -1909,3 +1909,116 @@ st.markdown("""
     © 2024 — All Rights Reserved
 </div>
 """, unsafe_allow_html=True)
+import streamlit as st
+import pandas as pd
+import urllib.parse
+
+# ==========================================
+# KONFIGURASI HALAMAN
+# ==========================================
+st.set_page_config(page_title="HRIS - WhatsApp Reminder", page_icon="📱", layout="wide")
+
+# ==========================================
+# DUMMY DATA (Simulasi Database Kandidat)
+# Di aplikasi asli Anda, ini diambil dari database/CSV
+# ==========================================
+@st.cache_data
+def load_data():
+    data = {
+        "nama": ["Muhammad Rifqy Fachrial", "Rio Ongki Saputra", "Basri Alam", "Muhammad Rizki Fahrozi"],
+        "telepon": ["6289655507060", "6285342600393", "6285242894786", "6282199293734"],
+        "posisi_dilamar": ["Mechanic", "Mekanik", "Mekanik", "Warehouseman site"],
+        "jadwal_interview": ["2026-10-25 09:00", "2026-10-26 10:00", "2026-10-26 13:00", ""] # Yang kosong berarti belum dijadwalkan
+    }
+    return pd.DataFrame(data)
+
+df_kandidat = load_data()
+
+# ==========================================
+# SIDEBAR MENU
+# ==========================================
+with st.sidebar:
+    st.markdown("### 👤 HRD Staff")
+    st.markdown("Role: **HRD**")
+    st.divider()
+    st.markdown("### 📌 Menu Navigasi")
+    st.button("📥 Import, Export & Backup", use_container_width=True)
+    st.button("📱 WhatsApp Reminder", type="primary", use_container_width=True)
+    st.divider()
+    st.button("🚪 Logout", use_container_width=True)
+
+# ==========================================
+# MAIN PAGE
+# ==========================================
+st.title("📱 WhatsApp Reminder")
+st.write("Kirim pengingat via WhatsApp")
+
+# Membuat Tab
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📄 PKWT Habis", 
+    "💰 Utility Belum Lunas", 
+    "📝 Template Pesan", 
+    "👨‍💼 Jadwal Interview"  # Tab Baru untuk Interview
+])
+
+# ---------------------------------------------------------
+# TAB 4: JADWAL INTERVIEW (Fitur yang baru ditambahkan)
+# ---------------------------------------------------------
+with tab4:
+    st.subheader("Kirim Undangan Interview ke Kandidat")
+    
+    # 1. Pengaturan Template
+    with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
+        default_template = "Halo [Nama], Anda diundang untuk interview pada [Tanggal] pukul [Jam]. Mohon hadir tepat waktu. Terima kasih."
+        template_pesan = st.text_area("Template Pesan", value=default_template, height=100, key="tpl_interview")
+        st.info("Variabel yang tersedia: `[Nama]`, `[Tanggal]`, `[Jam]`, `[Posisi]`")
+    
+    st.divider()
+    
+    # 2. Filter hanya kandidat yang sudah ada jadwal interview-nya
+    df_filter = df_kandidat[df_kandidat['jadwal_interview'].notna() & (df_kandidat['jadwal_interview'] != "")]
+    
+    if df_filter.empty:
+        st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Silakan isi kolom jadwal_interview di database.")
+    else:
+        # 3. Tampilkan dalam bentuk tabel + tombol kirim WA
+        for index, row in df_filter.iterrows():
+            # Pisahkan tanggal dan jam
+            try:
+                tgl, jam = row['jadwal_interview'].split(" ")
+            except:
+                tgl, jam = row['jadwal_interview'], "-"
+                
+            # Format pesan
+            pesan_final = template_pesan.replace("[Nama]", str(row['nama']))
+            pesan_final = pesan_final.replace("[Tanggal]", str(tgl))
+            pesan_final = pesan_final.replace("[Jam]", str(jam))
+            pesan_final = pesan_final.replace("[Posisi]", str(row['posisi_dilamar']))
+            
+            # Encode URL untuk WA
+            pesan_url = urllib.parse.quote(pesan_final)
+            wa_link = f"https://wa.me/{row['telepon']}?text={pesan_url}"
+            
+            # UI Tampilan per baris
+            col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
+            with col1:
+                st.write(f"**{row['nama']}**")
+                st.caption(f"{row['posisi_dilamar']}")
+            with col2:
+                st.write(f"📅 {tgl}")
+                st.write(f"⏰ {jam}")
+            with col3:
+                st.write(f"📱 +{row['telepon']}")
+            with col4:
+                st.link_button("Kirim WA 💬", wa_link, type="primary")
+            st.divider()
+
+# ---------------------------------------------------------
+# PLACEHOLDER UNTUK TAB LAINNYA (Agar tidak error saat dijalankan)
+# ---------------------------------------------------------
+with tab1:
+    st.info("Data PKWT Habis ada di sini.")
+with tab2:
+    st.info("Data Tagihan Utility ada di sini.")
+with tab3:
+    st.info("Pengaturan Template PKWT dan Utility ada di sini.")
