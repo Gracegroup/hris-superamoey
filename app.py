@@ -2102,13 +2102,110 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ---------------------------------------------------------
 # TAB 4: JADWAL INTERVIEW (Versi Offline)
 # ---------------------------------------------------------
-with tab4:
-    st.subheader("Kirim Undangan Interview (Offline)")
-    
-    # Template Default Offline
-    default_template = """PT UNITED EQUIPMENT INDONESIA 
+import streamlit as st
+import pandas as pd
+import urllib.parse
+from datetime import datetime
 
-Dear [Nama],
+# ==========================================
+# 1. KONFIGURASI HALAMAN
+# ==========================================
+st.set_page_config(page_title="HRIS - WhatsApp Reminder", page_icon="📱", layout="wide")
+
+# ==========================================
+# 2. FUNGSI BANTU (FORMAT TANGGAL INDONESIA)
+# ==========================================
+def format_tanggal_indonesia(tanggal_str):
+    try:
+        # Format input: YYYY-MM-DD HH:MM
+        dt = datetime.strptime(str(tanggal_str), "%Y-%m-%d %H:%M")
+        hari = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
+        bulan = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 
+                 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
+        
+        return hari[dt.weekday()], f"{dt.day} {bulan[dt.month]} {dt.year}", dt.strftime("%H:%M")
+    except Exception:
+        return "Hari", str(tanggal_str), "-"
+
+# ==========================================
+# 3. SIMULASI DATABASE KANDIDAT (Dummy Data)
+# Di aplikasi asli Anda, data ini diambil dari database/CSV
+# ==========================================
+@st.cache_data
+def load_data():
+    data = {
+        "nama": ["Muhammad Rifqy Fachrial", "Rio Ongki Saputra", "Basri Alam", "Muhammad Rizki Fahrozi"],
+        "telepon": ["6289655507060", "6285342600393", "6285242894786", "6282199293734"],
+        "posisi_dilamar": ["Mechanic", "Mekanik", "Mekanik", "Warehouseman site"],
+        "jadwal_interview": ["2026-10-23 10:00", "2026-10-26 13:00", "2026-10-27 09:00", ""] # Yang kosong belum dijadwalkan
+    }
+    return pd.DataFrame(data)
+
+df_kandidat = load_data()
+
+# ==========================================
+# 4. SIDEBAR MENU (Diberi 'key' unik agar tidak error)
+# ==========================================
+with st.sidebar:
+    st.markdown("### 👤 HRD Staff")
+    st.markdown("Role: **HRD**")
+    st.divider()
+    st.markdown("### 📌 Menu Navigasi")
+    
+    # Tombol dengan key unik
+    st.button("📥 Import, Export & Backup", use_container_width=True, key="btn_nav_import")
+    st.button("📱 WhatsApp Reminder", type="primary", use_container_width=True, key="btn_nav_wa")
+    st.divider()
+    st.button("🚪 Logout", use_container_width=True, key="btn_nav_logout")
+
+# ==========================================
+# 5. MAIN PAGE & TAB
+# ==========================================
+st.title("📱 WhatsApp Reminder")
+st.write("Kirim pengingat via WhatsApp")
+
+# Membuat 4 Tab
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📄 PKWT Habis", 
+    "💰 Utility Belum Lunas", 
+    "📝 Template Pesan", 
+    "👨‍💼 Jadwal Interview"
+])
+
+# ---------------------------------------------------------
+# TAB 1: PKWT HABIS (Placeholder)
+# ---------------------------------------------------------
+with tab1:
+    st.info("Data PKWT Habis ada di sini.")
+
+# ---------------------------------------------------------
+# TAB 2: UTILITY BELUM LUNAS (Placeholder)
+# ---------------------------------------------------------
+with tab2:
+    st.info("Data Tagihan Utility ada di sini.")
+
+# ---------------------------------------------------------
+# TAB 3: TEMPLATE PESAN (Pengaturan)
+# ---------------------------------------------------------
+with tab3:
+    st.subheader("Pengaturan Template Pesan Global")
+    st.text_area("Template PKWT", value="Halo [Nama], kontrak kerja Anda sebagai [Jabatan] akan berakhir pada [Tanggal]. Mohon hubungi HR untuk proses perpanjangan. Terima kasih.", height=100, key="tpl_pkwt_global")
+    st.text_area("Template Utility", value="Pengingat: Tagihan [Kategori] periode [Periode] sebesar [Nominal] belum lunas. Mohon segera diselesaikan. Terima kasih.", height=100, key="tpl_utility_global")
+
+# ---------------------------------------------------------
+# TAB 4: JADWAL INTERVIEW (Fitur Utama)
+# ---------------------------------------------------------
+with tab4:
+    st.subheader("Kirim Undangan Interview ke Kandidat")
+    
+    # Pilihan Mode Online / Offline
+    mode_interview = st.radio("Pilih Mode Interview:", ["Offline (Tatap Muka)", "Online (Zoom/Meet)"], horizontal=True)
+    
+    # Template Berdasarkan Pilihan
+    if mode_interview == "Offline (Tatap Muka)":
+        default_template = """PT UNITED EQUIPMENT INDONESIA 
+
+Dear Kandidat,
 
 Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Offline (Tatap Muka)*, sesuai jadwal di bawah ini:
 
@@ -2123,22 +2220,47 @@ Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Of
 *Notes!*
 1. Wajib hadir 15-30 menit sebelum acara dimulai.
 2. Berpakaian rapih dan sopan (Kemeja).
-3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung (KTP, Ijazah, dll).
-4. Menjaga kesehatan dan protokol yang berlaku.
+3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung.
 
 Good Luck !!!
 
 Thank you & Best regards,
 HR Recruitment
+Mobile : 082299548411"""
+    else:
+        default_template = """PT UNITED EQUIPMENT INDONESIA 
 
-PT. UNITED EQUIPMENT INDONESIA – Melak Reps
-Komplek Business Centre Tinggi Diraja Sendawar Blok A-04 
-Jl. Sendawar Raya, Barong Tongkok Sendawar, Kabupaten Kutai Barat, Kalimantan Timur – Indonesia.
+Dear kandidat,
+
+Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Online*, sesuai jadwal di bawah ini:
+
+- Hari, Tanggal: [Hari], [Tanggal]
+- Waktu: [Jam] WITA - Selesai
+- Agenda: Interview User 
+- Link: [Link_Meeting]
+- Mohon mengonfirmasi kehadiran dengan membalas pesan ini
+
+Notes!
+1. Join setelah instruksi
+2. Wajib oncam
+3. Berpakaian rapih
+4. Siapkan Koneksi & Device (Hp/Laptop)
+  
+Good Luck !!!
+
+Thank you & Best regards,
+HR Recruitment
 Mobile : 082299548411"""
 
+    # Kotak Edit Template
     with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
-        template_pesan = st.text_area("Template Pesan", value=default_template, height=400, key="tpl_interview")
-        st.info("Variabel yang tersedia: `[Nama]`, `[Hari]`, `[Tanggal]`, `[Jam]`")
+        template_pesan = st.text_area("Template Pesan", value=default_template, height=350, key="tpl_interview_dynamic")
+        st.info("Variabel yang tersedia: `[Nama]`, `[Hari]`, `[Tanggal]`, `[Jam]`, `[Link_Meeting]`")
+        
+        if mode_interview == "Online (Zoom/Meet)":
+            link_meeting = st.text_input("Masukkan Link Meeting (Untuk Mode Online):", value="https://meet.google.com/xxx-xxxx-xxx")
+        else:
+            link_meeting = "-"
     
     st.divider()
     
@@ -2146,127 +2268,36 @@ Mobile : 082299548411"""
     df_filter = df_kandidat[df_kandidat['jadwal_interview'].notna() & (df_kandidat['jadwal_interview'] != "")]
     
     if df_filter.empty:
-        st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Silakan isi kolom jadwal_interview di database.")
+        st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Pastikan data CSV sudah di-upload.")
     else:
+        # Looping Data Kandidat
         for index, row in df_filter.iterrows():
-            # Ambil data & Format
             hari_str, tgl_str, jam_str = format_tanggal_indonesia(row['jadwal_interview'])
                 
-            # Format pesan
+            # Ganti Variabel di Template
             pesan_final = template_pesan.replace("[Nama]", str(row['nama']))
             pesan_final = pesan_final.replace("[Hari]", hari_str)
             pesan_final = pesan_final.replace("[Tanggal]", tgl_str)
             pesan_final = pesan_final.replace("[Jam]", jam_str)
             
-            # Encode URL untuk WA
+            # Jika mode online, masukkan link
+            if mode_interview == "Online (Zoom/Meet)":
+                pesan_final = pesan_final.replace("[Link_Meeting]", link_meeting)
+            
+            # Encode ke URL WhatsApp
             pesan_url = urllib.parse.quote(pesan_final)
             wa_link = f"https://wa.me/{row['telepon']}?text={pesan_url}"
             
-            # UI Tampilan per baris
+            # TAMPILAN TABEL
             col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
             with col1:
                 st.write(f"**{row['nama']}**")
-                st.caption(f"{row['posisi_dilamar']}")
+                st.caption(f"Posisi: {row['posisi_dilamar']}")
             with col2:
                 st.write(f"📅 {hari_str}, {tgl_str}")
                 st.write(f"⏰ {jam_str} WITA")
             with col3:
                 st.write(f"📱 +{row['telepon']}")
             with col4:
-                st.link_button("Kirim WA 💬", wa_link, type="primary")
-            st.divider()
-
-# ---------------------------------------------------------
-# PLACEHOLDER UNTUK TAB LAINNYA
-# ---------------------------------------------------------
-with tab1:
-    st.info("Data PKWT Habis ada di sini.")
-with tab2:
-    st.info("Data Tagihan Utility ada di sini.")
-with tab3:
-    st.info("Pengaturan Template PKWT dan Utility ada di sini.")
-# =======================================================
-# FITUR: TAB JADWAL INTERVIEW (OFFLINE)
-# Paste di paling bawah file app.py
-# =======================================================
-import urllib.parse
-from datetime import datetime
-import pandas as pd
-
-def format_tgl_wa(tanggal_str):
-    try:
-        dt = datetime.strptime(str(tanggal_str), "%Y-%m-%d %H:%M")
-        hari = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
-        bulan = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 
-                 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
-        return hari[dt.weekday()], f"{dt.day} {bulan[dt.month]} {dt.year}", dt.strftime("%H:%M")
-    except:
-        return "Hari", str(tanggal_str), "-"
-
-# Asumsi nama variabel tab ke-4 Anda adalah 'tab4' (sesuai urutan tab di layar)
-# Jika variabelnya berbeda (misal: 't4' atau 'tabs[3]'), ganti 'tab4' di bawah ini.
-with tab4: 
-    st.subheader("Kirim Undangan Interview (Offline)")
-    
-    template_offline = """PT UNITED EQUIPMENT INDONESIA 
-Dear [Nama],
-
-Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Offline (Tatap Muka)*, sesuai jadwal di bawah ini:
-
-- Hari, Tanggal: [Hari], [Tanggal]
-- Waktu: [Jam] WITA - Selesai
-- Agenda: Interview User
-- Lokasi: PT. UNITED EQUIPMENT INDONESIA – Melak Reps 
-  (Komplek Business Centre Tinggi Diraja Sendawar Blok A-04, Jl. Sendawar Raya)
-
-- Mohon mengonfirmasi kehadiran dengan membalas pesan ini.
-
-*Notes!*
-1. Wajib hadir 15-30 menit sebelum acara dimulai.
-2. Berpakaian rapih dan sopan (Kemeja).
-3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung.
-4. Menjaga kesehatan.
-
-Good Luck !!!
-
-Thank you & Best regards,
-HR Recruitment"""
-
-    with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
-        template_pesan = st.text_area("Template Pesan", value=template_offline, height=300, key="tpl_offline_1")
-    
-    st.divider()
-    
-    # --- SILAKAN SESUAIKAN NAMA VARIABEL DATAFRAME KANDIDAT ANDA DI SINI ---
-    # Jika di kodingan Anda namanya bukan 'df_kandidat', ganti kata 'df_kandidat' di bawah ini
-    try:
-        df_kandidat = df_kandidat # Panggil dataframe Anda
-        df_filter = df_kandidat[df_kandidat['jadwal_interview'].notna() & (df_kandidat['jadwal_interview'] != "")]
-    except NameError:
-        df_filter = pd.DataFrame() # Jika data kosong
-
-    if df_filter.empty:
-        st.warning("Belum ada kandidat yang dijadwalkan untuk interview. Pastikan data CSV sudah di-upload.")
-    else:
-        for index, row in df_filter.iterrows():
-            hari_str, tgl_str, jam_str = format_tgl_wa(row['jadwal_interview'])
-                
-            pesan_final = template_pesan.replace("[Nama]", str(row['nama']))
-            pesan_final = pesan_final.replace("[Hari]", hari_str)
-            pesan_final = pesan_final.replace("[Tanggal]", tgl_str)
-            pesan_final = pesan_final.replace("[Jam]", jam_str)
-            
-            wa_link = f"https://wa.me/{row['telepon']}?text={urllib.parse.quote(pesan_final)}"
-            
-            col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
-            with col1:
-                st.write(f"**{row['nama']}**")
-                st.caption(f"{row['posisi_dilamar']}")
-            with col2:
-                st.write(f"📅 {hari_str}, {tgl_str}")
-                st.write(f"⏰ {jam_str} WITA")
-            with col3:
-                st.write(f"📱 +{row['telepon']}")
-            with col4:
-                st.link_button("Kirim WA 💬", wa_link, type="primary")
+                st.link_button("Kirim WA 💬", wa_link, type="primary", use_container_width=True)
             st.divider()
