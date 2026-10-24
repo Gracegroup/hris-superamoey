@@ -418,7 +418,10 @@ if not st.session_state.logged_in:
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
-    menu = ["🏠 Dashboard HRIS", "👥 Data Karyawan", "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", "🏥 SKD", "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", "📁 Arsip Dokumen (E-Filing)", "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"]
+    
+    # MENU DITAMBAHKAN "Filing Data Manpower"
+    menu = ["🏠 Dashboard HRIS", "👥 Data Karyawan", "🗂️ Filing Data Manpower", "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", "🏥 SKD", "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", "📁 Arsip Dokumen (E-Filing)", "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"]
+    
     if st.session_state.role == "admin": menu += ["👤 Manajemen User","🔄 Sinkronisasi Uniquip", "📝 Log Aktivitas"]
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
     st.markdown("---")
@@ -489,6 +492,45 @@ if pilihan == "🏠 Dashboard HRIS":
             chart = alt.Chart(df_div).mark_arc(innerRadius=60).encode(theta=alt.Theta('JML:Q'), color=alt.Color('DIVISI:N', scale=alt.Scale(scheme='purples')), tooltip=['DIVISI', 'JML']).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
 
+# ==================== FITUR BARU: FILING DATA MANPOWER ====================
+elif pilihan == "🗂️ Filing Data Manpower":
+    st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian Terpusat Data Karyawan, Rekrutmen & Aset</p></div>', unsafe_allow_html=True)
+    
+    st.info("Ketik nama karyawan atau kandidat untuk melihat seluruh rekam jejak (Profil, Jadwal Interview, Aset, dll).")
+    search_query = st.text_input("🔍 Masukkan Nama Manpower / Kandidat:")
+    
+    if search_query:
+        # Tarik data dari berbagai tabel berdasarkan nama
+        q_karyawan = pd.read_sql_query("SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, status_employee AS Status, join_date AS 'Tgl Masuk', mobile_phone AS HP FROM karyawan WHERE full_name LIKE ?", conn, params=(f'%{search_query}%',))
+        q_kandidat = pd.read_sql_query("SELECT nama AS Nama, posisi_dilamar AS Posisi, status AS Status, jadwal_interview AS 'Jadwal Interview', hasil_interview AS 'Hasil Interview', tgl_induksi AS 'Tgl Induksi', hasil_mcu AS 'Hasil MCU' FROM kandidat WHERE nama LIKE ?", conn, params=(f'%{search_query}%',))
+        q_aset = pd.read_sql_query("SELECT nama AS 'Nama Aset', kategori AS Kategori, lokasi AS Lokasi, kondisi AS Kondisi FROM aset WHERE penanggung_jawab LIKE ?", conn, params=(f'%{search_query}%',))
+        
+        if not q_karyawan.empty or not q_kandidat.empty or not q_aset.empty:
+            st.success(f"Data ditemukan untuk: **{search_query}**")
+            
+            # Tampilkan dalam bentuk Tabs agar rapi
+            tab_profil, tab_rekrut, tab_aset = st.tabs(["👤 Profil & Data Karyawan", "📋 Rekam Jejak Rekrutmen", "💻 Aset yang Dipegang"])
+            
+            with tab_profil:
+                if not q_karyawan.empty:
+                    st.dataframe(q_karyawan, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada data profil karyawan aktif di database.")
+                    
+            with tab_rekrut:
+                if not q_kandidat.empty:
+                    st.dataframe(q_kandidat, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada data riwayat rekrutmen/interview.")
+                    
+            with tab_aset:
+                if not q_aset.empty:
+                    st.dataframe(q_aset, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Manpower ini tidak memegang aset perusahaan.")
+        else:
+            st.warning("Data tidak ditemukan di database Karyawan, Kandidat, maupun Aset. Pastikan ejaan nama sudah benar.")
+
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input", "📋 Pipeline", "📢 Open Vacant"])
@@ -540,14 +582,16 @@ elif pilihan == "📋 Rekrutmen & CV":
                         st.markdown("**Tahapan Seleksi**")
                         cA, cB = st.columns(2)
                         with cA:
-                            e_tgl_int = st.text_input("Tgl Interview", value=s['tgl_interview'] or ""); e_hasil_int = st.selectbox("Hasil Interview", ["", "OK", "FAIL", "N/A"], index=["", "OK", "FAIL", "N/A"].index(s['hasil_interview']) if s['hasil_interview'] in ["", "OK", "FAIL", "N/A"] else 0)
+                            # PERBAIKAN BUG: Menggunakan 'jadwal_interview' agar sinkron dengan tabel
+                            e_tgl_int = st.text_input("Tgl Interview (YYYY-MM-DD HH:MM)", value=s['jadwal_interview'] or ""); e_hasil_int = st.selectbox("Hasil Interview", ["", "OK", "FAIL", "N/A"], index=["", "OK", "FAIL", "N/A"].index(s['hasil_interview']) if s['hasil_interview'] in ["", "OK", "FAIL", "N/A"] else 0)
                             e_tgl_gt = st.text_input("Tgl Ground Test", value=s['tgl_ground_test'] or ""); e_hasil_gt = st.selectbox("Hasil GT", ["", "OK", "FAIL", "N/A"], index=["", "OK", "FAIL", "N/A"].index(s['hasil_ground_test']) if s['hasil_ground_test'] in ["", "OK", "FAIL", "N/A"] else 0)
                         with cB:
                             e_tgl_ind = st.text_input("Tgl Induksi", value=s['tgl_induksi'] or ""); e_tgl_mcu = st.text_input("Tgl MCU", value=s['tgl_mcu'] or "")
                             e_hasil_mcu = st.selectbox("Hasil MCU", ["", "OK", "FAIL", "N/A"], index=["", "OK", "FAIL", "N/A"].index(s['hasil_mcu']) if s['hasil_mcu'] in ["", "OK", "FAIL", "N/A"] else 0)
                             e_tmk = st.text_input("TMK", value=s['tmk'] or "")
                         if st.form_submit_button("💾 Simpan", type="primary"):
-                            c.execute('''UPDATE kandidat SET nama=?, telepon=?, posisi_dilamar=?, status=?, tgl_interview=?, hasil_interview=?, tgl_ground_test=?, hasil_ground_test=?, tgl_induksi=?, tgl_mcu=?, hasil_mcu=?, tmk=? WHERE id=?''', (e_nama, e_telepon, e_posisi, e_status, e_tgl_int, e_hasil_int, e_tgl_gt, e_hasil_gt, e_tgl_ind, e_tgl_mcu, e_hasil_mcu, e_tmk, kandidat_id))
+                            # PERBAIKAN BUG: Menggunakan 'jadwal_interview=?' pada query UPDATE
+                            c.execute('''UPDATE kandidat SET nama=?, telepon=?, posisi_dilamar=?, status=?, jadwal_interview=?, hasil_interview=?, tgl_ground_test=?, hasil_ground_test=?, tgl_induksi=?, tgl_mcu=?, hasil_mcu=?, tmk=? WHERE id=?''', (e_nama, e_telepon, e_posisi, e_status, e_tgl_int, e_hasil_int, e_tgl_gt, e_hasil_gt, e_tgl_ind, e_tgl_mcu, e_hasil_mcu, e_tmk, kandidat_id))
                             conn.commit(); st.success("✅ Diperbarui!"); st.rerun()
                     if st.button(f"🗑️ Hapus {s['nama']}", type="primary"):
                         c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,)); conn.commit(); st.rerun()
