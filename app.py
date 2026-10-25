@@ -676,7 +676,7 @@ elif pilihan == "👥 Data Karyawan":
                 c.execute("DELETE FROM karyawan WHERE id=%s", (edit_kar_id,))
                 st.success("Karyawan dihapus!")
                 st.rerun()
-                elif pilihan == "🚛 Aset & Properti":
+elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
     total_aset = fetch_df("SELECT COUNT(*) FROM aset").iloc[0,0]
