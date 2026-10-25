@@ -883,6 +883,7 @@ elif pilihan == "🚛 Aset & Properti":
                     st.error("⚠️ Kode dan Nama Aset wajib diisi!")
 
 # --- 6. UTILITY MELAK ---
+# --- 6. UTILITY MELAK ---
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility Melak</h1><p>PDAM • Listrik • Internet • Telepon</p></div>', unsafe_allow_html=True)
     
@@ -900,7 +901,8 @@ elif pilihan == "💡 Utility Melak":
     tab1, tab2 = st.tabs(["📋 Daftar Utility", "➕ Input Utility"])
     
     with tab1:
-        df_util = pd.read_sql_query("SELECT kategori AS Kategori, periode AS Periode, label AS Label, penanggung_jawab AS 'Penanggung Jawab', total_bayar AS Nominal, status AS Status, tanggal_bayar AS 'Tgl Bayar' FROM utility ORDER BY id DESC", conn)
+        # PERBAIKAN: Menambahkan 'id_pelanggan' ke dalam query SELECT
+        df_util = pd.read_sql_query("SELECT kategori AS Kategori, periode AS Periode, id_pelanggan AS 'ID Pelanggan', label AS 'Nama / Lokasi', penanggung_jawab AS 'Penanggung Jawab', total_bayar AS Nominal, status AS Status, tanggal_bayar AS 'Tgl Bayar' FROM utility ORDER BY id DESC", conn)
         if not df_util.empty:
             st.dataframe(df_util, use_container_width=True, hide_index=True)
         else:
@@ -911,9 +913,10 @@ elif pilihan == "💡 Utility Melak":
             col1, col2 = st.columns(2)
             with col1:
                 u_kategori = st.selectbox("Kategori", ["PDAM", "Listrik", "Internet", "Telepon", "Lainnya"])
-                u_periode = st.text_input("Periode (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
-                u_label = st.text_input("Label / Lokasi")
+                u_id_pel = st.text_input("ID Pelanggan / No. Meter")
+                u_label = st.text_input("Nama / Lokasi (Contoh: MELAK - MESS)")
                 u_pj = st.text_input("Penanggung Jawab (Nama Manpower)")
+                u_periode = st.text_input("Periode (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
             with col2:
                 u_tgl = st.date_input("Tanggal Bayar", date.today())
                 u_nominal = st.number_input("Nominal Tagihan (Rp)", min_value=0.0, step=10000.0)
@@ -922,12 +925,12 @@ elif pilihan == "💡 Utility Melak":
             
             if st.form_submit_button("💾 Simpan Utility", type="primary"):
                 total_bayar = u_nominal + u_admin
-                c.execute('''INSERT INTO utility (kategori, tanggal_bayar, periode, label, nominal, admin, total_bayar, status, penanggung_jawab, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)''', 
-                          (u_kategori, str(u_tgl), u_periode, u_label, u_nominal, u_admin, total_bayar, u_status, u_pj, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                # PERBAIKAN: Memasukkan id_pelanggan ke dalam query INSERT
+                c.execute('''INSERT INTO utility (kategori, id_pelanggan, tanggal_bayar, periode, label, nominal, admin, total_bayar, status, penanggung_jawab, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', 
+                          (u_kategori, u_id_pel, str(u_tgl), u_periode, u_label, u_nominal, u_admin, total_bayar, u_status, u_pj, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 conn.commit()
                 st.success("✅ Data Utility berhasil disimpan!")
                 st.rerun()
-
 # --- 7. RUKO & TENANT ---
 elif pilihan == "🏪 Ruko & Tenant":
     st.markdown('<div class="main-header"><h1>🏪 Ruko & Tenant</h1><p>Manajemen Properti & Penyewa</p></div>', unsafe_allow_html=True)
