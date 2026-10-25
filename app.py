@@ -1002,7 +1002,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             """, unsafe_allow_html=True)
         else:
             st.info("Belum ada data payroll untuk ditampilkan")
-            elif pilihan == "📋 Jobdesk":
+elif pilihan == "📋 Jobdesk":
     st.markdown('<div class="main-header"><h1>📋 Jobdesk & KPI</h1></div>', unsafe_allow_html=True)
     
     # Fungsi CRUD Table untuk Jobdesk
@@ -1246,7 +1246,7 @@ elif pilihan == "📤 Exit Clearance":
                 st.success("✅ Clearance diperbarui"); st.rerun()
     else:
         st.info("Belum ada data resign untuk clearance")
-        elif pilihan == "📱 WhatsApp Reminder":
+elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
     
