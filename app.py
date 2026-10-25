@@ -185,7 +185,13 @@ if c.fetchone()[0] == 0:
 # ==================== SEEDING FILE (POSTGRES) ====================
 def seed_data_from_files():
     base_dir = os.getcwd()
-    if fetch_df("SELECT COUNT(*) FROM karyawan").iloc[0,0] == 0:
+    print("Memulai proses Seeding Data...")
+
+    # ==========================================
+    # 1. SEEDING KARYAWAN (Employee_10670...xlsx)
+    # ==========================================
+    c.execute("SELECT COUNT(*) FROM karyawan")
+    if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'Employee_10670_20261025090235.xlsx')
         if os.path.exists(file_path):
             try:
@@ -193,97 +199,142 @@ def seed_data_from_files():
                 for _, row in df_kar.iterrows():
                     c.execute('''INSERT INTO karyawan (employee_id, full_name, organization, job_position, job_level, join_date, resign_date, status_employee, end_date, email, mobile_phone, ptkp_status, bank_name, bank_account, gender, religion, no_ktp, no_kk, bpjs_kesehatan, bpjs_ketenagakerjaan) 
                                  VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (employee_id) DO NOTHING''',
-                              (str(row.get('Employee ID', '')), str(row.get('Full Name', '')), str(row.get('Organization', '')), 
-                               str(row.get('Job Position', '')), str(row.get('Job Level', '')), str(row.get('Join Date', '')), 
-                               str(row.get('Resign Date', '')), str(row.get('Status Employee', '')), str(row.get('End Date', '')), 
-                               str(row.get('Email', '')), str(row.get('Mobile Phone', '')), str(row.get('PTKP Status', '')), 
-                               str(row.get('Bank Name', '')), str(row.get('Bank Account', '')), str(row.get('Gender', '')), 
-                               str(row.get('Religion', '')), str(row.get('NIK (NPWP 16 Digit)', '')), '', 
-                               str(row.get('BPJS Kesehatan', '')), str(row.get('BPJS Ketenagakerjaan', ''))))
-            except Exception as e: print(f"Error Karyawan: {e}")
+                              (str(row.get('Employee ID', '')).strip(), str(row.get('Full Name', '')).strip(), str(row.get('Organization', '')).strip(), 
+                               str(row.get('Job Position', '')).strip(), str(row.get('Job Level', '')).strip(), str(row.get('Join Date', '')).strip(), 
+                               str(row.get('Resign Date', '')).strip(), str(row.get('Status Employee', '')).strip(), str(row.get('End Date', '')).strip(), 
+                               str(row.get('Email', '')).strip(), str(row.get('Mobile Phone', '')).strip(), str(row.get('PTKP Status', '')).strip(), 
+                               str(row.get('Bank Name', '')).strip(), str(row.get('Bank Account', '')).strip(), str(row.get('Gender', '')).strip(), 
+                               str(row.get('Religion', '')).strip(), str(row.get('NIK (NPWP 16 Digit)', '')).strip(), '', 
+                               str(row.get('BPJS Kesehatan', '')).strip(), str(row.get('BPJS Ketenagakerjaan', '')).strip()))
+                print("✅ Seeding Karyawan Berhasil")
+            except Exception as e: print(f"❌ Error Karyawan: {e}")
 
-    if fetch_df("SELECT COUNT(*) FROM ruko").iloc[0,0] == 0:
+    # ==========================================
+    # 2. SEEDING RUKO (grid_t_ruko.xlsx)
+    # ==========================================
+    c.execute("SELECT COUNT(*) FROM ruko")
+    if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_t_ruko.xlsx')
         if os.path.exists(file_path):
             try:
                 df_ruko = pd.read_excel(file_path)
                 for _, row in df_ruko.iterrows():
-                    c.execute('''INSERT INTO ruko (nama, alamat, status, penyewa, nilai_sewa, mulai_sewa, akhir_sewa, catatan) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
-                              (str(row.get('Nama Ruko', '')), str(row.get('Namacabang', '')), str(row.get('Status Kepemilikan', '')),
-                               str(row.get('Name', '')), float(row.get('Biaya New', 0) or 0), str(row.get('Periode Awal', '')),
-                               str(row.get('Periode Akhir', '')), str(row.get('Keterangan', ''))))
-            except Exception as e: print(f"Error Ruko: {e}")
+                    c.execute('''INSERT INTO ruko (nama, alamat, status, penyewa, nilai_sewa, mulai_sewa, akhir_sewa, catatan) 
+                                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
+                              (str(row.get('Nama Ruko', '')).strip(), str(row.get('Namacabang', '')).strip(), str(row.get('Status Kepemilikan', '')).strip(),
+                               str(row.get('Name', '')).strip(), float(row.get('Biaya New', 0) or 0), str(row.get('Periode Awal', '')).strip(),
+                               str(row.get('Periode Akhir', '')).strip(), str(row.get('Keterangan', '')).strip()))
+                print("✅ Seeding Ruko Berhasil")
+            except Exception as e: print(f"❌ Error Ruko: {e}")
 
-    if fetch_df("SELECT COUNT(*) FROM tenant").iloc[0,0] == 0:
+    # ==========================================
+    # 3. SEEDING TENANT (grid_t_tenant.csv)
+    # ==========================================
+    c.execute("SELECT COUNT(*) FROM tenant")
+    if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_t_tenant.csv')
         if os.path.exists(file_path):
             try:
-                df_tenant = pd.read_csv(file_path, sep=';', encoding='latin-1', on_bad_lines='skip')
+                # File CSV ini menggunakan pemisah titik koma (;) dan tidak ada header
+                df_tenant = pd.read_csv(file_path, sep=';', encoding='latin-1', header=None, on_bad_lines='skip')
                 for _, row in df_tenant.iterrows():
                     try:
-                        if pd.notna(row.iloc[1]):
-                            c.execute('''INSERT INTO tenant (nama, lokasi, kamar, penghuni, biaya_bulanan, status_ci, mulai, catatan) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
-                                      (str(row.iloc[2]), str(row.iloc[3]), '', str(row.iloc[4]), 0.0, str(row.iloc[21]), str(row.iloc[23]), str(row.iloc[22])))
-                    except: pass
-            except Exception as e: print(f"Error Tenant: {e}")
+                        # Mengambil data berdasarkan urutan kolom (index)
+                        nama_cabang = str(row[2]).strip()
+                        nama_tenant = str(row[3]).strip()
+                        if nama_tenant != 'nan' and nama_tenant != 'Nama Ruko':
+                            c.execute('''INSERT INTO tenant (nama, lokasi, kamar, penghuni, biaya_bulanan, status_ci, mulai, catatan) 
+                                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
+                                      (nama_tenant, nama_cabang, '', str(row[4]).strip(), 
+                                       0.0, str(row[21]).strip(), str(row[23]).strip(), str(row[22]).strip()))
+                    except Exception:
+                        pass # Lewati baris jika format tidak sesuai
+                print("✅ Seeding Tenant Berhasil")
+            except Exception as e: print(f"❌ Error Tenant: {e}")
 
-    if fetch_df("SELECT COUNT(*) FROM aset").iloc[0,0] == 0:
+    # ==========================================
+    # 4. SEEDING ASET KENDARAAN (grid_new_JT.xlsx)
+    # ==========================================
+    c.execute("SELECT COUNT(*) FROM aset")
+    if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_new_JT.xlsx')
         if os.path.exists(file_path):
             try:
                 df_aset = pd.read_excel(file_path)
                 for _, row in df_aset.iterrows():
-                    c.execute('''INSERT INTO aset (kode, nama, kategori, lokasi, kondisi, penanggung_jawab, status, catatan) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (kode) DO NOTHING''',
-                              (str(row.get('Kdaset', '')), str(row.get('Nopolisi', '')), 'Kendaraan', str(row.get('Namacabang', '')),
-                               str(row.get('Status', '')), '', 'Aktif', str(row.get('Penjelasan', ''))))
-            except Exception as e: print(f"Error Aset: {e}")
+                    c.execute('''INSERT INTO aset (kode, nama, kategori, lokasi, kondisi, penanggung_jawab, status, catatan) 
+                                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (kode) DO NOTHING''',
+                              (str(row.get('Kdaset', '')).strip(), str(row.get('Nopolisi', '')).strip(), 'Kendaraan', str(row.get('Namacabang', '')).strip(),
+                               str(row.get('Status', '')).strip(), '', 'Aktif', str(row.get('Penjelasan', '')).strip()))
+                print("✅ Seeding Aset Kendaraan Berhasil")
+            except Exception as e: print(f"❌ Error Aset: {e}")
 
-    if fetch_df("SELECT COUNT(*) FROM kandidat").iloc[0,0] == 0:
-        df_lowongan = fetch_df("SELECT posisi FROM lowongan WHERE status='Buka'")
-        list_vacant = [v.lower() for v in df_lowongan['posisi'].tolist()]
-
-        file_oi = os.path.join(base_dir, 'OPEN INTERVIEW.xlsx')
-        if os.path.exists(file_oi):
+    # ==========================================
+    # 5. SEEDING KANDIDAT (OPEN INTERVIEW.xlsx)
+    # ==========================================
+    c.execute("SELECT COUNT(*) FROM kandidat")
+    if c.fetchone()[0] == 0:
+        file_path = os.path.join(base_dir, 'OPEN INTERVIEW.xlsx')
+        if os.path.exists(file_path):
             try:
-                xls = pd.ExcelFile(file_oi)
+                # Ambil daftar lowongan aktif untuk pengecekan potensi
+                c.execute("SELECT posisi FROM lowongan WHERE status='Buka'")
+                lowongan_aktif = [row[0].lower() for row in c.fetchall()]
+                
+                xls = pd.ExcelFile(file_path)
+                # Hanya proses sheet yang relevan
                 sheets_to_process = ['MASTER DATA', 'MEKANIK', 'WHS SITE', 'WAREHOUSE', 'ADM PS', 'FOREMAN', 'SUDAH DI INTERVIEW', 'NEW CANDIDATES', 'WHSMAN']
+                
                 for sheet in sheets_to_process:
                     if sheet in xls.sheet_names:
-                        df_kand = pd.read_excel(file_oi, sheet_name=sheet)
+                        df_kand = pd.read_excel(file_path, sheet_name=sheet)
                         for _, row in df_kand.iterrows():
                             nama = str(row.get('Nama', row.get('Nama ', ''))).strip()
                             if not nama or nama == 'nan': continue
-                            posisi_dilamar = sheet if sheet not in ['MASTER DATA', 'SUDAH DI INTERVIEW', 'NEW CANDIDATES'] else str(row.get('Kategori', 'General'))
+                            
+                            # Tentukan Posisi Dilamar
+                            posisi_dilamar = sheet if sheet not in ['MASTER DATA', 'SUDAH DI INTERVIEW', 'NEW CANDIDATES'] else str(row.get('Kategori', 'General')).strip()
+                            
                             telepon = str(row.get('No HP', row.get('No_HP', ''))).strip()
-                            hasil = str(row.get('HASIL', row.get('Hasil', ''))).strip().upper()
-                            jadwal_tgl = str(row.get('JADWAL', '')).strip(); jadwal_jam = str(row.get('WAKTU', '')).strip()
+                            email = str(row.get('Email', '')).strip()
+                            
+                            # Ambil Tanggal dan Waktu Interview
+                            jadwal_tgl = str(row.get('JADWAL', '')).strip()
+                            jadwal_jam = str(row.get('WAKTU', '')).strip()
                             jadwal = f"{jadwal_tgl} {jadwal_jam}".strip() if jadwal_tgl != 'nan' else "-"
-                            tipe_intv = "Offline" if "GMEET" not in str(row.get('VIA', '')).upper() else "Online"
+                            
+                            # Tipe Interview
+                            tipe_intv = "Online" if "GMEET" in str(row.get('VIA', '')).upper() else "Offline"
 
-                            if hasil in ['APPROVE', 'DONE']: status = 'Diterima'; hasil_interview = 'OK'; catatan = f"[SUDAH DIINTERVIEW] Lolos. Potensi: {posisi_dilamar}."; tahapan = "Selesai"
-                            elif hasil == 'REJECT': status = 'Ditolak'; hasil_interview = 'FAIL'; catatan = "[SUDAH DIINTERVIEW] Tidak lolos."; tahapan = "Selesai"
-                            elif hasil in ['', 'NAN', 'ON REVIEW', 'REVIEW', 'PROSES INTV /KANDIDAT M3', 'PROSES INTV /KANDIDAT M2']: status = 'Wawancara'; hasil_interview = '-'; catatan = f"[BELUM DIINTERVIEW] Potensi: {posisi_dilamar}."; tahapan = "Interview"
-                            else: status = 'Proses'; hasil_interview = '-'; catatan = f"[STATUS: {hasil}] Potensi: {posisi_dilamar}."; tahapan = "Screening"
+                            # LOGIKA KETERANGAN & STATUS (Sesuai Permintaan)
+                            hasil = str(row.get('HASIL', row.get('Hasil', ''))).strip().upper()
+                            
+                            if hasil in ['APPROVE', 'DONE']:
+                                status = 'Diterima'
+                                catatan = f"[SUDAH DIINTERVIEW] Lolos. Potensi sesuai vacant: {posisi_dilamar}."
+                                tahapan = "Selesai"
+                            elif hasil == 'REJECT':
+                                status = 'Ditolak'
+                                catatan = "[SUDAH DIINTERVIEW] Tidak lolos."
+                                tahapan = "Selesai"
+                            elif hasil in ['', 'NAN', 'ON REVIEW', 'REVIEW', 'PROSES INTV /KANDIDAT M3', 'PROSES INTV /KANDIDAT M2']:
+                                status = 'Wawancara'
+                                catatan = f"[BELUM DIINTERVIEW / SEDANG REVIEW] Memiliki potensi untuk posisi: {posisi_dilamar}."
+                                tahapan = "Interview"
+                            else:
+                                status = 'Proses'
+                                catatan = f"[STATUS: {hasil}] Potensi: {posisi_dilamar}."
+                                tahapan = "Screening"
 
-                            if posisi_dilamar.lower() in list_vacant or any(v in posisi_dilamar.lower() for v in list_vacant): catatan += " [COCOK DENGAN VACANT]"
+                            # Cek apakah posisi kandidat cocok dengan Open Vacant
+                            if posisi_dilamar.lower() in lowongan_aktif or any(v in posisi_dilamar.lower() for v in lowongan_aktif):
+                                catatan += " [COCOK DENGAN OPEN VACANT]"
 
-                            c.execute('''INSERT INTO kandidat (nama, telepon, posisi_dilamar, status, catatan, jadwal_interview, hasil_interview, tipe_interview, jam_interview, tahapan) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
-                                      (nama, telepon, posisi_dilamar, status, catatan, jadwal, hasil_interview, tipe_intv, jadwal_jam, tahapan))
-            except Exception as e: print(f"Error Kandidat OI: {e}")
-
-        file_unt = os.path.join(base_dir, 'Untitled.csv')
-        if os.path.exists(file_unt):
-            try:
-                df = pd.read_csv(file_unt)
-                for _, r in df.iterrows():
-                    nama = str(r.get('nama','')).strip()
-                    if nama and nama != 'nan':
-                        c.execute('''INSERT INTO kandidat (nama, telepon, posisi_dilamar, email, sumber, tanggal_lamar, status, catatan) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
-                                  (nama, str(r.get('telepon','')), str(r.get('posisi_dilamar','')), str(r.get('email','')), str(r.get('sumber','')), str(r.get('tanggal_lamar','')), 'Proses', 'Import dari CSV Lamaran'))
-            except Exception as e: print(f"Error Kandidat Untitled: {e}")
-
-seed_data_from_files()
-
+                            c.execute('''INSERT INTO kandidat (nama, telepon, posisi_dilamar, email, status, catatan, jadwal_interview, tipe_interview, jam_interview, tahapan) 
+                                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+                                      (nama, telepon, posisi_dilamar, email, status, catatan, jadwal, tipe_intv, jadwal_jam, tahapan))
+                print("✅ Seeding Kandidat (Open Interview) Berhasil")
+            except Exception as e: print(f"❌ Error Kandidat OI: {e}")
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False; st.session_state.username = ""; st.session_state.nama = ""; st.session_state.role = ""
