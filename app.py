@@ -381,7 +381,7 @@ if pilihan == "🏠 Dashboard HRIS":
         if not df_div.empty:
             chart = alt.Chart(df_div).mark_arc(innerRadius=60).encode(theta=alt.Theta('JML:Q'), color=alt.Color('DIVISI:N', scale=alt.Scale(scheme='purples')), tooltip=['DIVISI', 'JML']).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
-            elif pilihan == "🗂️ Filing Data Manpower":
+elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian Terpusat Profil, Rekrutmen, Aset & Utilitas</p></div>', unsafe_allow_html=True)
     st.info("Ketik nama karyawan atau kandidat untuk melihat seluruh rekam jejak.")
     
