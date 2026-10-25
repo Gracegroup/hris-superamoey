@@ -12,3 +12,5 @@ altair
 openpyxl
 pypdf
 playwright
+psycopg2-binary
+bcrypt
