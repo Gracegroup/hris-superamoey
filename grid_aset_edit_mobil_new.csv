@@ -1,0 +1,388 @@
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-BPN-GA-LV-006*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-BPN-GA-LV-006.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-BPN-GA-LV-006</div>
+  <div><strong>Nama Aset</strong> : B 9245 TAW</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"B 9245 TAW";"005/BAST-UEI/09/25";"J ROLIS L TOBING - BALIKPAPAN";"ROBERTUS ENCIM - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-BPN-GA-LV-006/BPN%20-%20B%209245%20TAW.pdf' target='_blank'>BPN - B 9245 TAW.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/B%209245%20TAW%20PERIODE%20SEPT%20%281%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""B 9245 TAW PERIODE SEPT (1).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/B%209245%20TAW%20PERIODE%20SEPT%20%282%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""B 9245 TAW PERIODE SEPT (2).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/B%209245%20TAW%20PERIODE%20SEPT%20%283%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""B 9245 TAW PERIODE SEPT (3).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/B%209245%20TAW%20PERIODE%20SEPT%20%284%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""B 9245 TAW PERIODE SEPT (4).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/B%209245%20TAW%20PERIODE%20SEPT%20%285%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""B 9245 TAW PERIODE SEPT (5).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-006/image%20%2894%29.png"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""image (94).png"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-BPN-GA-LV-012*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-BPN-GA-LV-012.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-BPN-GA-LV-012</div>
+  <div><strong>Nama Aset</strong> : KT 8346 ZA</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Office</div>
+</div>";"KT 8346 ZA";"011/BAST-UEI/09/25";"J ROLIS L TOBING - BALIKPAPAN";"FATUR RAHMAN - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-BPN-GA-LV-012/BPN%20-%20KT%208346%20ZA.pdf' target='_blank'>BPN - KT 8346 ZA.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0000.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0000.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0001.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0001.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0002.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0002.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0003.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0003.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0004.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0004.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0005.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""9d5a02e4-6ffd-4a81-94d1-f7e9aa3bf143-0005.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/A-UEI-BPN-GA-LV-012.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""A-UEI-BPN-GA-LV-012.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-012/WhatsApp%20Image%202026-08-03%20at%2010.24.26.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""WhatsApp Image 2026-08-03 at 10.24.26.jpeg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-BPN-GA-LV-018*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-BPN-GA-LV-018.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-BPN-GA-LV-018</div>
+  <div><strong>Nama Aset</strong> : B 4336 TEZ</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"B 4336 TEZ";"156/BAST-UEI/09/25";"ADI HARIANTO, SE - BALIKPAPAN";"";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-BPN-GA-LV-018/SMD%20-%20B%204336%20TEZ.pdf' target='_blank'>SMD - B 4336 TEZ.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-BPN-GA-LV-018/A-UEI-BPN-GA-LV-018.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""A-UEI-BPN-GA-LV-018.jpg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-SDW-GA-LV-249*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-SDW-GA-LV-249.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-SDW-GA-LV-249</div>
+  <div><strong>Nama Aset</strong> : DA 8263 ZR</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"DA 8263 ZR";"098/BAST-UEI/09/25";"ADI HARIANTO, SE - BALIKPAPAN";"KURNIA BANGUN SAMUDRA - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-SDW-GA-LV-249/MLK%20-%20DA%208263%20ZR.pdf' target='_blank'>MLK - DA 8263 ZR.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/0.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""0.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/1.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""1.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/2.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""2.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/3.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""3.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/4.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""4.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%281%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (1).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%282%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (2).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%283%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (3).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%284%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (4).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%285%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (5).jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-249/DA%208263%20ZR%20PERIODE%20SEPT%20%286%29.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8263 ZR PERIODE SEPT (6).jpeg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-SDW-GA-LV-250*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-SDW-GA-LV-250.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-SDW-GA-LV-250</div>
+  <div><strong>Nama Aset</strong> : DA 8264 ZR</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"DA 8264 ZR";"099/BAST-UEI/09/25";"ADI HARIANTO, SE - BALIKPAPAN";"JOKO PRIONO - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-SDW-GA-LV-250/MLK%20-%20DA%208264%20ZR.pdf' target='_blank'>MLK - DA 8264 ZR.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/0.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""0.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/1.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""1.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/2.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""2.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/3.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""3.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/4.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""4.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/5.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""5.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0000.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0000.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0001.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0001.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0002.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0002.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0003.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0003.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0004.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""7e1cf7e2-a869-44a9-baac-71cc998b0ccb-0004.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-250/8264.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""8264.jpeg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-SDW-GA-LV-251*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-SDW-GA-LV-251.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-SDW-GA-LV-251</div>
+  <div><strong>Nama Aset</strong> : DA 8052 ZR</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"DA 8052 ZR";"100/BAST-UEI/09/25";"ADI HARIANTO, SE - BALIKPAPAN";"MARSEL RIAN SIWU - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-SDW-GA-LV-251/MLK%20-%20DA%208052%20ZR.pdf' target='_blank'>MLK - DA 8052 ZR.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/0.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""0.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/1.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""1.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/2.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""2.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/3.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""3.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/4.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""4.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/5.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""5.jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/8052.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""8052.jpeg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%281%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (1).jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%282%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (2).jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%283%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (3).jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%284%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (4).jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%285%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (5).jpg"" /></div>
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-251/DA%208052%20ZR%20PERIODE%20SEPT%20%286%29.jpg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""DA 8052 ZR PERIODE SEPT (6).jpg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
+"<a href='/asetuniquip/form_edit_aset_detail_mobil/?script_case_init=3735&nmgp_url_saida=/asetuniquip/grid_aset_edit_mobil_new/&nmgp_parms=vkdaset*scinA-UEI-SDW-GA-LV-252*scout' target='_self'  class='scButton_default' style='vertical-align: middle; display:inline-block;'>EDIT</a>";"<img src='https://files.uniquip.co.id/asetuniquip/_lib/file/img/qrcode/qr_A-UEI-SDW-GA-LV-252.png' style='max-width:80px;height:auto' />";"
+<div style='text-align: left; font-family: monospace; line-height: 1.4; max-width: 250px; white-space: normal; word-wrap: break-word;'>
+  <div><strong>Kode</strong> : A-UEI-SDW-GA-LV-252</div>
+  <div><strong>Nama Aset</strong> : DA 8053 ZR</div>
+  <div><strong>Lokasi</strong> : MELAK</div>
+  <div><strong>Ruang</strong> : Yard</div>
+</div>";"DA 8053 ZR";"101/BAST-UEI/09/25";"ADI HARIANTO, SE - BALIKPAPAN";"HERDINUS - MELAK";"<div><a href='https://files.uniquip.co.id/asetuniquip/_lib/file/doc/aset_bast_mobil/A-UEI-SDW-GA-LV-252/MLK%20-%20DA%208053%20ZR.pdf' target='_blank'>MLK - DA 8053 ZR.pdf</a></div>";"<div id=""foto-container"" data-env=""asetuniquip"" style=""display:flex;flex-wrap:wrap;gap:5px"">
+<div class='foto-item' style='position:relative;display:inline-block;margin:3px'><img src=""https://files.uniquip.co.id/asetuniquip/_lib/file/img/aset/A-UEI-SDW-GA-LV-252/8053.jpeg"" style=""max-width:60px;max-height:60px;margin:2px;cursor:pointer;border:1px solid #ccc;border-radius:4px"" onclick=""showModal(this.src)"" alt=""8053.jpeg"" /></div>
+</div>
+
+<script>
+(function() {
+  if (window.__fotoListenerBound) return;
+  window.__fotoListenerBound = true;
+
+  const doc = window.frameElement ? window.document : document;
+
+  doc.addEventListener('click', async function(e) {
+	const target = e.target;
+	if (target.classList && target.classList.contains('btn-del-foto')) {
+	  e.stopPropagation();
+
+	  const btn = target;
+	  const env = btn.dataset.env;
+	  const kdaset = btn.dataset.kdaset;
+	  const file = btn.dataset.file;
+
+	  if (!confirm(`Hapus foto """" ?`)) return;
+
+	  const url = ""../blank_delete_foto/?env="" + encodeURIComponent(env)
+		+ ""&kdaset="" + encodeURIComponent(kdaset)
+		+ ""&file="" + encodeURIComponent(file);
+
+	  try {
+		const res = await fetch(url);
+		const data = await res.json();
+
+		if (data.success) {
+		  btn.closest('.foto-item').remove();
+		} else {
+		  alert('Gagal hapus: ' + (data.message || 'Tidak diketahui'));
+		}
+	  } catch (err) {
+		alert('Error koneksi: ' + err);
+	  }
+	}
+  });
+})();
+</script>"
