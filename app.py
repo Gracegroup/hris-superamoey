@@ -16,6 +16,7 @@ from urllib.parse import quote
 from io import StringIO
 from fpdf import FPDF
 import bcrypt
+import scraper_uniquip
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(
