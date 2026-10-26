@@ -1,14 +1,14 @@
-import time
-from playwright.sync_api import sync_playwright
 import subprocess
 import os
-# Cek jika browser belum ada, lalu install
+
+# === AUTO INSTALL PLAYWRIGHT UNTUK STREAMLIT CLOUD ===
 if not os.path.exists(os.path.expanduser("~/.cache/ms-playwright")):
     subprocess.run(["playwright", "install", "chromium"])
+
+import time
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
 import io
 import json
 import re
@@ -25,7 +25,7 @@ import scraper_uniquip
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(
-    page_title="HRIS & GA Amoey ",
+    page_title="HRIS & GA Amoey",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -96,13 +96,9 @@ def clean_date(val):
     except Exception: return None
 
 # ==================== PEMBUATAN TABEL ====================
-# Tabel Users dengan Bcrypt
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
-# Tabel Karyawan dengan is_deleted
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, versatility TEXT, pendidikan_terakhir TEXT, asal_sekolah TEXT, no_ktp TEXT, no_kk TEXT, poh TEXT, status_poh TEXT, mine_permit_start TEXT, mine_permit_end TEXT, status_mine_permit TEXT, peringatan_pkwt TEXT, gaji REAL DEFAULT 0, aktif INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0)''')
-# Tabel Aset dengan is_deleted
 c.execute('''CREATE TABLE IF NOT EXISTS aset (id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT UNIQUE, nama TEXT, kategori TEXT, lokasi TEXT, kondisi TEXT, nilai REAL, tanggal_perolehan TEXT, penanggung_jawab TEXT, status TEXT, catatan TEXT, is_deleted INTEGER DEFAULT 0)''')
-# Tabel Lainnya
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, jadwal_interview TEXT, tipe_interview TEXT, jam_interview TEXT, tahapan TEXT, status_berkas TEXT, catatan_berkas TEXT, tgl_interview TEXT, hasil_interview TEXT, tgl_ground_test TEXT, hasil_ground_test TEXT, tgl_induksi TEXT, hasil_induksi TEXT, tgl_mcu TEXT, hasil_mcu TEXT, tgl_sign_contract TEXT, tmk TEXT, lead_time_hari INTEGER)''')
 c.execute('''CREATE TABLE IF NOT EXISTS lowongan (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, departemen TEXT, jumlah_dibutuhkan INTEGER, status TEXT DEFAULT 'Buka', deskripsi TEXT, tanggal_dibuka TEXT, tanggal_ditutup TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS resign (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT, alasan TEXT, jenis TEXT, exit_interview TEXT, clearance_status TEXT, kategori_penyebab TEXT, tanggal_sign_in TEXT, tanggal_sign_out TEXT)''')
@@ -122,13 +118,12 @@ c.execute('''CREATE TABLE IF NOT EXISTS arsip_dokumen (id INTEGER PRIMARY KEY AU
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
 conn.commit()
 
-# Migrasi Otomatis untuk database lama (menambah is_deleted jika belum ada)
 try: c.execute("ALTER TABLE karyawan ADD COLUMN is_deleted INTEGER DEFAULT 0")
 except: pass
 try: c.execute("ALTER TABLE aset ADD COLUMN is_deleted INTEGER DEFAULT 0")
 except: pass
 
-# ==================== SEEDING DEFAULT DENGAN BCRYPT ====================
+# ==================== SEEDING DEFAULT ====================
 c.execute("SELECT COUNT(*) FROM lowongan")
 if c.fetchone()[0] == 0:
     tgl_buka = date.today().strftime("%Y-%m-%d"); tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
@@ -137,14 +132,12 @@ if c.fetchone()[0] == 0:
 
 c.execute("SELECT COUNT(*) FROM users")
 if c.fetchone()[0] == 0:
-    # Hash admin123 dan hrd123 dengan Bcrypt
     hashed_admin = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     hashed_hrd = bcrypt.hashpw("hrd123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hashed_admin, "OKANAHARIANTO", "admin"))
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashed_hrd, "HRD Staff", "hrd"))
     conn.commit()
 
-# (Fungsi Seeding Karyawan, Ruko, Tenant, Aset, Kandidat dari Excel tetap sama seperti sebelumnya)
 def seed_data_from_files():
     base_dir = os.getcwd()
     c.execute("SELECT COUNT(*) FROM karyawan")
@@ -167,7 +160,6 @@ def seed_data_from_files():
                                clean(row.get('BPJS Kesehatan')), clean(row.get('BPJS Ketenagakerjaan'))))
                 conn.commit()
             except Exception as e: print(f"❌ Error Karyawan: {e}")
-    # ... (Biarkan logika seeding lainnya sama)
 seed_data_from_files()
 
 # ==================== HELPER FUNCTIONS ====================
@@ -192,7 +184,7 @@ def get_image_base64(filenames):
             except Exception: continue
     return ""
 
-# ==================== FITUR BARU: PDF SLIP GAJI ====================
+# ==================== FITUR PDF SLIP GAJI ====================
 class PDFSlipGaji(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 16)
@@ -257,10 +249,7 @@ def buat_pdf_slip(slip_data):
 
     return pdf.output(dest='S').encode('latin-1')
 
-# Placeholder untuk Sinkronisasi Uniquip (Scraping)
-def tarik_data_uniquip(username, password):
-    return "⚠️ Fitur Scraping belum diimplementasikan untuk versi produksi."
-    # ==================== LOGIN ====================
+# ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False; st.session_state.username = ""; st.session_state.nama = ""; st.session_state.role = ""
 
@@ -275,7 +264,6 @@ if not st.session_state.logged_in:
             if st.form_submit_button("Masuk"):
                 row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
                 if row and row[4] == 1:
-                    # Verifikasi menggunakan Bcrypt
                     if bcrypt.checkpw(p.encode('utf-8'), row[1].encode('utf-8')):
                         st.session_state.logged_in = True
                         st.session_state.username = row[0]
@@ -311,8 +299,6 @@ with st.sidebar:
         
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
     st.markdown("---")
-    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
-    st.markdown("---")
     
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
@@ -324,29 +310,9 @@ with st.sidebar:
 
 # --- 1. DASHBOARD HRIS ---
 if pilihan == "🏠 Dashboard HRIS":
-    if tampilkan_flyer:
-        img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg", "flyer_mekanik.jpg"])
-        img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg", "flyer_warehouse.jpg"])
-        src_mekanik = f"data:image/png;base64,{img_mekanik_b64}" if img_mekanik_b64 else "https://placehold.co/400x600/FFD700/000000.png?text=Flyer+Mekanik"
-        src_warehouse = f"data:image/png;base64,{img_warehouse_b64}" if img_warehouse_b64 else "https://placehold.co/400x600/1e3a8a/FFFFFF.png?text=Flyer+Warehouse"
-        html_flyers = """
-        <style>
-            @keyframes floatBounce { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
-            .flyer-container { position: fixed; right: 20px; z-index: 999; width: 260px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: floatBounce 4s ease-in-out infinite; transition: transform 0.3s; background-color: #fff; padding: 6px; border: 2px solid #f59e0b; }
-            .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
-            .flyer-top { top: 150px; animation-delay: 0s; }
-            .flyer-bottom { top: 550px; animation-delay: 2s; }
-            @media (max-width: 1024px) { .flyer-container { display: none; } }
-        </style>
-        """
-        html_flyers += f'<div class="flyer-container flyer-top"><img src="{src_mekanik}" style="width:100%; border-radius:8px;"></div>'
-        html_flyers += f'<div class="flyer-container flyer-bottom"><img src="{src_warehouse}" style="width:100%; border-radius:8px;"></div>'
-        st.markdown(html_flyers, unsafe_allow_html=True)
-
     st.markdown(f'<div class="main-header"><h1>⚡ HRIS, GA & ASET DASHBOARD</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
     
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
-    # Tambahkan filter is_deleted=0
     aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND is_deleted=0").fetchone()[0]
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     lowongan_buka = c.execute("SELECT SUM(jumlah_dibutuhkan) FROM lowongan WHERE status='Buka'").fetchone()[0] or 0
@@ -405,7 +371,8 @@ if pilihan == "🏠 Dashboard HRIS":
         if not df_div.empty:
             chart = alt.Chart(df_div).mark_arc(innerRadius=60).encode(theta=alt.Theta('JML:Q'), color=alt.Color('DIVISI:N', scale=alt.Scale(scheme='purples')), tooltip=['DIVISI', 'JML']).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
-            # --- 2. FILING DATA MANPOWER ---
+
+# --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian Terpusat Data Profil, Interview, Aset & Utilitas</p></div>', unsafe_allow_html=True)
     st.info("Ketik nama karyawan atau kandidat untuk melihat seluruh rekam jejak dalam satu layar.")
@@ -436,7 +403,7 @@ elif pilihan == "🗂️ Filing Data Manpower":
         else:
             st.warning("Data tidak ditemukan.")
 
-# --- 3. REKRUTMEN & CV (DENGAN ALERT DUPLIKAT) ---
+# --- 3. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Jadwal", "📢 Open Vacant"])
@@ -595,7 +562,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         conn.commit()
                         st.rerun()
 
-# --- 4. DATA KARYAWAN (SOFT DELETE) ---
+# --- 4. DATA KARYAWAN ---
 elif pilihan == "👥 Data Karyawan":
     st.markdown('<div class="main-header"><h1>👥 Data Karyawan</h1><p>Master Data Seluruh Karyawan</p></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📋 Daftar Karyawan", "✏️ Tambah / Edit"])
@@ -609,7 +576,6 @@ elif pilihan == "👥 Data Karyawan":
             f_org_kar = st.selectbox("🏢 Organisasi", list_org)
         with c3: f_status_kar = st.selectbox("📌 Status", ["Aktif", "Resign", "Semua"])
             
-        # QUERY DENGAN FILTER is_deleted=0
         q_kar_sql = "SELECT id, employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, gender AS Gender, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak', mobile_phone AS HP, email AS Email, gaji AS 'Gaji Pokok' FROM karyawan WHERE is_deleted=0"
         p_kar = []
         
@@ -694,15 +660,13 @@ elif pilihan == "👥 Data Karyawan":
         if edit_kar_id > 0:
             st.markdown("---")
             if st.button("🗑️ Hapus Karyawan Ini (Arsipkan)", type="primary"):
-                # SOFT DELETE: Ubah status is_deleted menjadi 1
                 c.execute("UPDATE karyawan SET is_deleted=1 WHERE id=?", (edit_kar_id,))
                 conn.commit()
                 st.success("Karyawan berhasil diarsipkan (tidak tampil di daftar)!")
                 st.rerun()
-
-# --- 5. ASET & PROPERTI (SOFT DELETE) ---
+                # --- 5. ASET & PROPERTI (DENGAN FITUR SCRAPING) ---
 elif pilihan == "🚛 Aset & Properti":
-        # === TAMBAHAN V2: SCRAPING UNIQUIP ===
+    # === FITUR SCRAPING UNIQUIP ===
     with st.expander("🔄 Sinkronisasi Data dari UniQuip (V2)", expanded=False):
         col_u, col_p, col_b = st.columns([2, 2, 1])
         uq_user = col_u.text_input("Username UniQuip", key="uq_user")
@@ -720,7 +684,8 @@ elif pilihan == "🚛 Aset & Properti":
                         st.error(str(e))
             else:
                 st.warning("Username dan Password wajib diisi!")
-    # === SELESAI TAMBAHAN V2 ===
+    # === SELESAI FITUR SCRAPING ===
+
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
     total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE is_deleted=0").fetchone()[0]
@@ -804,14 +769,14 @@ elif pilihan == "🚛 Aset & Properti":
                 
                 st.markdown("---")
                 if st.button("🗑️ Hapus Aset Ini (Arsipkan)", type="primary"):
-                    # SOFT DELETE ASET
                     c.execute("UPDATE aset SET is_deleted=1 WHERE id=?", (aid,))
                     conn.commit()
                     st.success("✅ Aset berhasil diarsipkan!")
                     st.rerun()
         else:
             st.info("Belum ada data aset untuk diedit atau dihapus.")
-            # --- 6. UTILITY MELAK ---
+
+# --- 6. UTILITY MELAK ---
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility Melak</h1><p>PDAM • Listrik • Internet • Telepon</p></div>', unsafe_allow_html=True)
     
@@ -887,7 +852,6 @@ elif pilihan == "💡 Utility Melak":
                 u_status = st.selectbox("Status", ["Lunas", "Belum Lunas"])
             
             if st.form_submit_button("💾 Simpan Utility", type="primary"):
-                # CEK DUPLIKAT DATA
                 existing = c.execute("SELECT id FROM utility WHERE kategori=? AND id_pelanggan=? AND periode=?", (u_kategori, u_id_pel, u_periode)).fetchone()
                 if existing:
                     st.error(f"⚠️ Data {u_kategori} ID {u_id_pel} periode {u_periode} sudah ada di database! Tidak dapat menambahkan data ganda.")
@@ -1037,7 +1001,7 @@ elif pilihan == "🏖️ Cuti & Izin":
                         st.rerun()
         else: st.info("Belum ada pengajuan cuti")
 
-# --- 10. PAYROLL & SLIP GAJI (DENGAN DOWNLOAD PDF) ---
+# --- 10. PAYROLL & SLIP GAJI ---
 elif pilihan == "💰 Payroll & Slip Gaji":
     def hitung_bpjs(gaji_pokok, tunjangan_tetap):
         upah = gaji_pokok + tunjangan_tetap
@@ -1126,7 +1090,6 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             pilih_slip = st.selectbox("Pilih Slip Gaji", list(opt_slip.keys()))
             slip = pd.read_sql_query("""SELECT p.*, k.employee_id, k.full_name, k.job_position, k.organization FROM payroll p JOIN karyawan k ON p.karyawan_id=k.id WHERE p.id=?""", conn, params=(opt_slip[pilih_slip],)).iloc[0]
             
-            # TAMPILAN HTML SLIP GAJI
             st.markdown(f"""
             <div class="payroll-slip">
                 <h3>🧾 SLIP GAJI — PERIODE {slip['periode']}</h3>
@@ -1149,8 +1112,6 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             </div>
             """, unsafe_allow_html=True)
             
-            # FITUR BARU: DOWNLOAD PDF SLIP GAJI
-            st.markdown("---")
             pdf_bytes = buat_pdf_slip(slip)
             st.download_button(
                 label="📥 Download Slip Gaji (PDF)",
@@ -1160,7 +1121,8 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                 type="primary"
             )
         else: st.info("Belum ada data payroll untuk ditampilkan")
-            # --- 11. JOBDESK ---
+
+# --- 11. JOBDESK ---
 elif pilihan == "📋 Jobdesk":
     def render_crud_table(table_name, title, original_df):
         st.markdown(f"### 📋 Data {title}")
@@ -1390,7 +1352,8 @@ elif pilihan == "📤 Exit Clearance":
                 c.execute("UPDATE resign SET clearance_status=? WHERE id=?", (new_status, rid))
                 conn.commit(); st.success("✅ Clearance diperbarui"); st.rerun()
     else: st.info("Belum ada data resign untuk exit clearance.")
-        # --- 19. WHATSAPP REMINDER ---
+
+# --- 19. WHATSAPP REMINDER ---
 elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
@@ -1761,7 +1724,6 @@ elif pilihan == "👤 Manajemen User":
                 u_role = st.selectbox("Role", ["staff", "hrd", "admin"])
                 if st.form_submit_button("💾 Tambah User", type="primary"):
                     try:
-                        # Hash password dengan Bcrypt
                         hashed_pwd = bcrypt.hashpw(u_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                         c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hashed_pwd, u_nama, u_role))
                         conn.commit(); st.success("User ditambahkan!"); st.rerun()
