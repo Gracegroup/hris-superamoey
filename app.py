@@ -697,6 +697,25 @@ elif pilihan == "👥 Data Karyawan":
 
 # --- 5. ASET & PROPERTI (SOFT DELETE) ---
 elif pilihan == "🚛 Aset & Properti":
+        # === TAMBAHAN V2: SCRAPING UNIQUIP ===
+    with st.expander("🔄 Sinkronisasi Data dari UniQuip (V2)", expanded=False):
+        col_u, col_p, col_b = st.columns([2, 2, 1])
+        uq_user = col_u.text_input("Username UniQuip", key="uq_user")
+        uq_pass = col_p.text_input("Password UniQuip", type="password", key="uq_pass")
+        
+        if col_b.button("Tarik Data", type="primary", use_container_width=True):
+            if uq_user and uq_pass:
+                with st.spinner("Menghubungi server UniQuip... Mohon tunggu."):
+                    try:
+                        df_uniquip = scraper_uniquip.scrape_aset_uniquip(uq_user, uq_pass)
+                        if not df_uniquip.empty:
+                            st.success(f"Berhasil menarik data aset!")
+                            st.dataframe(df_uniquip, use_container_width=True)
+                    except Exception as e:
+                        st.error(str(e))
+            else:
+                st.warning("Username dan Password wajib diisi!")
+    # === SELESAI TAMBAHAN V2 ===
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
     total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE is_deleted=0").fetchone()[0]
