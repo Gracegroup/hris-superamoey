@@ -11,3 +11,6 @@ altair
 fpdf2
 bcrypt
 playwright
+streamlit
+playwright
+pandas
