@@ -7,7 +7,7 @@ def scrape_uniquip(username, password):
     
     with sync_playwright() as p:
         # Gunakan headless=False jika ingin melihat browser bekerja (bagus untuk debugging)
-        browser = p.chromium.launch(headless=True) 
+        browser = p.chromium.launch(headless=False) 
         # ignore_https_errors untuk jaga-jaga jika sertifikat SSL bermasalah
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
