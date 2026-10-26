@@ -7,7 +7,7 @@ elif pilihan == "📱 WhatsApp Reminder":
     tgl_30_wa = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
     
     with tab1:
-        df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
+        df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0 AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
         if not df_wa.empty:
             for _, r in df_wa.iterrows():
                 pesan = f"Halo {r['full_name']}, kontrak kerja Anda sebagai {r['job_position'] or 'Karyawan'} akan berakhir pada {r['end_date']}. Mohon hubungi HR untuk proses perpanjangan. Terima kasih."
@@ -238,14 +238,14 @@ elif pilihan == "📊 Laporan & Analitik":
     tab1, tab2, tab3 = st.tabs(["👥 Karyawan", "💰 Payroll", "💡 Utility"])
     
     with tab1:
-        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None')").fetchone()[0]
-        resign_c = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'").fetchone()[0]
+        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0").fetchone()[0]
+        resign_c = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None' AND is_deleted=0").fetchone()[0]
         html = '<div class="metric-grid">'
         html += metric_card("👥 Karyawan Aktif", str(aktif), "", "card-blue")
         html += metric_card("📉 Total Resign", str(resign_c), "", "card-red")
         html += '</div>'
         st.markdown(html, unsafe_allow_html=True)
-        df_gender = pd.read_sql_query("SELECT gender AS Gender, COUNT(*) AS Jumlah FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND gender IS NOT NULL GROUP BY gender", conn)
+        df_gender = pd.read_sql_query("SELECT gender AS Gender, COUNT(*) AS Jumlah FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0 AND gender IS NOT NULL GROUP BY gender", conn)
         if not df_gender.empty:
             st.altair_chart(alt.Chart(df_gender).mark_arc(innerRadius=50).encode(theta='Jumlah:Q', color='Gender:N', tooltip=['Gender','Jumlah']).properties(height=300, title="Komposisi Gender"), use_container_width=True)
         else: st.info("Belum ada data gender.")
@@ -269,10 +269,10 @@ elif pilihan == "📈 Manpower Report":
     c1, c2 = st.columns(2)
     with c1: mp_status = st.selectbox("Status", ["Aktif", "Resign", "Semua"])
     with c2:
-        df_org_mp = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' ORDER BY organization", conn)
+        df_org_mp = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' AND is_deleted=0 ORDER BY organization", conn)
         mp_org = st.selectbox("Organisasi", ["Semua"] + df_org_mp['organization'].tolist())
         
-    q_mp = "SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak' FROM karyawan WHERE 1=1"
+    q_mp = "SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak' FROM karyawan WHERE is_deleted=0"
     p_mp = []
     if mp_status == "Aktif": q_mp += " AND (resign_date IS NULL OR resign_date='' OR resign_date='None')"
     elif mp_status == "Resign": q_mp += " AND resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'"
@@ -369,31 +369,13 @@ elif pilihan == "👤 Manajemen User":
                 u_role = st.selectbox("Role", ["staff", "hrd", "admin"])
                 if st.form_submit_button("💾 Tambah User", type="primary"):
                     try:
-                        c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hash_password(u_password), u_nama, u_role))
+                        # Hash password dengan Bcrypt
+                        hashed_pwd = bcrypt.hashpw(u_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                        c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hashed_pwd, u_nama, u_role))
                         conn.commit(); st.success("User ditambahkan!"); st.rerun()
                     except sqlite3.IntegrityError: st.error("Username sudah ada!")
 
-# --- 25. SINKRONISASI UNIQUIP ---
-elif pilihan == "🔄 Sinkronisasi Uniquip":
-    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1></div>', unsafe_allow_html=True)
-    with st.form("login_form_uniquip"):
-        st.subheader("Login Uniquip")
-        user = st.text_input("User Uniquip", value="okana")
-        pwd = st.text_input("Password Uniquip", type="password")
-        submit = st.form_submit_button("Tarik Data Aset", type="primary")
-    if submit:
-        if user and pwd:
-            with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
-                try:
-                    df = tarik_data_uniquip(user, pwd)
-                    if isinstance(df, pd.DataFrame):
-                        st.success("✅ Data berhasil ditarik!")
-                        st.dataframe(df, use_container_width=True)
-                    else: st.error(f"Gagal: {df}")
-                except Exception as e: st.error(f"Terjadi kesalahan: {e}")
-        else: st.warning("Username dan Password harus diisi!")
-
-# --- 26. LOG AKTIVITAS ---
+# --- 25. LOG AKTIVITAS ---
 elif pilihan == "📝 Log Aktivitas":
     st.markdown('<div class="main-header"><h1>📝 Log Aktivitas</h1></div>', unsafe_allow_html=True)
     if st.session_state.role != "admin":
@@ -410,424 +392,187 @@ st.markdown(f"""
     © {datetime.now().year} — All Rights Reserved
 </div>
 """, unsafe_allow_html=True)
-# --- 19. WHATSAPP REMINDER ---
-elif pilihan == "📱 WhatsApp Reminder":
-    st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
-    
-    tgl_skrg_wa = date.today().strftime("%Y-%m-%d")
-    tgl_30_wa = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
-    
-    with tab1:
-        df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
-        if not df_wa.empty:
-            for _, r in df_wa.iterrows():
-                pesan = f"Halo {r['full_name']}, kontrak kerja Anda sebagai {r['job_position'] or 'Karyawan'} akan berakhir pada {r['end_date']}. Mohon hubungi HR untuk proses perpanjangan. Terima kasih."
-                hp = str(r['mobile_phone'] or '').replace('-', '').replace(' ', '').replace('+', '')
-                if hp.startswith('0'): hp = '62' + hp[1:]
-                if hp and hp != '62':
-                    wa_link = f"https://wa.me/{hp}?text={quote(pesan, safe='')}"
-                    st.markdown(f"**{r['full_name']}** ({r['employee_id']}) — Habis: `{r['end_date']}` — [📱 Kirim WA]({wa_link})", unsafe_allow_html=True)
-        else: st.info("Tidak ada PKWT yang habis dalam 30 hari")
-            
-    with tab2:
-        df_wa_util = pd.read_sql_query("SELECT id, kategori, periode, label, total_bayar, status FROM utility WHERE status!='Lunas' ORDER BY id DESC", conn)
-        if not df_wa_util.empty:
-            for _, r in df_wa_util.iterrows():
-                pesan = f"Pengingat: Tagihan {r['kategori']} periode {r['periode']} sebesar {format_rp(r['total_bayar'])} belum lunas. Mohon segera diselesaikan. Terima kasih."
-                st.markdown(f"**{r['kategori']}** — {r['label'] or '-'} — `{format_rp(r['total_bayar'])}` — [📋 Copy Pesan](https://wa.me/?text={quote(pesan, safe='')})", unsafe_allow_html=True)
-        else: st.success("✅ Semua tagihan utility sudah lunas")
-            
-    with tab3:
-        st.markdown("### ✉️ Template Pesan")
-        st.text_area("Template PKWT", value="Halo [Nama], kontrak kerja Anda sebagai [Jabatan] akan berakhir pada [Tanggal]. Mohon hubungi HR untuk proses perpanjangan. Terima kasih.", height=100)
-        st.text_area("Template Utility", value="Pengingat: Tagihan [Kategori] periode [Periode] sebesar [Nominal] belum lunas. Mohon segera diselesaikan. Terima kasih.", height=100)
-        
-    with tab4:
-        st.subheader("Kirim Undangan Interview ke Kandidat")
-        mode_interview = st.radio("Pilih Mode Interview:", ["Offline (Tatap Muka)", "Online (Zoom/Meet)"], horizontal=True)
-        
-        if mode_interview == "Offline (Tatap Muka)":
-            default_template = """PT UNITED EQUIPMENT INDONESIA 
-Dear [Nama],
-Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Offline (Tatap Muka)*, sesuai jadwal di bawah ini:
-- Hari, Tanggal: [Hari], [Tanggal]
-- Waktu: [Jam] WITA - Selesai
-- Agenda: Interview User
-- Lokasi: PT. UNITED EQUIPMENT INDONESIA – Melak Reps 
-  (Komplek Business Centre Tinggi Diraja Sendawar Blok A-04, Jl. Sendawar Raya, Barong Tongkok, Kutai Barat)
-- Mohon mengonfirmasi kehadiran dengan membalas pesan ini.
-*Notes!*
-1. Wajib hadir 15-30 menit sebelum acara dimulai.
-2. Berpakaian rapih dan sopan (Kemeja).
-3. Wajib membawa CV (Hardcopy/Print) dan fotokopi berkas pendukung.
-Good Luck !!!
-Thank you & Best regards,
-HR Recruitment"""
-        else:
-            default_template = """PT UNITED EQUIPMENT INDONESIA 
-Dear [Nama],
-Melalui pesan ini kami mengundang Anda untuk mengikuti interview user secara *Online*, sesuai jadwal di bawah ini:
-- Hari, Tanggal: [Hari], [Tanggal]
-- Waktu: [Jam] WITA - Selesai
-- Agenda: Interview User 
-- Link: [Link_Meeting]
-- Mohon mengonfirmasi kehadiran dengan membalas pesan ini
-Notes!
-1. Join setelah instruksi
-2. Wajib oncam
-3. Berpakaian rapih
-4. Siapkan Koneksi & Device (Hp/Laptop)
-Good Luck !!!
-Thank you & Best regards,
-HR Recruitment"""
+# ==================== LOGIN ====================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False; st.session_state.username = ""; st.session_state.nama = ""; st.session_state.role = ""
 
-        with st.expander("⚙️ Lihat/Edit Template Pesan Interview", expanded=False):
-            template_pesan = st.text_area("Template Pesan", value=default_template, height=350, key="tpl_interview_dynamic")
-            if mode_interview == "Online (Zoom/Meet)":
-                link_meeting = st.text_input("Masukkan Link Meeting (Untuk Mode Online):", value="https://meet.google.com/xxx-xxxx-xxx")
-            else: link_meeting = "-"
-        
-        st.divider()
-        df_kandidat_db = pd.read_sql_query("SELECT * FROM kandidat WHERE jadwal_interview IS NOT NULL AND jadwal_interview != '' AND jadwal_interview != '-' ORDER BY jadwal_interview ASC", conn)
-        
-        if df_kandidat_db.empty:
-            st.warning("Belum ada kandidat yang dijadwalkan untuk interview.")
-        else:
-            for index, row in df_kandidat_db.iterrows():
-                try:
-                    jadwal_lengkap = f"{row['jadwal_interview']} {row['jam_interview']}"
-                    dt = datetime.strptime(jadwal_lengkap.strip(), "%Y-%m-%d %H:%M")
-                    hari = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
-                    bulan = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
-                    hari_str = hari[dt.weekday()]
-                    tgl_str = f"{dt.day} {bulan[dt.month]} {dt.year}"
-                    jam_str = dt.strftime("%H:%M")
-                except:
-                    hari_str, tgl_str, jam_str = "Hari", str(row['jadwal_interview']), str(row['jam_interview'])
-                    
-                pesan_final = template_pesan.replace("[Nama]", str(row['nama'])).replace("[Hari]", hari_str).replace("[Tanggal]", tgl_str).replace("[Jam]", jam_str)
-                if mode_interview == "Online (Zoom/Meet)": pesan_final = pesan_final.replace("[Link_Meeting]", link_meeting)
-                
-                pesan_url = quote(pesan_final, safe='')
-                wa_link = f"https://wa.me/{row['telepon']}?text={pesan_url}"
-                
-                col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
-                with col1:
-                    st.write(f"**{row['nama']}**")
-                    st.caption(f"Posisi: {row['posisi_dilamar']}")
-                with col2:
-                    st.write(f"📅 {hari_str}, {tgl_str}")
-                    st.write(f"⏰ {jam_str} WITA")
-                with col3:
-                    st.write(f"📱 +{row['telepon']}")
-                    st.write(f"Tipe: {row['tipe_interview']}")
-                with col4:
-                    st.link_button("Kirim WA 💬", wa_link, type="primary", use_container_width=True)
-                st.divider()
-
-# --- 20. ARSIP DOKUMEN (E-FILING) & UNIVERSAL IMPORT ---
-elif pilihan == "📁 Arsip Dokumen (E-Filing)":
-    def parse_csv(file, delim=None, encoding=None):
-        raw = file.read(); file.seek(0)
-        if encoding is None:
-            for enc in ["utf-8-sig", "utf-8", "latin-1", "iso-8859-1"]:
-                try: raw.decode(enc); encoding = enc; break
-                except: continue
-            encoding = encoding or "utf-8"
-        if delim is None:
-            try: text = raw.decode(encoding)
-            except: text = raw.decode("latin-1")
-            first = "\n".join(text.split("\n")[:5])
-            counts = {",": first.count(","), ";": first.count(";"), "\t": first.count("\t"), "|": first.count("|")}
-            delim = max(counts, key=counts.get)
-            if counts[delim] == 0: delim = ","
-        return pd.read_csv(io.BytesIO(raw), delimiter=delim, encoding=encoding, on_bad_lines='skip', engine='python')
-
-    def parse_excel(file):
-        raw = file.read(); file.seek(0)
-        xls = pd.ExcelFile(io.BytesIO(raw))
-        dfs = [pd.read_excel(io.BytesIO(raw), sheet_name=s) for s in xls.sheet_names]
-        dfs = [d for d in dfs if not d.empty]
-        if len(dfs) == 1: return dfs[0]
-        elif len(dfs) > 1: return pd.concat(dfs, ignore_index=True)
-        return pd.DataFrame()
-
-    def parse_any_file(file, filename):
-        ext = filename.lower().split('.')[-1]
-        if ext == 'csv': return parse_csv(file)
-        elif ext in ['xlsx', 'xls', 'xlsm']: return parse_excel(file)
-        elif ext in ['txt', 'tsv']: return parse_csv(file)
-        else: raise Exception(f"Format .{ext} tidak didukung")
-
-    st.markdown('<div class="main-header"><h1>📁 Arsip Dokumen (E-Filing)</h1></div>', unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["📤 Upload Dokumen", "🗂️ Universal Import"])
-    
-    with tab1:
-        with st.form("form_upload_dokumen", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                nama_dok = st.text_input("Nama Dokumen *", placeholder="Contoh: STNK B 9542 TAW")
-                kategori = st.selectbox("Kategori Dokumen", ["Legalitas & Perizinan", "Keuangan & Invoice", "Aset & Kendaraan", "HRD & Karyawan", "SOP & Internal Memo", "Lainnya"])
-            with col2:
-                keterangan = st.text_area("Keterangan / Catatan")
-                file_up = st.file_uploader("Pilih File *", type=["pdf", "jpg", "jpeg", "png", "xlsx", "xls", "docx", "doc"])
-            
-            if st.form_submit_button("💾 Simpan ke Sistem", type="primary"):
-                if nama_dok and file_up is not None:
-                    try:
-                        file_bytes = file_up.read(); file_name = file_up.name; file_type = file_up.type
-                        c.execute('''INSERT INTO arsip_dokumen (tanggal_upload, nama_dokumen, kategori, keterangan, file_data, file_name, file_type) VALUES (?,?,?,?,?,?,?)''', 
-                                  (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nama_dok, kategori, keterangan, file_bytes, file_name, file_type))
-                        conn.commit(); st.success("✅ Dokumen berhasil disimpan!"); st.rerun()
-                    except Exception as e: st.error(f"❌ Gagal: {e}")
-                else: st.warning("⚠️ Nama dan File wajib diisi!")
-
-        st.markdown("---")
-        st.markdown("### 📚 Daftar Dokumen Tersimpan")
-        df_arsip = pd.read_sql_query("SELECT id, tanggal_upload, nama_dokumen, kategori, keterangan, file_name, file_type FROM arsip_dokumen ORDER BY id DESC", conn)
-        if not df_arsip.empty:
-            st.dataframe(df_arsip.drop(columns=['id']), use_container_width=True, hide_index=True)
-            opt_dl = {f"#{r['id']} - {r['nama_dokumen']} ({r['file_name']})": r['id'] for _, r in df_arsip.iterrows()}
-            pilih_dl = st.selectbox("Pilih dokumen untuk diunduh", ["-- Pilih --"] + list(opt_dl.keys()), key="dl_arsip")
-            if pilih_dl != "-- Pilih --":
-                dok = pd.read_sql_query("SELECT * FROM arsip_dokumen WHERE id=?", conn, params=(opt_dl[pilih_dl],)).iloc[0]
-                st.download_button("📥 Download Dokumen", bytes(dok['file_data']), dok['file_name'], mime=dok['file_type'] or "application/octet-stream")
-        else: st.info("Belum ada dokumen tersimpan.")
-            
-    with tab2:
-        st.markdown("### 📦 Universal Import")
-        st.info("1. Pilih Tabel Tujuan (Misal: `disiplin`). 2. Download Template. 3. Upload file Excel/CSV.")
-        tabel_list = ["jobdesk", "ci", "skd", "im", "lowongan", "kandidat", "aset", "utility", "disiplin"]
-        target_table = st.selectbox("Pilih Tabel Tujuan", tabel_list)
-        
-        c.execute(f"PRAGMA table_info({target_table})")
-        columns = [info[1] for info in c.fetchall() if info[1] != 'id']
-        df_template = pd.DataFrame(columns=columns)
-        csv_template = df_template.to_csv(index=False).encode('utf-8')
-        st.download_button(f"📄 Download Template {target_table.upper()} (CSV)", csv_template, f"template_{target_table}.csv", "text/csv")
-        
-        st.markdown("---")
-        file_univ = st.file_uploader(f"Upload file Excel/CSV untuk tabel {target_table.upper()}", type=["xlsx", "csv"])
-        
-        if file_univ is not None:
-            if st.button(f"🚀 Proses Import ke {target_table.upper()}", type="primary"):
-                try:
-                    if file_univ.name.endswith('.csv'): df_imp = pd.read_csv(file_univ)
-                    else: df_imp = pd.read_excel(file_univ)
-                    
-                    df_imp.columns = [str(col).lower().strip().replace(' ', '_') for col in df_imp.columns]
-                    
-                    if ('nrp' in df_imp.columns or 'employee_id' in df_imp.columns) and 'karyawan_id' in columns:
-                        nrp_col = 'nrp' if 'nrp' in df_imp.columns else 'employee_id'
-                        def get_kid(nrp):
-                            res = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (str(nrp).strip(),)).fetchone()
-                            return res[0] if res else None
-                        df_imp['karyawan_id'] = df_imp[nrp_col].apply(get_kid)
-                        df_imp = df_imp.drop(columns=['nrp', 'employee_id'], errors='ignore')
-                    
-                    missing_cols = [col for col in columns if col not in df_imp.columns]
-                    if missing_cols:
-                        st.error(f"❌ Kolom berikut tidak ditemukan di file Anda: **{', '.join(missing_cols)}**")
-                    else:
-                        sukses, gagal = 0, 0
-                        for _, row in df_imp.iterrows():
-                            try:
-                                if 'karyawan_id' in columns and pd.isna(row['karyawan_id']): raise ValueError("NRP tidak ditemukan")
-                                vals = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
-                                ph = ", ".join(["?"] * len(columns))
-                                c.execute(f"INSERT INTO {target_table} ({', '.join(columns)}) VALUES ({ph})", tuple(vals))
-                                sukses += 1
-                            except Exception: gagal += 1
-                        conn.commit()
-                        if sukses > 0: st.success(f"✅ Berhasil mengimpor {sukses} baris ke tabel {target_table}!"); st.rerun()
-                        if gagal > 0: st.warning(f"⚠️ {gagal} baris gagal diimport.")
-                except Exception as e: st.error(f"❌ Gagal import: {e}")
-
-# --- 21. LAPORAN & ANALITIK ---
-elif pilihan == "📊 Laporan & Analitik":
-    st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["👥 Karyawan", "💰 Payroll", "💡 Utility"])
-    
-    with tab1:
-        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None')").fetchone()[0]
-        resign_c = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'").fetchone()[0]
-        html = '<div class="metric-grid">'
-        html += metric_card("👥 Karyawan Aktif", str(aktif), "", "card-blue")
-        html += metric_card("📉 Total Resign", str(resign_c), "", "card-red")
-        html += '</div>'
-        st.markdown(html, unsafe_allow_html=True)
-        df_gender = pd.read_sql_query("SELECT gender AS Gender, COUNT(*) AS Jumlah FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND gender IS NOT NULL GROUP BY gender", conn)
-        if not df_gender.empty:
-            st.altair_chart(alt.Chart(df_gender).mark_arc(innerRadius=50).encode(theta='Jumlah:Q', color='Gender:N', tooltip=['Gender','Jumlah']).properties(height=300, title="Komposisi Gender"), use_container_width=True)
-        else: st.info("Belum ada data gender.")
-            
-    with tab2:
-        df_pay_sum = pd.read_sql_query("SELECT periode, COUNT(*) AS Karyawan, SUM(total_penghasilan_bruto) AS Bruto, SUM(total_potongan) AS Potongan, SUM(gaji_bersih) AS Bersih FROM payroll GROUP BY periode ORDER BY periode DESC LIMIT 12", conn)
-        if not df_pay_sum.empty:
-            st.dataframe(df_pay_sum.style.format({'Bruto':'Rp {:,.0f}','Potongan':'Rp {:,.0f}','Bersih':'Rp {:,.0f}'}), use_container_width=True, hide_index=True)
-        else: st.info("Belum ada data payroll.")
-            
-    with tab3:
-        df_util_sum = pd.read_sql_query("SELECT kategori, COUNT(*) AS Transaksi, SUM(total_bayar) AS Total FROM utility GROUP BY kategori", conn)
-        if not df_util_sum.empty:
-            st.dataframe(df_util_sum.style.format({'Total':'Rp {:,.0f}'}), use_container_width=True, hide_index=True)
-            st.altair_chart(alt.Chart(df_util_sum).mark_bar().encode(x='kategori:N', y='Total:Q', color='kategori:N', tooltip=['kategori','Total']).properties(height=300), use_container_width=True)
-        else: st.info("Belum ada data utility.")
-
-# --- 22. MANPOWER REPORT ---
-elif pilihan == "📈 Manpower Report":
-    st.markdown('<div class="main-header"><h1>📈 Manpower Report</h1></div>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1: mp_status = st.selectbox("Status", ["Aktif", "Resign", "Semua"])
-    with c2:
-        df_org_mp = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' ORDER BY organization", conn)
-        mp_org = st.selectbox("Organisasi", ["Semua"] + df_org_mp['organization'].tolist())
-        
-    q_mp = "SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak' FROM karyawan WHERE 1=1"
-    p_mp = []
-    if mp_status == "Aktif": q_mp += " AND (resign_date IS NULL OR resign_date='' OR resign_date='None')"
-    elif mp_status == "Resign": q_mp += " AND resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'"
-    if mp_org != "Semua": q_mp += " AND organization = ?"; p_mp.append(mp_org)
-    q_mp += " ORDER BY organization, full_name"
-    df_mp = pd.read_sql_query(q_mp, conn, params=p_mp)
-    st.markdown(f"**Total: {len(df_mp)} karyawan**")
-    st.dataframe(df_mp, use_container_width=True, hide_index=True)
-    st.download_button("📥 Export CSV Manpower", df_mp.to_csv(index=False).encode('utf-8'), f"manpower_{date.today()}.csv", "text/csv")
-
-# --- 23. IMPORT, EXPORT & BACKUP ---
-elif pilihan == "💾 Import, Export & Backup":
-    def import_data_manpower_melak(file):
-        raw = file.read(); file.seek(0)
-        xls = pd.ExcelFile(io.BytesIO(raw))
-        sheet = 'DATABASE' if 'DATABASE' in xls.sheet_names else xls.sheet_names[0]
-        df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
-        sukses, gagal, errors = 0, 0, []
-        
-        if 'Employee ID' in df.columns:
-            col_map = {
-                'Employee ID': 'employee_id', 'Full Name': 'full_name', 'Barcode': 'barcode', 'Organization': 'organization', 'Job Position': 'job_position', 'Job Level': 'job_level', 'Join Date': 'join_date', 'Resign Date': 'resign_date', 'Status Employee': 'status_employee', 'End Date': 'end_date', 'Sign Date': 'sign_date', 'Email': 'email', 'Birth Date': 'birth_date', 'Age': 'age', 'Birth Place': 'birth_place', 'Citizen ID Address': 'citizen_id_address', 'Residential Address': 'residential_address', 'NPWP': 'npwp', 'PTKP Status': 'ptkp_status', 'Employee Tax Status': 'employee_tax_status', 'Tax Config': 'tax_config', 'Bank Name': 'bank_name', 'Bank Account': 'bank_account', 'Bank Account Holder': 'bank_account_holder', 'BPJS Ketenagakerjaan': 'bpjs_ketenagakerjaan', 'BPJS Kesehatan': 'bpjs_kesehatan', 'NIK (NPWP 16 Digit)': 'nik_npwp_16', 'Mobile Phone': 'mobile_phone', 'Phone': 'phone', 'Branch Name': 'branch_name', 'Parent Branch Name': 'parent_branch_name', 'Religion': 'religion', 'Gender': 'gender', 'Marital Status': 'marital_status', 'Blood Type': 'blood_type', 'Nationality Code': 'nationality_code', 'Currency': 'currency', 'Length Of Service': 'length_of_service', 'Payment Schedule': 'payment_schedule', 'Approval Line': 'approval_line', 'Manager': 'manager', 'Grade': 'grade', 'Class': 'class', 'Profile Picture': 'profile_picture', 'Cost Center': 'cost_center', 'Cost Center Category': 'cost_center_category', 'SBU': 'sbu', 'NPWP 16 digit (new)': 'npwp_16_new', 'Passport': 'passport', 'Passport Expiration Date': 'passport_expiration_date', 'Jenis Dok. Referensi Bukti Potong': 'jenis_dok_referensi_bukti_potong', 'Nomor Dok. Referensi Bukti Potong': 'nomor_dok_referensi_bukti_potong', 'Tanggal Dok. Referensi Bukti Potong': 'tanggal_dok_referensi_bukti_potong', 'TIN (Taxpayer Identification Number)': 'tin', 'Divisi': 'divisi', 'Keterangan': 'keterangan'
-            }
-            for idx, row in df.iterrows():
-                try:
-                    nrp = str(row.get('Employee ID', '')).strip()
-                    if nrp.lower() in ['nan', '', 'none']: continue
-                    data = {'employee_id': nrp}
-                    for xls_col, db_col in col_map.items():
-                        if xls_col in df.columns and db_col not in data:
-                            val = row.get(xls_col)
-                            if pd.notna(val) and str(val).strip().lower() not in ['nan', 'none', '']:
-                                if db_col in ['join_date','sign_date','end_date','resign_date','birth_date','tanggal_dok_referensi_bukti_potong']:
-                                    try: data[db_col] = pd.to_datetime(val).strftime('%Y-%m-%d')
-                                    except: data[db_col] = str(val).strip()
-                                else: data[db_col] = str(val).strip()
-                    if not data.get('full_name'): continue
-                    
-                    c.execute("SELECT id FROM karyawan WHERE employee_id=?", (nrp,))
-                    exists = c.fetchone()
-                    if exists:
-                        set_clause = ", ".join([f"{k}=?" for k in data.keys() if k != 'employee_id'])
-                        vals = [v for k, v in data.items() if k != 'employee_id']; vals.append(exists[0])
-                        c.execute(f"UPDATE karyawan SET {set_clause} WHERE id=?", vals)
-                    else:
-                        cols = ", ".join(data.keys()); phs = ", ".join(["?"] * len(data))
-                        c.execute(f"INSERT INTO karyawan ({cols}) VALUES ({phs})", list(data.values()))
-                    sukses += 1
-                except Exception as e: gagal += 1; errors.append(f"Baris {idx+2}: {str(e)[:100]}")
-            conn.commit()
-            return sukses, gagal, errors
-        return 0, 0, ["Format kolom tidak dikenali."]
-
-    st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1></div>', unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["📥 Import Manpower", "💾 Backup Database"])
-    
-    with tab1:
-        st.markdown("### 📥 Import Data Manpower (Format MELAK)")
-        file_imp = st.file_uploader("Pilih file Excel Manpower", type=["xlsx", "xls", "xlsm"], key="imp_manpower")
-        if file_imp:
-            if st.button("🚀 Proses Import Manpower", type="primary"):
-                with st.spinner("Mengimpor data..."):
-                    try:
-                        sukses, gagal, errors = import_data_manpower_melak(file_imp)
-                        st.success(f"✅ Sukses: {sukses} baris | Gagal: {gagal} baris")
-                        if errors:
-                            with st.expander("⚠️ Detail Error"): 
-                                for e in errors[:20]: st.text(e)
+if not st.session_state.logged_in:
+    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        with st.form("login"):
+            st.subheader("🔐 Login Sistem")
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("Masuk"):
+                row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
+                if row and row[4] == 1:
+                    # Verifikasi menggunakan Bcrypt
+                    if bcrypt.checkpw(p.encode('utf-8'), row[1].encode('utf-8')):
+                        st.session_state.logged_in = True
+                        st.session_state.username = row[0]
+                        st.session_state.nama = row[2]
+                        st.session_state.role = row[3]
+                        log_aksi(u, "LOGIN")
                         st.rerun()
-                    except Exception as e: st.error(f"❌ Import gagal: {e}")
-                        
-    with tab2:
-        st.markdown("### 💾 Backup Database")
-        try:
-            with open('hris_ga.db', 'rb') as f: db_bytes = f.read()
-            st.download_button("📥 Download Backup Database (SQLite)", db_bytes, f"backup_hris_{date.today()}.db", "application/octet-stream", type="primary", use_container_width=True)
-        except Exception as e: st.error(f"Gagal membaca database: {e}")
+                    else:
+                        st.error("❌ Username / password salah")
+                else: 
+                    st.error("❌ Username / password salah")
+        st.info("🔑 Default: **admin** / **admin123**")
+    st.stop()
 
-# --- 24. MANAJEMEN USER ---
-elif pilihan == "👤 Manajemen User":
-    st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1></div>', unsafe_allow_html=True)
-    if st.session_state.role != "admin":
-        st.error("⛔ Hanya admin yang dapat mengakses halaman ini")
-    else:
-        tab1, tab2 = st.tabs(["📋 Daftar User", "➕ Tambah User"])
-        with tab1:
-            df_users = pd.read_sql_query("SELECT username, nama_lengkap, role, aktif FROM users ORDER BY username", conn)
-            st.dataframe(df_users, use_container_width=True, hide_index=True)
-        with tab2:
-            with st.form("form_user_baru"):
-                u_username = st.text_input("Username *")
-                u_nama = st.text_input("Nama Lengkap *")
-                u_password = st.text_input("Password *", type="password")
-                u_role = st.selectbox("Role", ["staff", "hrd", "admin"])
-                if st.form_submit_button("💾 Tambah User", type="primary"):
-                    try:
-                        c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hash_password(u_password), u_nama, u_role))
-                        conn.commit(); st.success("User ditambahkan!"); st.rerun()
-                    except sqlite3.IntegrityError: st.error("Username sudah ada!")
+# ==================== SIDEBAR MENU ====================
+with st.sidebar:
+    st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    menu = [
+        "🏠 Dashboard HRIS", "🗂️ Filing Data Manpower", "👥 Data Karyawan", 
+        "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", 
+        "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", "🏥 SKD", 
+        "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", 
+        "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", 
+        "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", 
+        "📁 Arsip Dokumen (E-Filing)", "📊 Laporan & Analitik", 
+        "📈 Manpower Report", "💾 Import, Export & Backup"
+    ]
+    
+    if st.session_state.role == "admin": 
+        menu += ["👤 Manajemen User", "📝 Log Aktivitas"]
+        
+    pilihan = st.selectbox("📋 Menu Navigasi", menu)
+    st.markdown("---")
+    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
+    st.markdown("---")
+    
+    if st.button("🚪 Logout"):
+        log_aksi(st.session_state.username, "LOGOUT")
+        for k in ["logged_in", "username", "nama", "role"]: 
+            st.session_state[k] = False if k == "logged_in" else ""
+        st.rerun()
 
-# --- 25. SINKRONISASI UNIQUIP ---
-elif pilihan == "🔄 Sinkronisasi Uniquip":
-    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1></div>', unsafe_allow_html=True)
-    with st.form("login_form_uniquip"):
-        st.subheader("Login Uniquip")
-        user = st.text_input("User Uniquip", value="okana")
-        pwd = st.text_input("Password Uniquip", type="password")
-        submit = st.form_submit_button("Tarik Data Aset", type="primary")
-    if submit:
-        if user and pwd:
-            with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
-                try:
-                    df = tarik_data_uniquip(user, pwd)
-                    if isinstance(df, pd.DataFrame):
-                        st.success("✅ Data berhasil ditarik!")
-                        st.dataframe(df, use_container_width=True)
-                    else: st.error(f"Gagal: {df}")
-                except Exception as e: st.error(f"Terjadi kesalahan: {e}")
-        else: st.warning("Username dan Password harus diisi!")
+# ==================== KONTEN MENU ====================
 
-# --- 26. LOG AKTIVITAS ---
-elif pilihan == "📝 Log Aktivitas":
-    st.markdown('<div class="main-header"><h1>📝 Log Aktivitas</h1></div>', unsafe_allow_html=True)
-    if st.session_state.role != "admin":
-        st.error("⛔ Hanya admin yang dapat mengakses halaman ini")
-    else:
-        df_log = pd.read_sql_query("SELECT username AS User, aksi AS Aksi, detail AS Detail, waktu AS Waktu FROM log_aktivitas ORDER BY id DESC LIMIT 500", conn)
-        if not df_log.empty: st.dataframe(df_log, use_container_width=True, hide_index=True)
-        else: st.info("Belum ada log aktivitas")
+# --- 1. DASHBOARD HRIS ---
+if pilihan == "🏠 Dashboard HRIS":
+    if tampilkan_flyer:
+        img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg", "flyer_mekanik.jpg"])
+        img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg", "flyer_warehouse.jpg"])
+        src_mekanik = f"data:image/png;base64,{img_mekanik_b64}" if img_mekanik_b64 else "https://placehold.co/400x600/FFD700/000000.png?text=Flyer+Mekanik"
+        src_warehouse = f"data:image/png;base64,{img_warehouse_b64}" if img_warehouse_b64 else "https://placehold.co/400x600/1e3a8a/FFFFFF.png?text=Flyer+Warehouse"
+        html_flyers = """
+        <style>
+            @keyframes floatBounce { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+            .flyer-container { position: fixed; right: 20px; z-index: 999; width: 260px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: floatBounce 4s ease-in-out infinite; transition: transform 0.3s; background-color: #fff; padding: 6px; border: 2px solid #f59e0b; }
+            .flyer-container:hover { animation-play-state: paused; transform: scale(1.05); z-index: 1000; }
+            .flyer-top { top: 150px; animation-delay: 0s; }
+            .flyer-bottom { top: 550px; animation-delay: 2s; }
+            @media (max-width: 1024px) { .flyer-container { display: none; } }
+        </style>
+        """
+        html_flyers += f'<div class="flyer-container flyer-top"><img src="{src_mekanik}" style="width:100%; border-radius:8px;"></div>'
+        html_flyers += f'<div class="flyer-container flyer-bottom"><img src="{src_warehouse}" style="width:100%; border-radius:8px;"></div>'
+        st.markdown(html_flyers, unsafe_allow_html=True)
 
-# ==================== FOOTER ====================
-st.markdown(f"""
-<div style="text-align:center; padding: 25px 0 15px 0; color: #64748b; font-size: 0.85em; border-top: 1px solid #cbd5e1; margin-top: 30px;">
-    ⚡ <b>HRIS, GA & Amoey</b> — Sistem Manajemen SDM Terpadu<br>
-    © {datetime.now().year} — All Rights Reserved
-</div>
-""", unsafe_allow_html=True)
-# --- 3. REKRUTMEN & CV ---
+    st.markdown(f'<div class="main-header"><h1>⚡ HRIS, GA & ASET DASHBOARD</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
+    # Tambahkan filter is_deleted=0
+    aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND is_deleted=0").fetchone()[0]
+    kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
+    lowongan_buka = c.execute("SELECT SUM(jumlah_dibutuhkan) FROM lowongan WHERE status='Buka'").fetchone()[0] or 0
+    diterima = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Diterima'").fetchone()[0]
+    ditolak = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Ditolak'").fetchone()[0]
+    proses = c.execute("SELECT COUNT(*) FROM kandidat WHERE status='Proses' OR status='Wawancara'").fetchone()[0]
+    tgl_30 = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"); tgl_skrg = datetime.now().strftime("%Y-%m-%d")
+    kontrak_habis = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND is_deleted=0 AND end_date BETWEEN ? AND ?", (tgl_skrg, tgl_30)).fetchone()[0]
+    sp_aktif = c.execute("SELECT COUNT(*) FROM disiplin WHERE status='Aktif'").fetchone()[0]
+    
+    html = '<div class="metric-grid">'
+    html += metric_card("👥 Karyawan Aktif", f"{aktif}", "belum resign", "card-blue")
+    html += metric_card("📢 Open Vacant", f"{lowongan_buka}", "kebutuhan", "card-pink")
+    html += metric_card("📋 Kandidat CV", f"{kandidat}", "screening", "card-purple")
+    html += metric_card("📝 Kontrak Habis", f"{kontrak_habis}", "30 hari", "card-orange")
+    html += metric_card("✅ Diterima", f"{diterima}", "lolos", "card-green")
+    html += metric_card("❌ Ditolak", f"{ditolak}", "tidak lolos", "card-red")
+    html += metric_card("⏳ Proses", f"{proses}", "on going", "card-gold")
+    html += metric_card("⚠️ SP Aktif", f"{sp_aktif}", "disiplin", "card-red")
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header"><h3>📢 Detail Kebutuhan (Open Vacant)</h3></div>', unsafe_allow_html=True)
+    df_vacant = pd.read_sql_query("SELECT posisi AS 'Posisi / Level', departemen AS 'Departemen', jumlah_dibutuhkan AS 'Jumlah Dibutuhkan', deskripsi AS 'Keterangan' FROM lowongan WHERE status='Buka' ORDER BY id DESC", conn)
+    if not df_vacant.empty: st.dataframe(df_vacant, use_container_width=True, hide_index=True)
+    else: st.info("✅ Tidak ada posisi yang sedang open vacant saat ini.")
+        
+    st.markdown('<div class="section-header"><h3>💡 KPI Utility Melak</h3></div>', unsafe_allow_html=True)
+    total_util = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility").fetchone()[0]
+    util_belum = c.execute("SELECT COUNT(*) FROM utility WHERE status!='Lunas'").fetchone()[0]
+    util_belum_rp = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility WHERE status!='Lunas'").fetchone()[0]
+    pdam_rp = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility WHERE kategori='PDAM'").fetchone()[0]
+    listrik_rp = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility WHERE kategori='Listrik'").fetchone()[0]
+    internet_rp = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility WHERE kategori='Internet'").fetchone()[0]
+    
+    html = '<div class="metric-grid">'
+    html += metric_card("💰 Total Utility", format_rp(total_util), "PDAM+Listrik+Internet", "card-blue")
+    html += metric_card("💧 PDAM", format_rp(pdam_rp), "", "card-teal")
+    html += metric_card("⚡ Listrik", format_rp(listrik_rp), "", "card-gold")
+    html += metric_card("🌐 Internet", format_rp(internet_rp), "", "card-purple")
+    html += metric_card("❌ Utility Belum Lunas", f"{util_belum}", format_rp(util_belum_rp), "card-red")
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header"><h3>📊 Analitik</h3></div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**👔 Job Position (Aktif)**")
+        df_jab = pd.read_sql_query("SELECT job_position as JABATAN, COUNT(*) as JML FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND is_deleted=0 AND job_position IS NOT NULL GROUP BY job_position ORDER BY JML DESC LIMIT 15", conn)
+        if not df_jab.empty:
+            chart = alt.Chart(df_jab).mark_bar(cornerRadiusTopRight=10).encode(x=alt.X('JML:Q', title='Jumlah'), y=alt.Y('JABATAN:N', sort='-x', title=''), color=alt.Color('JML:Q', scale=alt.Scale(scheme='blues'), legend=None)).properties(height=max(300, len(df_jab)*35))
+            st.altair_chart(chart, use_container_width=True)
+    with col2:
+        st.markdown("**🏢 Organization (Aktif)**")
+        df_div = pd.read_sql_query("SELECT organization as DIVISI, COUNT(*) as JML FROM karyawan WHERE (resign_date IS NULL OR resign_date='') AND is_deleted=0 AND organization IS NOT NULL GROUP BY organization ORDER BY JML DESC", conn)
+        if not df_div.empty:
+            chart = alt.Chart(df_div).mark_arc(innerRadius=60).encode(theta=alt.Theta('JML:Q'), color=alt.Color('DIVISI:N', scale=alt.Scale(scheme='purples')), tooltip=['DIVISI', 'JML']).properties(height=350)
+            st.altair_chart(chart, use_container_width=True)
+            # --- 2. FILING DATA MANPOWER ---
+elif pilihan == "🗂️ Filing Data Manpower":
+    st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian Terpusat Data Profil, Interview, Aset & Utilitas</p></div>', unsafe_allow_html=True)
+    st.info("Ketik nama karyawan atau kandidat untuk melihat seluruh rekam jejak dalam satu layar.")
+    search_query = st.text_input("🔍 Masukkan Nama Manpower / Kandidat:")
+    
+    if search_query:
+        q_karyawan = pd.read_sql_query("SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, status_employee AS Status, mobile_phone AS HP FROM karyawan WHERE full_name LIKE ? AND is_deleted=0", conn, params=(f'%{search_query}%',))
+        q_kandidat = pd.read_sql_query("SELECT nama AS Nama, posisi_dilamar AS Posisi, status AS Status, jadwal_interview AS 'Tgl Interview', jam_interview AS 'Jam', tipe_interview AS 'Tipe', tahapan AS 'Tahapan', catatan AS 'Catatan' FROM kandidat WHERE nama LIKE ?", conn, params=(f'%{search_query}%',))
+        q_aset = pd.read_sql_query("SELECT nama AS 'Nama Aset', kategori AS Kategori, lokasi AS Lokasi, kondisi AS Kondisi FROM aset WHERE penanggung_jawab LIKE ? AND is_deleted=0", conn, params=(f'%{search_query}%',))
+        q_utility = pd.read_sql_query("SELECT kategori AS 'Jenis Utility', label AS Label, periode AS Periode, total_bayar AS Nominal, status AS Status FROM utility WHERE penanggung_jawab LIKE ?", conn, params=(f'%{search_query}%',))
+        
+        if not q_karyawan.empty or not q_kandidat.empty or not q_aset.empty or not q_utility.empty:
+            st.success(f"Data ditemukan untuk: **{search_query}**")
+            tab_profil, tab_rekrut, tab_aset, tab_util = st.tabs(["👤 Profil Karyawan", "📋 Rekam Jejak Rekrutmen", "💻 Aset yang Dipegang", "💡 Riwayat Utilitas"])
+            
+            with tab_profil:
+                if not q_karyawan.empty: st.dataframe(q_karyawan, use_container_width=True, hide_index=True)
+                else: st.info("Tidak ada data profil karyawan aktif di database.")
+            with tab_rekrut:
+                if not q_kandidat.empty: st.dataframe(q_kandidat, use_container_width=True, hide_index=True)
+                else: st.info("Tidak ada data riwayat rekrutmen/interview.")
+            with tab_aset:
+                if not q_aset.empty: st.dataframe(q_aset, use_container_width=True, hide_index=True)
+                else: st.info("Manpower ini tidak memegang aset perusahaan.")
+            with tab_util:
+                if not q_utility.empty: st.dataframe(q_utility, use_container_width=True, hide_index=True)
+                else: st.info("Tidak ada data utilitas terkait manpower ini.")
+        else:
+            st.warning("Data tidak ditemukan.")
+
+# --- 3. REKRUTMEN & CV (DENGAN ALERT DUPLIKAT) ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Jadwal", "📢 Open Vacant"])
     
-    # TAB 1: INPUT KANDIDAT BARU
     with tab1:
         with st.form("form_kandidat_baru", clear_on_submit=True):
             st.subheader("Formulir Kandidat Baru")
@@ -850,7 +595,6 @@ elif pilihan == "📋 Rekrutmen & CV":
             
             if st.form_submit_button("💾 Simpan Kandidat", type="primary"):
                 if nama:
-                    # CEK DUPLIKAT DATA KANDIDAT
                     existing = c.execute("SELECT id FROM kandidat WHERE nama=? AND posisi_dilamar=?", (nama, posisi)).fetchone()
                     if existing:
                         st.error(f"⚠️ Kandidat **{nama}** untuk posisi **{posisi}** sudah ada di database! Tidak dapat menambahkan data ganda.")
@@ -865,7 +609,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                 else:
                     st.error("⚠️ Nama Kandidat wajib diisi!")
 
-    # TAB 2: PIPELINE & JADWAL
     with tab2:
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         if not df_k.empty:
@@ -924,7 +667,6 @@ elif pilihan == "📋 Rekrutmen & CV":
         else: 
             st.info("Belum ada data kandidat. Silakan input melalui Tab 'Input Kandidat'.")
             
-    # TAB 3: OPEN VACANT
     with tab3:
         st.markdown("### 📢 Daftar Open Vacant (Lowongan)")
         with st.expander("➕ Tambah Lowongan Baru"):
@@ -985,7 +727,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         conn.commit()
                         st.rerun()
 
-# --- 4. DATA KARYAWAN ---
+# --- 4. DATA KARYAWAN (SOFT DELETE) ---
 elif pilihan == "👥 Data Karyawan":
     st.markdown('<div class="main-header"><h1>👥 Data Karyawan</h1><p>Master Data Seluruh Karyawan</p></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📋 Daftar Karyawan", "✏️ Tambah / Edit"])
@@ -994,12 +736,13 @@ elif pilihan == "👥 Data Karyawan":
         c1, c2, c3 = st.columns(3)
         with c1: q_kar = st.text_input("🔍 Cari Nama / NRP / NIK", "")
         with c2:
-            df_org_opts = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' ORDER BY organization", conn)
+            df_org_opts = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' AND is_deleted=0 ORDER BY organization", conn)
             list_org = ["Semua"] + df_org_opts['organization'].tolist()
             f_org_kar = st.selectbox("🏢 Organisasi", list_org)
         with c3: f_status_kar = st.selectbox("📌 Status", ["Aktif", "Resign", "Semua"])
             
-        q_kar_sql = "SELECT id, employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, gender AS Gender, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak', mobile_phone AS HP, email AS Email, gaji AS 'Gaji Pokok' FROM karyawan WHERE 1=1"
+        # QUERY DENGAN FILTER is_deleted=0
+        q_kar_sql = "SELECT id, employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, gender AS Gender, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak', mobile_phone AS HP, email AS Email, gaji AS 'Gaji Pokok' FROM karyawan WHERE is_deleted=0"
         p_kar = []
         
         if q_kar:
@@ -1024,7 +767,7 @@ elif pilihan == "👥 Data Karyawan":
 
     with tab2:
         st.subheader("Formulir Tambah / Edit Karyawan")
-        list_kar_all = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan ORDER BY full_name", conn)
+        list_kar_all = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE is_deleted=0 ORDER BY full_name", conn)
         opt_kar_all = {"-- Karyawan Baru --": 0}
         for _, r in list_kar_all.iterrows():
             opt_kar_all[f"{r['employee_id']} - {r['full_name']}"] = r['id']
@@ -1067,7 +810,6 @@ elif pilihan == "👥 Data Karyawan":
                                   (e_nrp, e_nama, e_org, e_pos, e_lvl, e_gender, e_tgl_masuk, e_status_kar, e_tgl_akhir, e_tgl_resign, e_hp, e_email, e_ktp, e_ptkp, e_gaji, 1 if e_aktif else 0, edit_kar_id))
                         st.success("✅ Data Karyawan berhasil diperbarui!")
                     else:
-                        # CEK DUPLIKAT NRP
                         existing = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (e_nrp,)).fetchone()
                         if existing:
                             st.error(f"⚠️ NRP {e_nrp} sudah ada di database!")
@@ -1083,28 +825,29 @@ elif pilihan == "👥 Data Karyawan":
                     
         if edit_kar_id > 0:
             st.markdown("---")
-            if st.button("🗑️ Hapus Karyawan Ini", type="primary"):
-                c.execute("DELETE FROM karyawan WHERE id=?", (edit_kar_id,))
+            if st.button("🗑️ Hapus Karyawan Ini (Arsipkan)", type="primary"):
+                # SOFT DELETE: Ubah status is_deleted menjadi 1
+                c.execute("UPDATE karyawan SET is_deleted=1 WHERE id=?", (edit_kar_id,))
                 conn.commit()
-                st.success("Karyawan dihapus!")
+                st.success("Karyawan berhasil diarsipkan (tidak tampil di daftar)!")
                 st.rerun()
 
-# --- 5. ASET & PROPERTI ---
+# --- 5. ASET & PROPERTI (SOFT DELETE) ---
 elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
-    total_aset = c.execute("SELECT COUNT(*) FROM aset").fetchone()[0]
-    total_nilai = c.execute("SELECT COALESCE(SUM(nilai),0) FROM aset").fetchone()[0]
+    total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE is_deleted=0").fetchone()[0]
+    total_nilai = c.execute("SELECT COALESCE(SUM(nilai),0) FROM aset WHERE is_deleted=0").fetchone()[0]
     html = '<div class="metric-grid">'
     html += metric_card("📦 Total Aset", str(total_aset), "unit", "card-blue")
     html += metric_card("💰 Total Nilai", format_rp(total_nilai), "", "card-green")
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["📋 Daftar Aset", "➕ Tambah Aset"])
+    tab1, tab2, tab3 = st.tabs(["📋 Daftar Aset", "➕ Tambah Aset", "✏️ Edit / Hapus Aset"])
     
     with tab1:
-        df_aset = pd.read_sql_query("SELECT kode AS Kode, nama AS 'Nama Aset', kategori AS Kategori, lokasi AS Lokasi, kondisi AS Kondisi, penanggung_jawab AS 'Penanggung Jawab', status AS Status, catatan AS Catatan FROM aset ORDER BY id DESC", conn)
+        df_aset = pd.read_sql_query("SELECT kode AS Kode, nama AS 'Nama Aset', kategori AS Kategori, lokasi AS Lokasi, kondisi AS Kondisi, penanggung_jawab AS 'Penanggung Jawab', status AS Status, catatan AS Catatan FROM aset WHERE is_deleted=0 ORDER BY id DESC", conn)
         if not df_aset.empty:
             st.dataframe(df_aset, use_container_width=True, hide_index=True)
             csv_aset = df_aset.to_csv(index=False).encode('utf-8')
@@ -1137,7 +880,51 @@ elif pilihan == "🚛 Aset & Properti":
                         st.error("❌ Kode Aset sudah digunakan!")
                 else:
                     st.error("⚠️ Kode dan Nama Aset wajib diisi!")
-                    # --- 6. UTILITY MELAK ---
+
+    with tab3:
+        st.subheader("✏️ Edit / Hapus Data Aset")
+        df_aset_all = pd.read_sql_query("SELECT * FROM aset WHERE is_deleted=0 ORDER BY id DESC", conn)
+        
+        if not df_aset_all.empty:
+            opt_aset = {f"{r['kode']} - {r['nama']}": r['id'] for _, r in df_aset_all.iterrows()}
+            pilih_aset = st.selectbox("Pilih Aset yang akan diubah/dihapus:", ["-- Pilih --"] + list(opt_aset.keys()))
+            
+            if pilih_aset != "-- Pilih --":
+                aid = opt_aset[pilih_aset]
+                s_aset = pd.read_sql_query("SELECT * FROM aset WHERE id=?", conn, params=(aid,)).iloc[0]
+                
+                with st.form("form_edit_aset"):
+                    st.markdown(f"**✏️ Edit Data: {s_aset['nama']}**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        ea_kode = st.text_input("Kode Aset", value=s_aset['kode'])
+                        ea_nama = st.text_input("Nama Aset", value=s_aset['nama'])
+                        kat_opts = ["Kendaraan", "Elektronik", "Furniture", "Peralatan Kerja", "Bangunan", "Lainnya"]
+                        ea_kategori = st.selectbox("Kategori", kat_opts, index=kat_opts.index(s_aset['kategori']) if s_aset['kategori'] in kat_opts else 5)
+                    with col2:
+                        ea_lokasi = st.text_input("Lokasi", value=s_aset['lokasi'] or "")
+                        ea_pj = st.text_input("Penanggung Jawab", value=s_aset['penanggung_jawab'] or "")
+                        kond_opts = ["Baik", "Rusak Ringan", "Rusak Berat"]
+                        ea_kondisi = st.selectbox("Kondisi", kond_opts, index=kond_opts.index(s_aset['kondisi']) if s_aset['kondisi'] in kond_opts else 0)
+                    ea_catatan = st.text_area("Catatan Tambahan", value=s_aset['catatan'] or "")
+                    
+                    if st.form_submit_button("💾 Simpan Perubahan", type="primary"):
+                        c.execute('''UPDATE aset SET kode=?, nama=?, kategori=?, lokasi=?, kondisi=?, penanggung_jawab=?, catatan=? WHERE id=?''',
+                                  (ea_kode, ea_nama, ea_kategori, ea_lokasi, ea_kondisi, ea_pj, ea_catatan, aid))
+                        conn.commit()
+                        st.success("✅ Data Aset berhasil diperbarui!")
+                        st.rerun()
+                
+                st.markdown("---")
+                if st.button("🗑️ Hapus Aset Ini (Arsipkan)", type="primary"):
+                    # SOFT DELETE ASET
+                    c.execute("UPDATE aset SET is_deleted=1 WHERE id=?", (aid,))
+                    conn.commit()
+                    st.success("✅ Aset berhasil diarsipkan!")
+                    st.rerun()
+        else:
+            st.info("Belum ada data aset untuk diedit atau dihapus.")
+            # --- 6. UTILITY MELAK ---
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility Melak</h1><p>PDAM • Listrik • Internet • Telepon</p></div>', unsafe_allow_html=True)
     
@@ -1245,7 +1032,7 @@ elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Harian", "📋 Rekap Harian", "📊 Statistik Bulanan"])
     
-    list_kar_abs = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='') ORDER BY full_name", conn)
+    list_kar_abs = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='') ORDER BY full_name", conn)
     opt_abs = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_abs.iterrows()}
     
     with tab1:
@@ -1308,7 +1095,7 @@ elif pilihan == "🏖️ Cuti & Izin":
     st.markdown('<div class="main-header"><h1>🏖️ Cuti & Izin</h1></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["➕ Ajukan Cuti", "📋 Approval & Rekap"])
     
-    list_kar_cuti = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='') ORDER BY full_name", conn)
+    list_kar_cuti = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='') ORDER BY full_name", conn)
     opt_cuti = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_cuti.iterrows()}
     
     with tab1:
@@ -1363,7 +1150,7 @@ elif pilihan == "🏖️ Cuti & Izin":
                         st.rerun()
         else: st.info("Belum ada pengajuan cuti")
 
-# --- 10. PAYROLL & SLIP GAJI ---
+# --- 10. PAYROLL & SLIP GAJI (DENGAN DOWNLOAD PDF) ---
 elif pilihan == "💰 Payroll & Slip Gaji":
     def hitung_bpjs(gaji_pokok, tunjangan_tetap):
         upah = gaji_pokok + tunjangan_tetap
@@ -1412,7 +1199,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                 if existing > 0:
                     st.warning(f"⚠️ Payroll periode {periode_pay} sudah ada ({existing} baris). Hapus dulu untuk regenerate.")
                 else:
-                    kar_list = pd.read_sql_query("SELECT id, full_name, ptkp_status, gaji FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='')", conn)
+                    kar_list = pd.read_sql_query("SELECT id, full_name, ptkp_status, gaji FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='')", conn)
                     count = 0
                     for _, kr in kar_list.iterrows():
                         gaji_pokok = float(kr['gaji'] or 0)
@@ -1452,6 +1239,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             pilih_slip = st.selectbox("Pilih Slip Gaji", list(opt_slip.keys()))
             slip = pd.read_sql_query("""SELECT p.*, k.employee_id, k.full_name, k.job_position, k.organization FROM payroll p JOIN karyawan k ON p.karyawan_id=k.id WHERE p.id=?""", conn, params=(opt_slip[pilih_slip],)).iloc[0]
             
+            # TAMPILAN HTML SLIP GAJI
             st.markdown(f"""
             <div class="payroll-slip">
                 <h3>🧾 SLIP GAJI — PERIODE {slip['periode']}</h3>
@@ -1473,6 +1261,17 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                 <div class="payroll-row payroll-total" style="font-size:1.4em;"><span>GAJI BERSIH</span><span>{format_rp(slip['gaji_bersih'])}</span></div>
             </div>
             """, unsafe_allow_html=True)
+            
+            # FITUR BARU: DOWNLOAD PDF SLIP GAJI
+            st.markdown("---")
+            pdf_bytes = buat_pdf_slip(slip)
+            st.download_button(
+                label="📥 Download Slip Gaji (PDF)",
+                data=pdf_bytes,
+                file_name=f"Slip_Gaji_{slip['employee_id']}_{slip['periode']}.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
         else: st.info("Belum ada data payroll untuk ditampilkan")
             # --- 11. JOBDESK ---
 elif pilihan == "📋 Jobdesk":
@@ -1576,7 +1375,7 @@ elif pilihan == "🔄 Mutasi & PKWT":
     st.markdown('<div class="main-header"><h1>🔄 Mutasi & PKWT</h1><p>Riwayat Mutasi & Kontrak Karyawan</p></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Mutasi", "📋 Daftar Mutasi", "📅 PKWT Habis (30 Hari)"])
     
-    list_kar_mut = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
+    list_kar_mut = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
     opt_mut = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_mut.iterrows()}
     
     with tab1:
@@ -1602,7 +1401,7 @@ elif pilihan == "🔄 Mutasi & PKWT":
             
     with tab3:
         tgl_skrg_m = date.today().strftime("%Y-%m-%d"); tgl_30_m = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
-        df_pkwt_m = pd.read_sql_query("SELECT employee_id AS NRP, full_name AS Nama, organization AS Dept, job_position AS Jabatan, end_date AS 'Kontrak Habis', mobile_phone AS HP FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_m, tgl_30_m))
+        df_pkwt_m = pd.read_sql_query("SELECT employee_id AS NRP, full_name AS Nama, organization AS Dept, job_position AS Jabatan, end_date AS 'Kontrak Habis', mobile_phone AS HP FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0 AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_m, tgl_30_m))
         if not df_pkwt_m.empty:
             st.warning(f"⚠️ {len(df_pkwt_m)} karyawan kontraknya habis dalam 30 hari")
             st.dataframe(df_pkwt_m, use_container_width=True, hide_index=True)
@@ -1613,7 +1412,7 @@ elif pilihan == "📉 Resign & Turnover":
     st.markdown('<div class="main-header"><h1>📉 Resign & Turnover</h1></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["➕ Input Resign", "📋 Daftar Resign"])
     
-    list_kar_res = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
+    list_kar_res = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
     opt_res = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_res.iterrows()}
     
     with tab1:
@@ -1652,7 +1451,7 @@ elif pilihan == "⚠️ Disiplin & SP":
     tab1, tab2 = st.tabs(["➕ Input Manual", "📋 Daftar SP"])
     
     with tab1:
-        list_kar_sp = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
+        list_kar_sp = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND is_deleted=0 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
         opt_sp = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_sp.iterrows()}
         with st.form("form_sp", clear_on_submit=True):
             c1, c2 = st.columns(2)
@@ -1713,7 +1512,7 @@ elif pilihan == "📱 WhatsApp Reminder":
     tgl_30_wa = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
     
     with tab1:
-        df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
+        df_wa = pd.read_sql_query("SELECT id, employee_id, full_name, mobile_phone, end_date, job_position FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0 AND end_date BETWEEN ? AND ? ORDER BY end_date", conn, params=(tgl_skrg_wa, tgl_30_wa))
         if not df_wa.empty:
             for _, r in df_wa.iterrows():
                 pesan = f"Halo {r['full_name']}, kontrak kerja Anda sebagai {r['job_position'] or 'Karyawan'} akan berakhir pada {r['end_date']}. Mohon hubungi HR untuk proses perpanjangan. Terima kasih."
@@ -1944,14 +1743,14 @@ elif pilihan == "📊 Laporan & Analitik":
     tab1, tab2, tab3 = st.tabs(["👥 Karyawan", "💰 Payroll", "💡 Utility"])
     
     with tab1:
-        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None')").fetchone()[0]
-        resign_c = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'").fetchone()[0]
+        aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0").fetchone()[0]
+        resign_c = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None' AND is_deleted=0").fetchone()[0]
         html = '<div class="metric-grid">'
         html += metric_card("👥 Karyawan Aktif", str(aktif), "", "card-blue")
         html += metric_card("📉 Total Resign", str(resign_c), "", "card-red")
         html += '</div>'
         st.markdown(html, unsafe_allow_html=True)
-        df_gender = pd.read_sql_query("SELECT gender AS Gender, COUNT(*) AS Jumlah FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND gender IS NOT NULL GROUP BY gender", conn)
+        df_gender = pd.read_sql_query("SELECT gender AS Gender, COUNT(*) AS Jumlah FROM karyawan WHERE (resign_date IS NULL OR resign_date='' OR resign_date='None') AND is_deleted=0 AND gender IS NOT NULL GROUP BY gender", conn)
         if not df_gender.empty:
             st.altair_chart(alt.Chart(df_gender).mark_arc(innerRadius=50).encode(theta='Jumlah:Q', color='Gender:N', tooltip=['Gender','Jumlah']).properties(height=300, title="Komposisi Gender"), use_container_width=True)
         else: st.info("Belum ada data gender.")
@@ -1975,10 +1774,10 @@ elif pilihan == "📈 Manpower Report":
     c1, c2 = st.columns(2)
     with c1: mp_status = st.selectbox("Status", ["Aktif", "Resign", "Semua"])
     with c2:
-        df_org_mp = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' ORDER BY organization", conn)
+        df_org_mp = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' AND is_deleted=0 ORDER BY organization", conn)
         mp_org = st.selectbox("Organisasi", ["Semua"] + df_org_mp['organization'].tolist())
         
-    q_mp = "SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak' FROM karyawan WHERE 1=1"
+    q_mp = "SELECT employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak' FROM karyawan WHERE is_deleted=0"
     p_mp = []
     if mp_status == "Aktif": q_mp += " AND (resign_date IS NULL OR resign_date='' OR resign_date='None')"
     elif mp_status == "Resign": q_mp += " AND resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'"
@@ -2075,31 +1874,13 @@ elif pilihan == "👤 Manajemen User":
                 u_role = st.selectbox("Role", ["staff", "hrd", "admin"])
                 if st.form_submit_button("💾 Tambah User", type="primary"):
                     try:
-                        c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hash_password(u_password), u_nama, u_role))
+                        # Hash password dengan Bcrypt
+                        hashed_pwd = bcrypt.hashpw(u_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                        c.execute("INSERT INTO users (username, password, nama_lengkap, role, aktif) VALUES (?,?,?,?,1)", (u_username, hashed_pwd, u_nama, u_role))
                         conn.commit(); st.success("User ditambahkan!"); st.rerun()
                     except sqlite3.IntegrityError: st.error("Username sudah ada!")
 
-# --- 25. SINKRONISASI UNIQUIP ---
-elif pilihan == "🔄 Sinkronisasi Uniquip":
-    st.markdown('<div class="main-header"><h1>🔄 Sinkronisasi Uniquip</h1></div>', unsafe_allow_html=True)
-    with st.form("login_form_uniquip"):
-        st.subheader("Login Uniquip")
-        user = st.text_input("User Uniquip", value="okana")
-        pwd = st.text_input("Password Uniquip", type="password")
-        submit = st.form_submit_button("Tarik Data Aset", type="primary")
-    if submit:
-        if user and pwd:
-            with st.spinner("Robot sedang login dan mengambil data dari Uniquip..."):
-                try:
-                    df = tarik_data_uniquip(user, pwd)
-                    if isinstance(df, pd.DataFrame):
-                        st.success("✅ Data berhasil ditarik!")
-                        st.dataframe(df, use_container_width=True)
-                    else: st.error(f"Gagal: {df}")
-                except Exception as e: st.error(f"Terjadi kesalahan: {e}")
-        else: st.warning("Username dan Password harus diisi!")
-
-# --- 26. LOG AKTIVITAS ---
+# --- 25. LOG AKTIVITAS ---
 elif pilihan == "📝 Log Aktivitas":
     st.markdown('<div class="main-header"><h1>📝 Log Aktivitas</h1></div>', unsafe_allow_html=True)
     if st.session_state.role != "admin":
