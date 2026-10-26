@@ -1,5 +1,10 @@
 import time
 from playwright.sync_api import sync_playwright
+import subprocess
+import os
+# Cek jika browser belum ada, lalu install
+if not os.path.exists(os.path.expanduser("~/.cache/ms-playwright")):
+    subprocess.run(["playwright", "install", "chromium"])
 import streamlit as st
 import pandas as pd
 import sqlite3
