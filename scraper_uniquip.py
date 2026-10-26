@@ -57,3 +57,69 @@ def scrape_aset_uniquip(username, password):
         except Exception as e:
             browser.close()
             raise Exception(f"Gagal Scraping: {str(e)}")
+from playwright.sync_api import sync_playwright
+import pandas as pd
+import time
+
+def scrape_aset_uniquip(username, password):
+    all_data = []
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True) 
+        context = browser.new_context()
+        page = context.new_page()
+
+        try:
+            # 1. LOGIN
+            page.goto("https://files.uniquip.co.id/login", timeout=60000)
+            page.wait_for_load_state("networkidle")
+            time.sleep(3) 
+            
+            page.fill('input[name="username"]', username) 
+            page.fill('input[name="password"]', password) 
+            page.click('button[type="submit"]')           
+            
+            page.wait_for_load_state("networkidle")
+            time.sleep(5) 
+
+            # 2. DAFTAR URL YANG AKAN DI-SCRAPE
+            # ⚠️ GANTI URL IT DAN UERE DI BAWAH INI DENGAN URL ASLINYA
+            target_urls = [
+                {"kategori": "ASET", "url": "https://files.uniquip.co.id/asetuniquip/menu_aset/"},
+                {"kategori": "IT", "url": "https://files.uniquip.co.id/asetuniquip/menu_it/"},   # Ubah URL ini
+                {"kategori": "UERE", "url": "https://files.uniquip.co.id/asetuniquip/menu_uere/"} # Ubah URL ini
+            ]
+
+            for target in target_urls:
+                try:
+                    page.goto(target["url"], timeout=60000)
+                    page.wait_for_load_state("networkidle")
+                    time.sleep(5) # Beri waktu tabel ZK Framework untuk render
+                    
+                    # ⚠️ CARI TAHU SELECTOR TABELNYA
+                    # Jika tabel biasa, gunakan 'table tbody tr'
+                    # Jika ZK Framework, cari ID tabelnya (misal '#tabel-aset tbody tr')
+                    rows = page.query_selector_all('table tbody tr') 
+                    
+                    for row in rows:
+                        cols = row.query_selector_all('td')
+                        if len(cols) >= 3: # Minimal ada 3 kolom
+                            all_data.append({
+                                "Kategori_Web": target["kategori"],
+                                "Kode": cols[0].inner_text().strip(),
+                                "Nama Aset": cols[1].inner_text().strip(),
+                                "Lokasi": cols[2].inner_text().strip()
+                            })
+                except Exception as e:
+                    print(f"Gagal scrape {target['kategori']}: {e}")
+
+            browser.close()
+            
+            if not all_data:
+                return pd.DataFrame([{"Kategori_Web": "INFO", "Kode": "-", "Nama Aset": "Data Kosong / Selector Salah", "Lokasi": "-"}])
+                
+            return pd.DataFrame(all_data)
+
+        except Exception as e:
+            browser.close()
+            raise Exception(f"Gagal Total Scraping: {str(e)}")
