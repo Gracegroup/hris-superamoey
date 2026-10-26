@@ -1,13 +1,6 @@
 streamlit
 pandas
-playwright
-bcrypt
 fpdf
-altair
-streamlit
-pandas
-playwright
 bcrypt
-fpdf
-altair
+playwright
 openpyxl
