@@ -1,0 +1,6 @@
+streamlit
+pandas
+playwright
+bcrypt
+fpdf
+altair
