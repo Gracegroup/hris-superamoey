@@ -17,7 +17,6 @@ from urllib.parse import quote
 from io import StringIO
 
 # ==================== FIX BUG #4: Playwright install ====================
-# Jangan jalankan setiap import — cukup sekali via env var atau manual.
 if os.getenv("INSTALL_PLAYWRIGHT_ON_START", "0") == "1":
     try:
         os.system("playwright install chromium")
@@ -80,32 +79,21 @@ c = conn.cursor()
 
 # ==================== FIX BUG #5: Helper anti-NaN ====================
 def clean(val, default=""):
-    """Ubah NaN/None/'nan' -> string bersih."""
-    if val is None:
-        return default
+    if val is None: return default
     try:
-        if pd.isna(val):
-            return default
-    except (TypeError, ValueError):
-        pass
+        if pd.isna(val): return default
+    except (TypeError, ValueError): pass
     s = str(val).strip()
-    if s.lower() in ("nan", "none", "null", "nat", ""):
-        return default
+    if s.lower() in ("nan", "none", "null", "nat", ""): return default
     return s
 
 def clean_date(val):
-    """Ubah date/timestamp -> 'YYYY-MM-DD' atau None."""
-    if val is None:
-        return None
+    if val is None: return None
     try:
-        if pd.isna(val):
-            return None
-    except (TypeError, ValueError):
-        pass
-    try:
-        return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
-    except Exception:
-        return None
+        if pd.isna(val): return None
+    except (TypeError, ValueError): pass
+    try: return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
+    except Exception: return None
 
 # ==================== Pembuatan Tabel ====================
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
@@ -144,11 +132,9 @@ if c.fetchone()[0] == 0:
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashlib.sha256("hrd123".encode()).hexdigest(), "HRD Staff", "hrd"))
     conn.commit()
 
-# ==================== FUNGSI SEEDING DARI FILE (FIXED NaN) ====================
+# ==================== FUNGSI SEEDING DARI FILE ====================
 def seed_data_from_files():
     base_dir = os.getcwd()
-    
-    # 1. SEEDING KARYAWAN
     c.execute("SELECT COUNT(*) FROM karyawan")
     if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'Employee_10670_20261025090235.xlsx')
@@ -171,7 +157,6 @@ def seed_data_from_files():
                 print("✅ Seeding Karyawan Berhasil")
             except Exception as e: print(f"❌ Error Karyawan: {e}")
 
-    # 2. SEEDING RUKO
     c.execute("SELECT COUNT(*) FROM ruko")
     if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_t_ruko.xlsx')
@@ -181,10 +166,8 @@ def seed_data_from_files():
                 for _, row in df_ruko.iterrows():
                     nama_ruko = clean(row.get('Nama Ruko'))
                     if not nama_ruko or nama_ruko.lower() == 'nama ruko': continue
-                    try:
-                        nilai = float(row.get('Biaya New') or 0)
-                    except (ValueError, TypeError):
-                        nilai = 0.0
+                    try: nilai = float(row.get('Biaya New') or 0)
+                    except (ValueError, TypeError): nilai = 0.0
                     c.execute('''INSERT INTO ruko (nama, alamat, status, penyewa, nilai_sewa, mulai_sewa, akhir_sewa, catatan) 
                                  VALUES (?,?,?,?,?,?,?,?)''',
                               (nama_ruko, clean(row.get('Namacabang')), clean(row.get('Status Kepemilikan')),
@@ -194,7 +177,6 @@ def seed_data_from_files():
                 print("✅ Seeding Ruko Berhasil")
             except Exception as e: print(f"❌ Error Ruko: {e}")
 
-    # 3. SEEDING TENANT
     c.execute("SELECT COUNT(*) FROM tenant")
     if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_t_tenant.csv')
@@ -213,7 +195,6 @@ def seed_data_from_files():
                 print("✅ Seeding Tenant Berhasil")
             except Exception as e: print(f"❌ Error Tenant: {e}")
 
-    # 4. SEEDING ASET KENDARAAN
     c.execute("SELECT COUNT(*) FROM aset")
     if c.fetchone()[0] == 0:
         file_path = os.path.join(base_dir, 'grid_new_JT.xlsx')
@@ -231,7 +212,6 @@ def seed_data_from_files():
                 print("✅ Seeding Aset Berhasil")
             except Exception as e: print(f"❌ Error Aset: {e}")
 
-    # 5. SEEDING KANDIDAT
     c.execute("SELECT COUNT(*) FROM kandidat")
     if c.fetchone()[0] == 0:
         df_lowongan = pd.read_sql_query("SELECT posisi FROM lowongan WHERE status='Buka'", conn)
@@ -260,25 +240,13 @@ def seed_data_from_files():
                             tipe_intv = "Offline" if "GMEET" not in clean(row.get('VIA', '')).upper() else "Online"
 
                             if hasil in ['APPROVE', 'DONE']:
-                                status = 'Diterima'
-                                hasil_interview = 'OK'
-                                catatan = f"[SUDAH DIINTERVIEW] Lolos. Potensi sesuai vacant: {posisi_dilamar}."
-                                tahapan = "Selesai"
+                                status = 'Diterima'; hasil_interview = 'OK'; catatan = f"[SUDAH DIINTERVIEW] Lolos. Potensi sesuai vacant: {posisi_dilamar}."; tahapan = "Selesai"
                             elif hasil == 'REJECT':
-                                status = 'Ditolak'
-                                hasil_interview = 'FAIL'
-                                catatan = "[SUDAH DIINTERVIEW] Tidak lolos."
-                                tahapan = "Selesai"
+                                status = 'Ditolak'; hasil_interview = 'FAIL'; catatan = "[SUDAH DIINTERVIEW] Tidak lolos."; tahapan = "Selesai"
                             elif hasil in ['', 'NAN', 'ON REVIEW', 'REVIEW', 'PROSES INTV /KANDIDAT M3', 'PROSES INTV /KANDIDAT M2']:
-                                status = 'Wawancara'
-                                hasil_interview = '-'
-                                catatan = f"[BELUM DIINTERVIEW / SEDANG REVIEW] Memiliki potensi untuk posisi: {posisi_dilamar}."
-                                tahapan = "Interview"
+                                status = 'Wawancara'; hasil_interview = '-'; catatan = f"[BELUM DIINTERVIEW / SEDANG REVIEW] Memiliki potensi untuk posisi: {posisi_dilamar}."; tahapan = "Interview"
                             else:
-                                status = 'Proses'
-                                hasil_interview = '-'
-                                catatan = f"[STATUS: {hasil}] Potensi: {posisi_dilamar}."
-                                tahapan = "Screening"
+                                status = 'Proses'; hasil_interview = '-'; catatan = f"[STATUS: {hasil}] Potensi: {posisi_dilamar}."; tahapan = "Screening"
 
                             if posisi_dilamar.lower() in list_vacant or any(v in posisi_dilamar.lower() for v in list_vacant):
                                 catatan += " [COCOK DENGAN OPEN VACANT]"
@@ -317,56 +285,38 @@ def metric_card(label, value, sub="", warna="card-blue"):
     sub_html = f'<div class="sub">{sub}</div>' if sub else ''
     return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
 
-# ==================== FIX BUG #2: Fungsi get_image_base64 ====================
 def get_image_base64(filenames):
-    """Cari file pertama yang ada di list, lalu kembalikan base64 string-nya."""
-    if isinstance(filenames, str):
-        filenames = [filenames]
+    if isinstance(filenames, str): filenames = [filenames]
     for fn in filenames:
         if os.path.exists(fn):
             try:
-                with open(fn, "rb") as f:
-                    return base64.b64encode(f.read()).decode()
-            except Exception:
-                continue
+                with open(fn, "rb") as f: return base64.b64encode(f.read()).decode()
+            except Exception: continue
     return ""
 
-# ==================== FIX BUG #1: Fungsi tarik_data_uniquip ====================
 def tarik_data_uniquip(username, password):
-    """
-    Scrape data aset dari Uniquip via Playwright.
-    ⚠️  Implementasi placeholder — sesuaikan URL & selector dengan form login Uniquip.
-    """
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            # TODO: ganti URL di bawah dengan URL login Uniquip yang sebenarnya
             page.goto("https://uniquip.co.id/asetuniquip/", timeout=30000)
-            # TODO: sesuaikan selector form login
             try:
                 page.fill("input[name='username']", username)
                 page.fill("input[name='password']", password)
                 page.click("button[type='submit']")
                 page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-            # TODO: sesuaikan selector tabel aset
+            except Exception: pass
             rows = []
             try:
                 table_rows = page.query_selector_all("table tbody tr")
                 for tr in table_rows:
                     cols = [td.inner_text().strip() for td in tr.query_selector_all("td")]
-                    if cols:
-                        rows.append(cols)
-            except Exception:
-                pass
+                    if cols: rows.append(cols)
+            except Exception: pass
             browser.close()
-            if not rows:
-                return "⚠️ Belum ada data / selector perlu disesuaikan."
+            if not rows: return "⚠️ Belum ada data / selector perlu disesuaikan."
             return pd.DataFrame(rows)
-    except Exception as e:
-        return f"❌ Scraping gagal: {e}"
+    except Exception as e: return f"❌ Scraping gagal: {e}"
         # === SAMBUNGAN CHUNK 1 ===
 
 # ==================== LOGIN ====================
@@ -561,8 +511,7 @@ elif pilihan == "🗂️ Filing Data Manpower":
                     st.info("Tidak ada data utilitas terkait manpower ini.")
         else:
             st.warning("Data tidak ditemukan di database Karyawan, Kandidat, Aset, maupun Utilitas. Pastikan ejaan nama sudah benar.")
-
-# --- 3. REKRUTMEN & CV (DENGAN JADWAL LENGKAP) ---
+            # --- 3. REKRUTMEN & CV (DENGAN JADWAL LENGKAP) ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Jadwal", "📢 Open Vacant"])
@@ -591,17 +540,22 @@ elif pilihan == "📋 Rekrutmen & CV":
             
             if st.form_submit_button("💾 Simpan Kandidat", type="primary"):
                 if nama:
-                    jadwal_str = str(tgl_interview)
-                    c.execute('''INSERT INTO kandidat (nama, posisi_dilamar, telepon, email, sumber, tanggal_lamar, status, catatan, jadwal_interview, jam_interview, tipe_interview, tahapan, status_berkas) 
-                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                              (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan, jadwal_str, jam_interview.strftime('%H:%M'), tipe_interview, tahapan, status_berkas))
-                    conn.commit()
-                    st.success(f"✅ Kandidat {nama} berhasil disimpan!")
-                    st.rerun()
+                    # === FITUR ALERT DUPLIKAT ===
+                    cek_duplikat = c.execute("SELECT id FROM kandidat WHERE LOWER(nama)=LOWER(?) AND LOWER(posisi_dilamar)=LOWER(?)", (nama.strip(), posisi.strip())).fetchone()
+                    if cek_duplikat:
+                        st.error(f"⚠️ Data Kandidat **{nama}** untuk posisi **{posisi}** sudah ada (ID: {cek_duplikat[0]}). Silakan edit di tab Pipeline & Jadwal.")
+                    else:
+                        jadwal_str = str(tgl_interview)
+                        c.execute('''INSERT INTO kandidat (nama, posisi_dilamar, telepon, email, sumber, tanggal_lamar, status, catatan, jadwal_interview, jam_interview, tipe_interview, tahapan, status_berkas) 
+                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                                  (nama, posisi, telepon, email, sumber, str(tgl_lamar), status, catatan, jadwal_str, jam_interview.strftime('%H:%M'), tipe_interview, tahapan, status_berkas))
+                        conn.commit()
+                        st.success(f"✅ Kandidat {nama} berhasil disimpan!")
+                        st.rerun()
                 else:
                     st.error("⚠️ Nama Kandidat wajib diisi!")
 
-    # TAB 2: PIPELINE & JADWAL
+    # TAB 2: PIPELINE & JADWAL (FITUR EDIT & DELETE)
     with tab2:
         df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
         if not df_k.empty:
@@ -623,13 +577,13 @@ elif pilihan == "📋 Rekrutmen & CV":
             st.markdown("---")
             opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_filtered.iterrows()}
             if opsi_kandidat:
-                pilihan_edit = st.selectbox("Pilih Kandidat untuk Update Pipeline:", ["-- Pilih --"] + list(opsi_kandidat.keys()))
+                pilihan_edit = st.selectbox("Pilih Kandidat untuk Edit/Hapus Pipeline:", ["-- Pilih --"] + list(opsi_kandidat.keys()))
                 if pilihan_edit != "-- Pilih --":
                     kandidat_id = opsi_kandidat[pilihan_edit]
                     s = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,)).iloc[0]
                     
                     with st.form("form_update_pipeline"):
-                        st.markdown(f"**✏️ Update Data: {s['nama']}**")
+                        st.markdown(f"**✏️ Edit Data: {s['nama']}**")
                         colA, colB = st.columns(2)
                         with colA:
                             e_nama = st.text_input("Nama Kandidat", value=s['nama'])
@@ -657,6 +611,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                     if st.button(f"🗑️ Hapus Kandidat {s['nama']}", type="primary"):
                         c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,))
                         conn.commit()
+                        st.success("Kandidat berhasil dihapus!")
                         st.rerun()
         else: 
             st.info("Belum ada data kandidat. Silakan input melalui Tab 'Input Kandidat'.")
@@ -723,9 +678,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                         c.execute("DELETE FROM lowongan WHERE id=?", (r['id'],))
                         conn.commit()
                         st.rerun()
-
-# === SAMBUNGAN CHUNK 3 ===
-# === SAMBUNGAN CHUNK 2 ===
 
 # --- 4. DATA KARYAWAN ---
 elif pilihan == "👥 Data Karyawan":
@@ -832,7 +784,6 @@ elif pilihan == "👥 Data Karyawan":
                 st.rerun()
 
 # --- 5. ASET & PROPERTI ---
-# ⚠️ FIX BUG #3: hitung_bpjs, hitung_pph21, PTKP_MAP dipindah ke dalam elif Payroll
 elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
@@ -881,9 +832,7 @@ elif pilihan == "🚛 Aset & Properti":
                         st.error("❌ Kode Aset sudah digunakan!")
                 else:
                     st.error("⚠️ Kode dan Nama Aset wajib diisi!")
-
-# --- 6. UTILITY MELAK ---
-# --- 6. UTILITY MELAK ---
+                    # --- 6. UTILITY MELAK ---
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility Melak</h1><p>PDAM • Listrik • Internet • Telepon</p></div>', unsafe_allow_html=True)
     
@@ -931,6 +880,7 @@ elif pilihan == "💡 Utility Melak":
                 conn.commit()
                 st.success("✅ Data Utility berhasil disimpan!")
                 st.rerun()
+
 # --- 7. RUKO & TENANT ---
 elif pilihan == "🏪 Ruko & Tenant":
     st.markdown('<div class="main-header"><h1>🏪 Ruko & Tenant</h1><p>Manajemen Properti & Penyewa</p></div>', unsafe_allow_html=True)
@@ -1214,15 +1164,9 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             """, unsafe_allow_html=True)
         else:
             st.info("Belum ada data payroll untuk ditampilkan")
-
-# === SAMBUNGAN CHUNK 4 ===
-# === SAMBUNGAN CHUNK 3 ===
-
-# --- 11. JOBDESK ---
+            # --- 11. JOBDESK ---
 elif pilihan == "📋 Jobdesk":
     # === FIX BUG #3 (varian 2): helper didefinisikan di dalam blok Jobdesk ===
-    # Sebelumnya file asli menaruh `def render_crud_table` di antara rantai
-    # elif Payroll dan elif Jobdesk → SyntaxError. Sekarang dipindah ke dalam.
     def render_crud_table(table_name, title, original_df):
         st.markdown(f"### 📋 Data {title}")
         edited_df = st.data_editor(original_df, num_rows="dynamic", use_container_width=True, hide_index=True)
@@ -1247,7 +1191,6 @@ elif pilihan == "📋 Jobdesk":
             conn.commit()
             st.success(f"✅ Perubahan data {title} berhasil disimpan!")
             st.rerun()
-    # === END FIX ===
 
     st.markdown('<div class="main-header"><h1>📋 Jobdesk & KPI</h1></div>', unsafe_allow_html=True)
     df_jd = pd.read_sql_query("SELECT id, posisi, departemen, tugas_utama, kpi FROM jobdesk ORDER BY id", conn)
@@ -1482,11 +1425,7 @@ elif pilihan == "📤 Exit Clearance":
                 st.rerun()
     else:
         st.info("Belum ada data resign untuk exit clearance.")
-
-# === SAMBUNGAN CHUNK 5 ===
-# === SAMBUNGAN CHUNK 4 ===
-
-# --- 19. WHATSAPP REMINDER ---
+        # --- 19. WHATSAPP REMINDER ---
 elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
@@ -1613,7 +1552,6 @@ HR Recruitment"""
 
 # --- 20. ARSIP DOKUMEN (E-FILING) & UNIVERSAL IMPORT ---
 elif pilihan == "📁 Arsip Dokumen (E-Filing)":
-    # === FIX BUG #3 (varian 3): parse_* dipindah ke dalam blok ===
     def parse_csv(file, delim=None, encoding=None):
         raw = file.read(); file.seek(0)
         if encoding is None:
@@ -1638,14 +1576,6 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
         if len(dfs) == 1: return dfs[0]
         elif len(dfs) > 1: return pd.concat(dfs, ignore_index=True)
         return pd.DataFrame()
-
-    def parse_any_file(file, filename):
-        ext = filename.lower().split('.')[-1]
-        if ext == 'csv': return parse_csv(file)
-        elif ext in ['xlsx', 'xls', 'xlsm']: return parse_excel(file)
-        elif ext in ['txt', 'tsv']: return parse_csv(file)
-        else: raise Exception(f"Format .{ext} tidak didukung")
-    # === END FIX ===
 
     st.markdown('<div class="main-header"><h1>📁 Arsip Dokumen (E-Filing)</h1></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📤 Upload Dokumen", "🗂️ Universal Import"])
