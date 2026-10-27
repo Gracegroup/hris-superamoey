@@ -34,29 +34,29 @@ st.markdown("""
     
     /* CSS DASHBOARD WALLPAPER STYLE */
     .main-header { 
+        .main-header { 
         background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
-        padding: 30px; border-radius: 24px; color: white; text-align: center; margin-bottom: 25px; 
+        padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
     }
     
     /* Card Glassmorphism */
-    .metric-grid { 
+       .metric-grid { 
         display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
-        gap: 15px; margin-bottom: 25px; 
+        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); 
+        gap: 12px; margin-bottom: 20px; 
     }
     .metric-card { 
-        padding: 20px; border-radius: 20px; 
+        padding: 15px; border-radius: 18px; 
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
         backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
-        transition: transform 0.3s ease, box-shadow 0.3s ease; 
+        transition: all 0.3s ease; 
         color: white; position: relative; overflow: hidden;
     }
-    .metric-card::before {
-        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
+    .metric-card:hover { 
+        transform: translateY(-5px) scale(1.03); 
+        box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
     }
-    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.3); }
     .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
     .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
     .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
@@ -386,8 +386,9 @@ if pilihan == "🏠 Dashboard HRIS":
         # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
         if tampilkan_flyer:
             st.markdown("""
-            <div style="background: rgba(255,255,255,0.05); border-radius: 20px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);">
-                <h3 style="text-align: center; color: #fff; margin-top: 0;">📢 Info Lowongan</h3>
+                       st.markdown("""
+            <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 12px; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; text-align: center;">
+                <h3 style="color: #fff; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
             </div>
             """, unsafe_allow_html=True)
             
