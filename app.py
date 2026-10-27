@@ -58,7 +58,7 @@ st.markdown("""
         box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
     }
     .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-    .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
+    .metric-card .value { font-size: 1.5em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); word-break: break-word; }
     .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
 
     /* Warna Gradient Modern */
