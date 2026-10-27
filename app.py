@@ -303,196 +303,191 @@ with st.sidebar:
 # ==================== KONTEN MENU ====================
 
 # ==================== KONTEN MENU ====================
-# --- 1. DASHBOARD HRIS (UPGRADE TAMPILAN) ---
+# --- 1. DASHBOARD HRIS (LAYOUT 2 KOLOM & METRIK LENGKAP) ---
 if pilihan == "🏠 Dashboard HRIS":
     # Header
     st.markdown('<div class="main-header"><h1>🏠 Dashboard HRIS & GA</h1><p>Ringkasan Eksekutif Data SDM, Rekrutmen, dan General Affairs</p></div>', unsafe_allow_html=True)
     
-    # --- 1. AMBIL DATA DARI DATABASE ---
+    # --- AMBIL SEMUA DATA DARI DATABASE ---
     total_karyawan = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=1").fetchone()[0]
     total_kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     total_lowongan = c.execute("SELECT COUNT(*) FROM lowongan WHERE status='Buka'").fetchone()[0]
     total_cuti = c.execute("SELECT COUNT(*) FROM cuti WHERE status='Menunggu'").fetchone()[0]
     total_resign = c.execute("SELECT COUNT(*) FROM resign").fetchone()[0]
+    
     total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE status='Aktif'").fetchone()[0]
+    total_ruko = c.execute("SELECT COUNT(*) FROM ruko").fetchone()[0]
+    ruko_disewa = c.execute("SELECT COUNT(*) FROM ruko WHERE status='Disewa'").fetchone()[0]
+    total_tenant = c.execute("SELECT COUNT(*) FROM tenant").fetchone()[0]
+    tenant_terisi = c.execute("SELECT COUNT(*) FROM tenant WHERE penghuni IS NOT NULL AND penghuni != ''").fetchone()[0]
     total_sp = c.execute("SELECT COUNT(*) FROM disiplin WHERE status='Aktif'").fetchone()[0]
     
     periode_ini = datetime.now().strftime("%Y-%m")
     total_payroll = c.execute("SELECT COALESCE(SUM(gaji_bersih), 0) FROM payroll WHERE periode=?", (periode_ini,)).fetchone()[0]
+    total_utility = c.execute("SELECT COALESCE(SUM(total_bayar), 0) FROM utility WHERE periode=?", (periode_ini,)).fetchone()[0]
 
-    # --- 2. KARTU METRIK (RINGKASAN) ---
-    st.markdown("### 📊 Ringkasan Utama")
-    
-    # Baris 1: Data HR
-    html_row1 = '<div class="metric-grid">'
-    html_row1 += metric_card("👥 Karyawan Aktif", str(total_karyawan), "Orang", "card-blue")
-    html_row1 += metric_card("🎯 Total Kandidat", str(total_kandidat), "Pelamar", "card-purple")
-    html_row1 += metric_card("📋 Lowongan Buka", str(total_lowongan), "Posisi", "card-green")
-    html_row1 += metric_card("💰 Payroll Bulan Ini", format_rp(total_payroll), "Total Gaji Bersih", "card-gold")
-    html_row1 += '</div>'
-    st.markdown(html_row1, unsafe_allow_html=True)
+    # --- MEMBAGI LAYAR MENJADI 2 KOLOM (KIRI BESAR, KANAN FLYER) ---
+    col_left, col_right = st.columns([2.5, 1])
 
-    # Baris 2: Data Operasional & GA
-    html_row2 = '<div class="metric-grid">'
-    html_row2 += metric_card("🏖️ Cuti Menunggu", str(total_cuti), "Perlu Approval", "card-orange")
-    html_row2 += metric_card("⚠️ SP Aktif", str(total_sp), "Sanksi Berjalan", "card-red")
-    html_row2 += metric_card("🚛 Aset Aktif", str(total_aset), "Unit Terdaftar", "card-teal")
-    html_row2 += metric_card("📉 Total Resign", str(total_resign), "Karyawan Keluar", "card-dark")
-    html_row2 += '</div>'
-    st.markdown(html_row2, unsafe_allow_html=True)
-
-    # --- 3. CHART & GRAFIK ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 📈 Analitik & Distribusi Data")
-    
-    col_chart1, col_chart2 = st.columns(2)
-    
-    # Chart 1: Distribusi Karyawan per Divisi (Donut Chart)
-    with col_chart1:
-        with st.container(border=True):
-            st.markdown("**🏢 Distribusi Karyawan per Divisi**")
-            df_div = pd.read_sql_query("SELECT COALESCE(NULLIF(divisi,''),'Belum Diisi') as divisi, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY divisi", conn)
-            if not df_div.empty:
-                chart_div = alt.Chart(df_div).mark_arc(innerRadius=60).encode(
-                    theta=alt.Theta(field="jumlah", type="quantitative"),
-                    color=alt.Color(field="divisi", type="nominal", title="Divisi", scale=alt.Scale(scheme='tableau10')),
-                    tooltip=['divisi', 'jumlah']
-                ).properties(height=300)
-                st.altair_chart(chart_div, use_container_width=True)
-            else:
-                st.info("Belum ada data.")
-
-    # Chart 2: Distribusi Gender (Pie Chart)
-    with col_chart2:
-        with st.container(border=True):
-            st.markdown("**🚻 Distribusi Gender Karyawan**")
-            df_gender = pd.read_sql_query("SELECT COALESCE(NULLIF(gender,''),'Tidak Diketahui') as gender, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY gender", conn)
-            if not df_gender.empty:
-                chart_gender = alt.Chart(df_gender).mark_arc(innerRadius=60).encode(
-                    theta=alt.Theta(field="jumlah", type="quantitative"),
-                    color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita'], range=['#4facfe', '#f093fb'])),
-                    tooltip=['gender', 'jumlah']
-                ).properties(height=300)
-                st.altair_chart(chart_gender, use_container_width=True)
-            else:
-                st.info("Belum ada data.")
-
-    col_chart3, col_chart4 = st.columns(2)
-    
-    # Chart 3: Pengeluaran Utility per Bulan (Area Chart)
-    with col_chart3:
-        with st.container(border=True):
-            st.markdown("**💡 Tren Pengeluaran Utility (6 Bulan Terakhir)**")
-            df_util = pd.read_sql_query("SELECT periode, SUM(total_bayar) as total FROM utility GROUP BY periode ORDER BY periode DESC LIMIT 6", conn)
-            if not df_util.empty:
-                df_util = df_util.sort_values('periode') # Urutkan dari terlama ke terbaru
-                chart_util = alt.Chart(df_util).mark_area(
-                    line={'color':'#11998e'}, 
-                    color=alt.Gradient(
-                        gradient='linear',
-                        stops=[alt.GradientStop(color='#38ef7d', offset=0), alt.GradientStop(color='white', offset=1)],
-                        x1=1, x2=1, y1=1, y2=0)
-                ).encode(
-                    x=alt.X('periode:N', title='Periode (YYYY-MM)'),
-                    y=alt.Y('total:Q', title='Total Pengeluaran (Rp)')
-                ).properties(height=300)
-                st.altair_chart(chart_util, use_container_width=True)
-            else:
-                st.info("Belum ada data pembayaran utility.")
-
-    # Chart 4: Tahapan Kandidat (Bar Chart)
-    with col_chart4:
-        with st.container(border=True):
-            st.markdown("**📋 Status / Tahapan Kandidat Rekrutmen**")
-            df_kand = pd.read_sql_query("SELECT COALESCE(NULLIF(tahapan,''),'Belum Ada Tahapan') as tahapan, COUNT(*) as jumlah FROM kandidat GROUP BY tahapan", conn)
-            if not df_kand.empty:
-                chart_kand = alt.Chart(df_kand).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
-                    x=alt.X('jumlah:Q', title='Jumlah Kandidat'),
-                    y=alt.Y('tahapan:N', sort='-x', title='Tahapan'),
-                    color=alt.Color('jumlah:Q', scale=alt.Scale(scheme='blues'), legend=None)
-                ).properties(height=300)
-                st.altair_chart(chart_kand, use_container_width=True)
-            else:
-                st.info("Belum ada data kandidat.")
-    # --- 4. FLYER LOWONGAN BERGERAK (MARQUEE) ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    if tampilkan_flyer:
-        st.markdown('<div class="section-header"><h3>📢 Flyer Lowongan Tersedia</h3></div>', unsafe_allow_html=True)
+    with col_left:
+        # ================= BAGIAN KIRI: METRIK & GRAFIK =================
         
-        os.makedirs("uploads/flyer", exist_ok=True)
-        flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        st.markdown("### 👥 Ringkasan SDM & Rekrutmen")
+        r1_c1, r1_c2, r1_c3 = st.columns(3)
+        with r1_c1: st.markdown(metric_card("👥 Karyawan", str(total_karyawan), "Aktif", "card-blue"), unsafe_allow_html=True)
+        with r1_c2: st.markdown(metric_card("🎯 Kandidat", str(total_kandidat), "Pelamar", "card-purple"), unsafe_allow_html=True)
+        with r1_c3: st.markdown(metric_card("📋 Lowongan", str(total_lowongan), "Buka", "card-green"), unsafe_allow_html=True)
+
+        r2_c1, r2_c2, r2_c3 = st.columns(3)
+        with r2_c1: st.markdown(metric_card("💰 Payroll", format_rp(total_payroll), "Bulan Ini", "card-gold"), unsafe_allow_html=True)
+        with r2_c2: st.markdown(metric_card("🏖️ Cuti", str(total_cuti), "Menunggu", "card-orange"), unsafe_allow_html=True)
+        with r2_c3: st.markdown(metric_card("📉 Resign", str(total_resign), "Total", "card-red"), unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### 🏢 Ringkasan GA & Properti")
+        r3_c1, r3_c2, r3_c3 = st.columns(3)
+        with r3_c1: st.markdown(metric_card("🚛 Aset", str(total_aset), "Aktif", "card-teal"), unsafe_allow_html=True)
+        with r3_c2: st.markdown(metric_card("🏪 Ruko", f"{ruko_disewa}/{total_ruko}", "Disewa", "card-dark"), unsafe_allow_html=True)
+        with r3_c3: st.markdown(metric_card("🏠 Tenant", f"{tenant_terisi}/{total_tenant}", "Terisi", "card-purple"), unsafe_allow_html=True)
+
+        r4_c1, r4_c2, r4_c3 = st.columns(3)
+        with r4_c1: st.markdown(metric_card("💡 Utility", format_rp(total_utility), "Bulan Ini", "card-blue"), unsafe_allow_html=True)
+        with r4_c2: st.markdown(metric_card("⚠️ SP Aktif", str(total_sp), "Sanksi", "card-red"), unsafe_allow_html=True)
+
+        # --- GRAFIK ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### 📈 Analitik & Distribusi Data")
         
-        if flyer_files:
-            import base64
+        col_chart1, col_chart2 = st.columns(2)
+        with col_chart1:
+            with st.container(border=True):
+                st.markdown("**🏢 Distribusi Karyawan per Divisi**")
+                df_div = pd.read_sql_query("SELECT COALESCE(NULLIF(divisi,''),'Belum Diisi') as divisi, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY divisi", conn)
+                if not df_div.empty:
+                    chart_div = alt.Chart(df_div).mark_arc(innerRadius=60).encode(
+                        theta=alt.Theta(field="jumlah", type="quantitative"),
+                        color=alt.Color(field="divisi", type="nominal", title="Divisi", scale=alt.Scale(scheme='tableau10')),
+                        tooltip=['divisi', 'jumlah']
+                    ).properties(height=250)
+                    st.altair_chart(chart_div, use_container_width=True)
+                else: st.info("Belum ada data.")
+
+        with col_chart2:
+            with st.container(border=True):
+                st.markdown("**🚻 Distribusi Gender Karyawan**")
+                df_gender = pd.read_sql_query("SELECT COALESCE(NULLIF(gender,''),'Tidak Diketahui') as gender, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY gender", conn)
+                if not df_gender.empty:
+                    chart_gender = alt.Chart(df_gender).mark_arc(innerRadius=60).encode(
+                        theta=alt.Theta(field="jumlah", type="quantitative"),
+                        color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita'], range=['#4facfe', '#f093fb'])),
+                        tooltip=['gender', 'jumlah']
+                    ).properties(height=250)
+                    st.altair_chart(chart_gender, use_container_width=True)
+                else: st.info("Belum ada data.")
+
+        col_chart3, col_chart4 = st.columns(2)
+        with col_chart3:
+            with st.container(border=True):
+                st.markdown("**💡 Tren Pengeluaran Utility (6 Bulan Terakhir)**")
+                df_util = pd.read_sql_query("SELECT periode, SUM(total_bayar) as total FROM utility GROUP BY periode ORDER BY periode DESC LIMIT 6", conn)
+                if not df_util.empty:
+                    df_util = df_util.sort_values('periode') 
+                    chart_util = alt.Chart(df_util).mark_area(
+                        line={'color':'#11998e'}, 
+                        color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#38ef7d', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)
+                    ).encode(
+                        x=alt.X('periode:N', title='Periode'),
+                        y=alt.Y('total:Q', title='Total (Rp)')
+                    ).properties(height=250)
+                    st.altair_chart(chart_util, use_container_width=True)
+                else: st.info("Belum ada data utility.")
+
+        with col_chart4:
+            with st.container(border=True):
+                st.markdown("**📋 Tahapan Kandidat Rekrutmen**")
+                df_kand = pd.read_sql_query("SELECT COALESCE(NULLIF(tahapan,''),'Belum Ada') as tahapan, COUNT(*) as jumlah FROM kandidat GROUP BY tahapan", conn)
+                if not df_kand.empty:
+                    chart_kand = alt.Chart(df_kand).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+                        x=alt.X('jumlah:Q', title='Jumlah'),
+                        y=alt.Y('tahapan:N', sort='-x', title='Tahapan'),
+                        color=alt.Color('jumlah:Q', scale=alt.Scale(scheme='blues'), legend=None)
+                    ).properties(height=250)
+                    st.altair_chart(chart_kand, use_container_width=True)
+                else: st.info("Belum ada data kandidat.")
+
+
+    with col_right:
+        # ================= BAGIAN KANAN: FLYER BERJALAN VERTIKAL =================
+        if tampilkan_flyer:
+            st.markdown("### 📢 Flyer Lowongan")
+            os.makedirs("uploads/flyer", exist_ok=True)
+            flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
             
-            # 1. Konversi gambar ke Base64
-            img_tags = ""
-            for img_name in flyer_files:
-                filepath = os.path.join("uploads/flyer", img_name)
-                with open(filepath, "rb") as f:
-                    b64_str = base64.b64encode(f.read()).decode()
-                # Buat tag img dengan class CSS
-                img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" class="flyer-img">'
-            
-            # 2. Duplikasi gambar agar animasi berputar seamless (tanpa putus)
-            img_tags_double = img_tags + img_tags
-            
-            # 3. CSS Animasi & HTML
-            marquee_html = f"""
-            <style>
-            @keyframes scroll-flyer {{
-                0% {{ transform: translateX(0); }}
-                100% {{ transform: translateX(-50%); }} /* Geser setengah dari total lebar */
-            }}
-            .marquee-container {{
-                width: 100%;
-                overflow: hidden;
-                white-space: nowrap;
-                position: relative;
-                padding: 10px 0;
-            }}
-            .marquee-track {{
-                display: inline-block;
-                white-space: nowrap;
-                animation: scroll-flyer 25s linear infinite; /* Kecepatan: 25 detik */
-            }}
-            .marquee-track:hover {{
-                animation-play-state: paused; /* Berhenti jika di-hover mouse */
-            }}
-            .flyer-img {{
-                height: 350px; /* Tinggi Flyer */
-                margin-right: 20px;
-                border-radius: 10px;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-                object-fit: cover;
-            }}
-            </style>
-            
-            <div class="marquee-container">
-                <div class="marquee-track">
-                    {img_tags_double}
+            if flyer_files:
+                import base64
+                
+                # Konversi gambar ke Base64
+                img_tags = ""
+                for img_name in flyer_files:
+                    filepath = os.path.join("uploads/flyer", img_name)
+                    with open(filepath, "rb") as f:
+                        b64_str = base64.b64encode(f.read()).decode()
+                    img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" class="flyer-img-vert">'
+                
+                # Duplikasi gambar agar animasi berputar seamless
+                img_tags_double = img_tags + img_tags
+                
+                # CSS Animasi Vertikal (Atas ke Bawah)
+                marquee_html = f"""
+                <style>
+                @keyframes scroll-vertical {{
+                    0% {{ transform: translateY(0); }}
+                    100% {{ transform: translateY(-50%); }}
+                }}
+                .vertical-marquee-container {{
+                    height: 800px; /* Tinggi area scroll */
+                    overflow: hidden;
+                    position: relative;
+                    background: transparent;
+                }}
+                .vertical-marquee-track {{
+                    display: flex;
+                    flex-direction: column;
+                    animation: scroll-vertical 20s linear infinite; /* Kecepatan 20 detik */
+                }}
+                .vertical-marquee-track:hover {{
+                    animation-play-state: paused; /* Berhenti saat di-hover */
+                }}
+                .flyer-img-vert {{
+                    width: 100%;
+                    margin-bottom: 15px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                    object-fit: cover;
+                }}
+                </style>
+                <div class="vertical-marquee-container">
+                    <div class="vertical-marquee-track">
+                        {img_tags_double}
+                    </div>
                 </div>
-            </div>
-            """
-            # Tampilkan animasi HTML
-            st.markdown(marquee_html, unsafe_allow_html=True)
-            
-        else:
-            st.info("Belum ada gambar flyer yang diunggah. Silakan upload poster di bawah ini.")
-            
-        # Fitur Upload Flyer
-        with st.expander("➕ Upload / Ganti Gambar Flyer (Poster)"):
-            st.write("Unggah gambar poster lowongan Anda (format JPG/PNG).")
-            uploaded_flyer = st.file_uploader("Pilih gambar flyer", type=["jpg", "jpeg", "png"], key="up_flyer", accept_multiple_files=True)
-            if uploaded_flyer:
-                if st.button("💾 Simpan Flyer ke Aplikasi", key="btn_save_flyer"):
-                    for file in uploaded_flyer:
-                        with open(os.path.join("uploads/flyer", file.name), "wb") as f:
-                            f.write(file.getbuffer())
-                    st.success(f"✅ {len(uploaded_flyer)} Flyer berhasil disimpan!")
-                    time.sleep(1)
-                    st.rerun()
-  # --- 2. FILING DATA MANPOWER ---
+                """
+                st.markdown(marquee_html, unsafe_allow_html=True)
+            else:
+                st.info("Belum ada gambar flyer.")
+                
+            # Fitur Upload Flyer
+            with st.expander("➕ Upload Flyer"):
+                uploaded_flyer = st.file_uploader("Pilih gambar flyer", type=["jpg", "jpeg", "png"], key="up_flyer", accept_multiple_files=True, label_visibility="collapsed")
+                if uploaded_flyer:
+                    if st.button("💾 Simpan Flyer", use_container_width=True):
+                        for file in uploaded_flyer:
+                            with open(os.path.join("uploads/flyer", file.name), "wb") as f:
+                                f.write(file.getbuffer())
+                        st.success(f"✅ {len(uploaded_flyer)} Flyer disimpan!")
+                        time.sleep(1)
+                        st.rerun()
+# --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
     
