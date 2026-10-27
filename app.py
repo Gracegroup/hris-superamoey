@@ -622,8 +622,7 @@ elif pilihan == "📈 Manpower Report":
                     time.sleep(2); st.rerun()
             except Exception as e:
                 st.error(f"Gagal membaca file: {e}")# --- 
-                5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN) ---
-# --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN + IMPORT EXCEL) ---
+               # --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN + IMPORT EXCEL) ---
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1><p>Pencatatan Kehadiran Harian & Import Excel</p></div>', unsafe_allow_html=True)
     
