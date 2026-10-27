@@ -959,6 +959,9 @@ elif pilihan == "📋 Rekrutmen & CV":
             # Tambah kolom kontrol Hapus
             df_k['Hapus?'] = False
             
+                       # Tambah kolom kontrol Hapus
+            df_k['Hapus?'] = False
+            
             edited_df = st.data_editor(
                 df_k,
                 use_container_width=True,
@@ -986,7 +989,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                     "Hapus?": st.column_config.CheckboxColumn("Hapus?", default=False, width="small")
                 },
                 num_rows="dynamic", 
-                key="editor_kandidat_final"
+                key="editor_kandidat_tabel_utama_v2"  # <--- KEY DIUBAH DI SINI
             )
             
             # Tombol Eksekusi Perubahan
