@@ -124,7 +124,7 @@ def render_edit_delete_table(table_name, query, editable_cols, display_cols, key
                 c.execute(f"UPDATE {table_name} SET {', '.join([f'{col}=?' for col in editable_cols])} WHERE id=?", tuple(vals) + (int(row_id),))
         conn.commit(); st.success("✅ Tersimpan."); time.sleep(1); st.rerun()
 
-# Bikin Tabel
+# ==================== INISIALISASI TABEL ====================
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, tahapan TEXT)''')
@@ -185,7 +185,7 @@ if not st.session_state.logged_in:
         st.info("🔑 Default: **admin** / **admin123**")
     st.stop()
 
-# ==================== SIDEBAR ====================
+# ==================== SIDEBAR & FLYER ====================
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3>{st.session_state.nama}</h3><p>Role: {st.session_state.role.upper()}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
@@ -262,15 +262,14 @@ elif pilihan == "👥 Data Karyawan":
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi</h1></div>', unsafe_allow_html=True)
     st.info("Modul Absensi harian.")
-
-elif pilihan == "🏖️ Cuti & Izin":
+    elif pilihan == "🏖️ Cuti & Izin":
     st.markdown('<div class="main-header"><h1>🏖️ Cuti & Izin</h1></div>', unsafe_allow_html=True)
     df_cuti = pd.read_sql_query("SELECT c.id, k.full_name, c.jenis_cuti, c.tanggal_mulai, c.status FROM cuti c LEFT JOIN karyawan k ON c.karyawan_id=k.id", conn)
     st.dataframe(df_cuti, use_container_width=True, hide_index=True)
 
 elif pilihan == "💰 Payroll & Slip Gaji":
     st.markdown('<div class="main-header"><h1>💰 Payroll</h1></div>', unsafe_allow_html=True)
-    st.info("Modul Payroll.")
+    st.info("Modul Payroll sedang dalam tahap pengembangan.")
 
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen</h1></div>', unsafe_allow_html=True)
@@ -365,7 +364,7 @@ elif pilihan == "📎 Lampiran / Attachment":
                 conn.commit(); st.success(f"✅ File {lm_file.name} tersimpan."); time.sleep(1); st.rerun()
     df_lm = pd.read_sql_query("SELECT id, ref_modul, ref_id, file_name FROM lampiran ORDER BY id DESC", conn)
     st.dataframe(df_lm, use_container_width=True, hide_index=True)
-    elif pilihan == "📋 Formulir HRD (Official)":
+elif pilihan == "📋 Formulir HRD (Official)":
     st.markdown('<div class="main-header"><h1>📋 Formulir HRD (Official)</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Wawancara & Coaching", "🌴 Permohonan Cuti", "🧑‍💼 Data Pelamar", "📋 Permintaan Karyawan (FPK)", "🚪 Exit & Clearance", "⏱️ Izin & Kehadiran"])
     
@@ -632,24 +631,30 @@ elif pilihan == "📎 Lampiran / Attachment":
                     if st.button("📥 Cetak PDF Perubahan Data"):
                         pdf_bytes = generate_pdf("Form Perubahan Data Karyawan", {"Nama": pd_nama_val, "NIK": pd_emp_id, "Tanggal": str(st.session_state.get("pd_tgl",""))})
                         st.download_button("💾 Download PDF Perubahan", data=pdf_bytes, file_name="Perubahan_Data.pdf", mime="application/pdf")
-
-elif pilihan == "📊 Laporan & Analitik":
+                        elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1></div>', unsafe_allow_html=True)
     st.info("Fitur Analitik siap digunakan. Anda dapat menambahkan grafik Altair di sini.")
 
 elif pilihan == "📈 Manpower Report":
     st.markdown('<div class="main-header"><h1>📈 Manpower Report</h1></div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
-    with col1: filter_div = st.selectbox("Filter Divisi", ["(Semua)"] + [r[0] for r in c.execute("SELECT DISTINCT divisi FROM karyawan WHERE divisi IS NOT NULL AND divisi != ''").fetchall()], key="mp_div")
-    with col2: filter_status = st.selectbox("Filter Status", ["(Semua)", "Contract", "Permanent", "Percobaan"], key="mp_stat")
-    q = "SELECT * FROM karyawan WHERE 1=1"; params = []
+    with col1: 
+        filter_div = st.selectbox("Filter Divisi", ["(Semua)"] + [r[0] for r in c.execute("SELECT DISTINCT divisi FROM karyawan WHERE divisi IS NOT NULL AND divisi != ''").fetchall()], key="mp_div")
+    with col2: 
+        filter_status = st.selectbox("Filter Status", ["(Semua)", "Contract", "Permanent", "Percobaan"], key="mp_stat")
+        
+    q = "SELECT * FROM karyawan WHERE 1=1"
+    params = []
     if filter_div != "(Semua)": q += " AND divisi=?"; params.append(filter_div)
     if filter_status != "(Semua)": q += " AND status_employee=?"; params.append(filter_status)
+    
     df_man = pd.read_sql_query(q, conn, params=tuple(params))
     st.markdown(f"**Total Data: {len(df_man)} Karyawan**")
+    
     cols_tampil = ["employee_id", "full_name", "organization", "job_position", "job_level", "join_date", "resign_date", "status_employee", "email", "mobile_phone", "branch_name", "divisi"]
     cols_ada = [c for c in cols_tampil if c in df_man.columns]
     st.dataframe(df_man[cols_ada], use_container_width=True, hide_index=True)
+    
     csv_man = df_man.to_csv(index=False).encode('utf-8-sig')
     st.download_button("📥 Download Laporan (CSV)", data=csv_man, file_name=f"manpower_report.csv", mime="text/csv")
 
@@ -676,17 +681,56 @@ elif pilihan == "💾 Import, Export & Backup":
             
     with tab_e3:
         st.subheader("Import Data Karyawan dari Excel")
+        st.info("Pastikan judul kolom di file Excel Anda sesuai format standar (Employee ID, Full Name, Job Position, dll).")
         uploaded_excel = st.file_uploader("Pilih File Excel", type=["xlsx", "xls"])
+        
         if uploaded_excel is not None:
             df_excel = pd.read_excel(uploaded_excel)
             st.write(f"Total baris: {len(df_excel)}")
+            
             if st.button("💾 Mulai Import", type="primary"):
                 success = 0
                 for _, row in df_excel.iterrows():
                     emp_id = str(row.get('Employee ID', '')).strip()
                     if not emp_id or emp_id == 'nan': continue
-                    c.execute("""INSERT OR REPLACE INTO karyawan (employee_id, full_name, barcode, organization, job_position, job_level, join_date, resign_date, status_employee, end_date, sign_date, email, birth_date, age, birth_place, citizen_id_address, residential_address, npwp, ptkp_status, employee_tax_status, tax_config, bank_name, bank_account, bank_account_holder, bpjs_ketenagakerjaan, bpjs_kesehatan, nik_npwp_16, mobile_phone, phone, branch_name, parent_branch_name, religion, gender, marital_status, blood_type, nationality_code, currency, length_of_service, payment_schedule, approval_line, manager, grade, class, profile_picture, cost_center, cost_center_category, sbu, npwp_16_new, passport, passport_expiration_date, jenis_dok_referensi_bukti_potong, nomor_dok_referensi_bukti_potong, tanggal_dok_referensi_bukti_potong, tin, divisi, keterangan, aktif) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
-                              (emp_id, clean(row.get('Full Name')), clean(row.get('Barcode')), clean(row.get('Organization')), clean(row.get('Job Position')), clean(row.get('Job Level')), clean_date(row.get('Join Date')), clean_date(row.get('Resign Date')), clean(row.get('Status Employee')), clean_date(row.get('End Date')), clean_date(row.get('Sign Date')), clean(row.get('Email')), clean_date(row.get('Birth Date')), clean(row.get('Age')), clean(row.get('Birth Place')), clean(row.get('Citizen ID Address')), clean(row.get('Residential Address')), clean(row.get('NPWP')), clean(row.get('PTKP Status')), clean(row.get('Employee Tax Status')), clean(row.get('Tax Config')), clean(row.get('Bank Name')), clean(row.get('Bank Account')), clean(row.get('Bank Account Holder')), clean(row.get('BPJS Ketenagakerjaan')), clean(row.get('BPJS Kesehatan')), clean(row.get('NIK (NPWP 16 Digit)')), clean(row.get('Mobile Phone')), clean(row.get('Phone')), clean(row.get('Branch Name')), clean(row.get('Parent Branch Name')), clean(row.get('Religion')), clean(row.get('Gender')), clean(row.get('Marital Status')), clean(row.get('Blood Type')), clean(row.get('Nationality Code')), clean(row.get('Currency')), clean(row.get('Length Of Service')), clean(row.get('Payment Schedule')), clean(row.get('Approval Line')), clean(row.get('Manager')), clean(row.get('Grade')), clean(row.get('Class')), clean(row.get('Profile Picture')), clean(row.get('Cost Center')), clean(row.get('Cost Center Category')), clean(row.get('SBU')), clean(row.get('NPWP 16 digit (new)')), clean(row.get('Passport')), clean_date(row.get('Passport Expiration Date')), clean(row.get('Jenis Dok. Referensi Bukti Potong')), clean(row.get('Nomor Dok. Referensi Bukti Potong')), clean_date(row.get('Tanggal Dok. Referensi Bukti Potong')), clean(row.get('TIN (Taxpayer Identification Number)')), clean(row.get('Divisi')), clean(row.get('Keterangan')))
+                    
+                    c.execute("""INSERT OR REPLACE INTO karyawan 
+                        (employee_id, full_name, barcode, organization, job_position, job_level, 
+                         join_date, resign_date, status_employee, end_date, sign_date, email, 
+                         birth_date, age, birth_place, citizen_id_address, residential_address, 
+                         npwp, ptkp_status, employee_tax_status, tax_config, bank_name, 
+                         bank_account, bank_account_holder, bpjs_ketenagakerjaan, bpjs_kesehatan, 
+                         nik_npwp_16, mobile_phone, phone, branch_name, parent_branch_name, 
+                         religion, gender, marital_status, blood_type, nationality_code, 
+                         currency, length_of_service, payment_schedule, approval_line, 
+                         manager, grade, class, profile_picture, cost_center, 
+                         cost_center_category, sbu, npwp_16_new, passport, 
+                         passport_expiration_date, jenis_dok_referensi_bukti_potong, 
+                         nomor_dok_referensi_bukti_potong, tanggal_dok_referensi_bukti_potong, 
+                         tin, divisi, keterangan, aktif) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+                        (emp_id, clean(row.get('Full Name')), clean(row.get('Barcode')), 
+                         clean(row.get('Organization')), clean(row.get('Job Position')), clean(row.get('Job Level')), 
+                         clean_date(row.get('Join Date')), clean_date(row.get('Resign Date')), 
+                         clean(row.get('Status Employee')), clean_date(row.get('End Date')), 
+                         clean_date(row.get('Sign Date')), clean(row.get('Email')), 
+                         clean_date(row.get('Birth Date')), clean(row.get('Age')), clean(row.get('Birth Place')), 
+                         clean(row.get('Citizen ID Address')), clean(row.get('Residential Address')), clean(row.get('NPWP')), 
+                         clean(row.get('PTKP Status')), clean(row.get('Employee Tax Status')), clean(row.get('Tax Config')), 
+                         clean(row.get('Bank Name')), clean(row.get('Bank Account')), clean(row.get('Bank Account Holder')), 
+                         clean(row.get('BPJS Ketenagakerjaan')), clean(row.get('BPJS Kesehatan')), 
+                         clean(row.get('NIK (NPWP 16 Digit)')), clean(row.get('Mobile Phone')), clean(row.get('Phone')), 
+                         clean(row.get('Branch Name')), clean(row.get('Parent Branch Name')), 
+                         clean(row.get('Religion')), clean(row.get('Gender')), clean(row.get('Marital Status')), 
+                         clean(row.get('Blood Type')), clean(row.get('Nationality Code')), clean(row.get('Currency')), 
+                         clean(row.get('Length Of Service')), clean(row.get('Payment Schedule')), clean(row.get('Approval Line')), 
+                         clean(row.get('Manager')), clean(row.get('Grade')), clean(row.get('Class')), 
+                         clean(row.get('Profile Picture')), clean(row.get('Cost Center')), 
+                         clean(row.get('Cost Center Category')), clean(row.get('SBU')), clean(row.get('NPWP 16 digit (new)')), 
+                         clean(row.get('Passport')), clean_date(row.get('Passport Expiration Date')), 
+                         clean(row.get('Jenis Dok. Referensi Bukti Potong')), clean(row.get('Nomor Dok. Referensi Bukti Potong')), 
+                         clean_date(row.get('Tanggal Dok. Referensi Bukti Potong')), clean(row.get('TIN (Taxpayer Identification Number)')), 
+                         clean(row.get('Divisi')), clean(row.get('Keterangan')))
                     )
                     success += 1
                 conn.commit()
@@ -695,11 +739,13 @@ elif pilihan == "💾 Import, Export & Backup":
 
 elif pilihan == "👤 Manajemen User":
     st.markdown('<div class="main-header"><h1>👤 Manajemen User</h1></div>', unsafe_allow_html=True)
-    st.dataframe(pd.read_sql_query("SELECT id, username, nama_lengkap, role, aktif FROM users", conn), use_container_width=True)
+    df_u = pd.read_sql_query("SELECT id, username, nama_lengkap, role, aktif FROM users", conn)
+    st.dataframe(df_u, use_container_width=True, hide_index=True)
 
 elif pilihan == "📝 Log Aktivitas":
     st.markdown('<div class="main-header"><h1>📝 Log Aktivitas</h1></div>', unsafe_allow_html=True)
-    st.dataframe(pd.read_sql_query("SELECT * FROM log_aktivitas ORDER BY id DESC LIMIT 200", conn), use_container_width=True)
+    df_log = pd.read_sql_query("SELECT * FROM log_aktivitas ORDER BY id DESC LIMIT 200", conn)
+    st.dataframe(df_log, use_container_width=True, hide_index=True)
 
 # ==================== FOOTER ====================
 st.markdown(f"""
