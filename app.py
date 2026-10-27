@@ -592,7 +592,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
                         data_pdf = {"Nama": e_nama_val, "NIK": e_emp_id, "Jabatan": e_jab, "Divisi": e_div, "Daftar Barang": items_str}
                         pdf_bytes = generate_pdf("Serah Terima Inventaris", data_pdf)
                         st.download_button("💾 Download PDF Inventaris", data=pdf_bytes, file_name="Inventaris.pdf", mime="application/pdf")
-                            with tab6:
+     with tab6:
         st.subheader("1. Permohonan Izin Pulang Cepat")
         with st.container(border=True):
             st.markdown('<div class="form-title">PERMOHONAN IZIN PULANG CEPAT</div>', unsafe_allow_html=True)
