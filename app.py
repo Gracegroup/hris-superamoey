@@ -568,8 +568,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
                     data_pdf = {"Posisi": st.session_state.get("fpk_posisi",""), "Divisi": st.session_state.get("fpk_divisi",""), "Jumlah": st.session_state.get("fpk_jumlah",1), "Penempatan": st.session_state.get("fpk_penempatan",""), "Alasan": st.session_state.get("fpk_alasan",""), "Deskripsi": st.session_state.get("fpk_deskripsi","")}
                     pdf_bytes = generate_pdf("Formulir Permintaan Karyawan (FPK)", data_pdf)
                     st.download_button("💾 Download PDF FPK", data=pdf_bytes, file_name="FPK.pdf", mime="application/pdf")
-
-    with tab5:
+       with tab5:
         st.subheader("Formulir Karyawan Keluar dari Perusahaan")
         with st.container(border=True):
             st.markdown('<div class="form-title">SERAH TERIMA INVENTARIS PERUSAHAAN</div>', unsafe_allow_html=True)
@@ -592,7 +591,8 @@ elif pilihan == "📋 Formulir HRD (Official)":
                         data_pdf = {"Nama": e_nama_val, "NIK": e_emp_id, "Jabatan": e_jab, "Divisi": e_div, "Daftar Barang": items_str}
                         pdf_bytes = generate_pdf("Serah Terima Inventaris", data_pdf)
                         st.download_button("💾 Download PDF Inventaris", data=pdf_bytes, file_name="Inventaris.pdf", mime="application/pdf")
-     with tab6:
+
+    with tab6:
         st.subheader("1. Permohonan Izin Pulang Cepat")
         with st.container(border=True):
             st.markdown('<div class="form-title">PERMOHONAN IZIN PULANG CEPAT</div>', unsafe_allow_html=True)
@@ -632,7 +632,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                     if st.button("📥 Cetak PDF Perubahan Data"):
                         pdf_bytes = generate_pdf("Form Perubahan Data Karyawan", {"Nama": pd_nama_val, "NIK": pd_emp_id, "Tanggal": str(st.session_state.get("pd_tgl",""))})
                         st.download_button("💾 Download PDF Perubahan", data=pdf_bytes, file_name="Perubahan_Data.pdf", mime="application/pdf")
-
 
 elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1></div>', unsafe_allow_html=True)
