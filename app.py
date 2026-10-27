@@ -158,8 +158,12 @@ def format_rp(n):
     except: return "Rp 0"
 
 def log_aksi(u, a, d=""):
-    c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
+    try:
+        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+    except Exception:
+        # Jika tabel log belum siap atau database terkunci, abaikan saja agar aplikasi tidak crash
+        pass
 
 def metric_card(label, value, sub="", warna="card-blue"):
     sub_html = f'<div class="sub">{sub}</div>' if sub else ''
@@ -280,8 +284,9 @@ with st.sidebar:
     tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
     st.markdown("---")
     
-    # TOMBOL DARURAT UNTUK MENGHAPUS DATABASE LAMA (SPASI SUDAH DIPERBAIKI)
+        # TOMBOL DARURAT UNTUK MENGHAPUS DATABASE LAMA
     if st.button("🛠️ Reset Database (Perbaikan Error)", key="btn_reset_db"):
+        conn.close() # TUTUP KONEKSI SEBELUM DIHAPUS
         if os.path.exists("hris_ga.db"):
             os.remove("hris_ga.db")
         st.success("✅ Database lama dihapus. Silakan refresh halaman (F5).")
