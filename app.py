@@ -1,13 +1,33 @@
 import time
 import streamlit as st
 import pandas as pd
-# ... (import lainnya) ...
+import sqlite3
+import hashlib
+import os
+import io
+import json
+import re
+import calendar
+import altair as alt
+import base64
+import zipfile
+from datetime import datetime, timedelta, date
+from urllib.parse import quote
+from io import StringIO
 
-st.set_page_config(page_title="HRIS & GA Amoey", layout="wide")
+# ==================== KONFIGURASI ====================
+st.set_page_config(
+    page_title="HRIS & GA Amoey",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ==================== CUSTOM CSS ====================
-# PERHATIKAN: st.markdown harus diawali dengan """ (tiga kutip)
-# ==================== CUSTOM CSS ====================
+os.makedirs("uploads/foto", exist_ok=True)
+os.makedirs("uploads/dokumen", exist_ok=True)
+os.makedirs("uploads/flyer", exist_ok=True)
+
+# ==================== CUSTOM CSS (DASHBOARD WALLPAPER STYLE) ====================
 st.markdown("""
 <style>
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
@@ -76,8 +96,17 @@ st.markdown("""
     .form-table th { background: #f0f0f0; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
-# ====================================================
 
+# ==================== DATABASE & AUTO-REPAIR ====================
+conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
+c = conn.cursor()
+
+# Fitur Auto-Repair: Memastikan database lama tidak menyebabkan error
+try:
+    c.execute("SELECT divisi FROM karyawan LIMIT 1")
+except sqlite3.OperationalError:
+    c.execute("DROP TABLE IF EXISTS karyawan")
+    conn.commit()
 # --- Kode Python selanjutnya (Database, dsb) ---
 conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
 # ...
