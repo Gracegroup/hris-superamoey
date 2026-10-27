@@ -2671,31 +2671,66 @@ elif pilihan == "📊 Laporan & Analitik":
 elif pilihan == "💾 Import, Export & Backup":
     st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1><p>Ekspor Laporan & Cadangkan Database</p></div>', unsafe_allow_html=True)
     
-    tab_e1, tab_e2 = st.tabs(["📤 Export CSV", "📦 Backup ZIP"])
+    # Menambahkan Tab Import (tab_e1)
+    tab_e1, tab_e2, tab_e3 = st.tabs(["📥 Import Data (CSV)", "📤 Export CSV", "📦 Backup ZIP"])
     
     with tab_e1:
+        st.subheader("Import Data dari File CSV")
+        st.info("💡 **Catatan:** Untuk Import file Excel Manpower (seperti `Employee_10670.xlsx`), silakan buka menu **📈 Manpower Report** -> Tab **Import Excel Manpower**.")
+        
+        tables_import = ["karyawan", "kandidat", "lowongan", "aset", "utility", "ruko", "tenant", "disiplin", "mutasi", "jobdesk"]
+        pilih_tabel_imp = st.selectbox("Pilih Tabel Tujuan", tables_import, key="imp_tabel")
+        
+        uploaded_file = st.file_uploader("Upload File CSV (sesuaikan nama header kolom dengan nama kolom database)", type=["csv"], key="imp_file")
+        
+        if uploaded_file is not None:
+            try:
+                df_imp = pd.read_csv(uploaded_file)
+                st.write(f"✅ File terbaca: **{len(df_imp)} baris data**.")
+                st.dataframe(df_imp.head(3), use_container_width=True)
+                
+                if st.button("💾 Mulai Import ke Database", type="primary", key="btn_start_import"):
+                    # Menggunakan pandas to_sql untuk memasukkan data ke sqlite
+                    df_imp.to_sql(pilih_tabel_imp, conn, if_exists='append', index=False)
+                    st.success(f"✅ Berhasil meng-import {len(df_imp)} baris data ke tabel **{pilih_tabel_imp}**.")
+                    log_aksi(st.session_state.username, "IMPORT_CSV", f"{pilih_tabel_imp} - {len(df_imp)} data")
+                    time.sleep(2)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"❌ Gagal memproses file: {e}")
+                st.warning("Pastikan nama header (baris pertama) di file CSV Anda sama persis dengan nama kolom di database SQLite.")
+                
+    with tab_e2:
+        st.subheader("Export Data ke CSV")
         tables = ["karyawan", "kandidat", "lowongan", "absensi", "cuti", "payroll", "resign", "aset", "utility", "ruko", "tenant", "disiplin", "mutasi", "jobdesk", "ci", "skd", "im", "log_aktivitas"]
-        pilih_tabel = st.selectbox("Pilih Tabel", tables, key="exp_tabel")
+        pilih_tabel = st.selectbox("Pilih Tabel yang Ingin Diexport", tables, key="exp_tabel")
+        
         if st.button("📥 Download CSV", key="btn_exp_csv"):
             try:
                 df = pd.read_sql_query(f"SELECT * FROM {pilih_tabel}", conn)
                 csv = df.to_csv(index=False).encode("utf-8-sig")
-                st.download_button(f"💾 {pilih_tabel}.csv", data=csv, file_name=f"{pilih_tabel}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", key="dl_csv")
-            except Exception as e: st.error(f"Gagal: {e}")
-            
-    with tab_e2:
+                st.download_button(f"💾 Klik untuk Download {pilih_tabel}.csv", data=csv, file_name=f"{pilih_tabel}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", key="dl_csv")
+            except Exception as e: 
+                st.error(f"Gagal: {e}")
+                
+    with tab_e3:
+        st.subheader("Backup Database")
+        st.info("Fitur ini akan mengunduh seluruh file database (`hris_ga.db`) beserta file yang ada di folder `uploads` dalam bentuk file ZIP.")
+        
         if st.button("📦 Buat Backup ZIP (Database + Uploads)", key="btn_backup"):
             try:
                 buf = io.BytesIO()
                 with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                    if os.path.exists("hris_ga.db"): zf.write("hris_ga.db")
+                    if os.path.exists("hris_ga.db"): 
+                        zf.write("hris_ga.db")
                     for root, _, files in os.walk("uploads"):
                         for f in files:
                             fp = os.path.join(root, f)
                             zf.write(fp, fp)
                 buf.seek(0)
-                st.download_button("💾 Download Backup", data=buf, file_name=f"backup_hris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", mime="application/zip", key="dl_backup")
-            except Exception as e: st.error(f"Gagal: {e}")
+                st.download_button("💾 Download Backup (.zip)", data=buf, file_name=f"backup_hris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", mime="application/zip", key="dl_backup")
+            except Exception as e: 
+                st.error(f"Gagal membuat backup: {e}")
 
 # --- 25. MANAJEMEN USER (ADMIN) ---
 elif pilihan == "👤 Manajemen User":
