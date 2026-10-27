@@ -1,0 +1,65 @@
+import pandas as pd
+import numpy as np
+
+# 1. Baca file Excel (skip baris pertama yang berisi judul kolom ganda)
+file_excel = '20261027142016-2524611-export_attendance (1).xlsx'
+# Kita baca mulai dari baris ke-3 (index 2) karena baris ke-1 adalah metadata dan baris ke-2 adalah header
+df = pd.read_excel(file_excel, header=1) 
+
+# 2. Pilih dan Ganti Nama Kolom Sesuai Kebutuhan Database Streamlit
+# Mapping kolom Excel ke kolom database
+df_clean = pd.DataFrame()
+df_clean['employee_id'] = df['Employee ID*']
+df_clean['nama'] = df['Full Name']
+df_clean['tanggal'] = pd.to_datetime(df['Date*']).dt.strftime('%Y-%m-%d')
+df_clean['jam_masuk'] = df['Check In']
+df_clean['jam_keluar'] = df['Check Out']
+df_clean['status'] = df['Attendance Code']
+df_clean['shift'] = df['Shift']
+
+# 3. Bersihkan Nilai Kosong (NaN) menjadi string kosong
+df_clean = df_clean.fillna('')
+
+# 4. Logika Penentuan Status Absensi & Keterlambatan
+# Di Streamlit, status yang valid: "Hadir", "Terlambat", "Izin", "Sakit", "Alpha", "Cuti"
+def tentukan_status(row):
+    kode = str(row['status']).strip().upper()
+    shift = str(row['shift']).strip()
+    
+    if shift.lower() == 'dayoff':
+        return 'Libur'
+    elif kode == 'H':
+        # Cek apakah terlambat (Schedule In adalah 08:00, jika masuk > 08:00 dianggap terlambat)
+        if row['jam_masuk'] != '' and row['jam_masuk'] > '08:00':
+            return 'Terlambat'
+        return 'Hadir'
+    elif kode in ['CT', 'CJ']:
+        return 'Cuti' # CT = Cuti Tahunan, CJ = Cuti Khusus (bisa disesuaikan)
+    elif kode == '':
+        return 'Alpha'
+    return 'Hadir'
+
+df_clean['status_final'] = df_clean.apply(tentukan_status, axis=1)
+
+# 5. Hitung Menit Terlambat (Opsional)
+def hitung_terlambat(row):
+    if row['status_final'] == 'Terlambat':
+        jam_masuk = row['jam_masuk']
+        # Asumsi masuk jam 08:00
+        h, m = map(int, jam_masuk.split(':'))
+        menit_masuk = h * 60 + m
+        menit_schedule = 8 * 60 # 08:00
+        return max(0, menit_masuk - menit_schedule)
+    return 0
+
+df_clean['terlambat_menit'] = df_clean.apply(hitung_terlambat, axis=1)
+
+# 6. Sesuaikan dengan struktur tabel Streamlit
+# Hapus kolom yang tidak diperlukan untuk import
+df_final = df_clean[['employee_id', 'nama', 'tanggal', 'jam_masuk', 'jam_keluar', 'status_final', 'terlambat_menit']]
+df_final.columns = ['employee_id', 'nama', 'tanggal', 'jam_masuk', 'jam_keluar', 'status', 'terlambat_menit']
+
+# 7. Simpan ke CSV
+df_final.to_csv('absensi_siap_import.csv', index=False)
+print("✅ File 'absensi_siap_import.csv' berhasil dibuat!")
+print(f"Total baris data: {len(df_final)}")
