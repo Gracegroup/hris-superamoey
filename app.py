@@ -414,8 +414,7 @@ if pilihan == "🏠 Dashboard HRIS":
                 st.altair_chart(chart_kand, use_container_width=True)
             else:
                 st.info("Belum ada data kandidat.")
-
-    # --- 4. FLYER LOWONGAN ---
+    # --- 4. FLYER LOWONGAN BERGERAK (MARQUEE) ---
     st.markdown("<br>", unsafe_allow_html=True)
     if tampilkan_flyer:
         st.markdown('<div class="section-header"><h3>📢 Flyer Lowongan Tersedia</h3></div>', unsafe_allow_html=True)
@@ -424,13 +423,64 @@ if pilihan == "🏠 Dashboard HRIS":
         flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         
         if flyer_files:
-            cols = st.columns(min(len(flyer_files), 3))
-            for idx, img_name in enumerate(flyer_files):
-                with cols[idx % 3]:
-                    st.image(f"uploads/flyer/{img_name}", use_container_width=True, caption=img_name)
-        else:
-            st.info("Belum ada gambar flyer yang diunggah.")
+            import base64
             
+            # 1. Konversi gambar ke Base64
+            img_tags = ""
+            for img_name in flyer_files:
+                filepath = os.path.join("uploads/flyer", img_name)
+                with open(filepath, "rb") as f:
+                    b64_str = base64.b64encode(f.read()).decode()
+                # Buat tag img dengan class CSS
+                img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" class="flyer-img">'
+            
+            # 2. Duplikasi gambar agar animasi berputar seamless (tanpa putus)
+            img_tags_double = img_tags + img_tags
+            
+            # 3. CSS Animasi & HTML
+            marquee_html = f"""
+            <style>
+            @keyframes scroll-flyer {{
+                0% {{ transform: translateX(0); }}
+                100% {{ transform: translateX(-50%); }} /* Geser setengah dari total lebar */
+            }}
+            .marquee-container {{
+                width: 100%;
+                overflow: hidden;
+                white-space: nowrap;
+                position: relative;
+                padding: 10px 0;
+            }}
+            .marquee-track {{
+                display: inline-block;
+                white-space: nowrap;
+                animation: scroll-flyer 25s linear infinite; /* Kecepatan: 25 detik */
+            }}
+            .marquee-track:hover {{
+                animation-play-state: paused; /* Berhenti jika di-hover mouse */
+            }}
+            .flyer-img {{
+                height: 350px; /* Tinggi Flyer */
+                margin-right: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                object-fit: cover;
+            }}
+            </style>
+            
+            <div class="marquee-container">
+                <div class="marquee-track">
+                    {img_tags_double}
+                </div>
+            </div>
+            """
+            # Tampilkan animasi HTML
+            st.markdown(marquee_html, unsafe_allow_html=True)
+            
+        else:
+            st.info("Belum ada gambar flyer yang diunggah. Silakan upload poster di bawah ini.")
+            
+        # Fitur Upload Flyer
         with st.expander("➕ Upload / Ganti Gambar Flyer (Poster)"):
             st.write("Unggah gambar poster lowongan Anda (format JPG/PNG).")
             uploaded_flyer = st.file_uploader("Pilih gambar flyer", type=["jpg", "jpeg", "png"], key="up_flyer", accept_multiple_files=True)
@@ -442,7 +492,7 @@ if pilihan == "🏠 Dashboard HRIS":
                     st.success(f"✅ {len(uploaded_flyer)} Flyer berhasil disimpan!")
                     time.sleep(1)
                     st.rerun()
-# --- 2. FILING DATA MANPOWER ---
+  # --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
     
