@@ -256,6 +256,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==================== SIDEBAR MENU ====================
+# ==================== SIDEBAR MENU ====================
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
@@ -278,22 +279,24 @@ with st.sidebar:
     st.markdown("---")
     tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
     st.markdown("---")
-        st.markdown("---")
-    # TOMBOL DARURAT UNTUK MENGHAPUS DATABASE LAMA
-    if st.button("🛠️ Reset Database (Perbaikan Error)"):
+    
+    # TOMBOL DARURAT UNTUK MENGHAPUS DATABASE LAMA (SPASI SUDAH DIPERBAIKI)
+    if st.button("🛠️ Reset Database (Perbaikan Error)", key="btn_reset_db"):
         if os.path.exists("hris_ga.db"):
             os.remove("hris_ga.db")
         st.success("✅ Database lama dihapus. Silakan refresh halaman (F5).")
         time.sleep(2)
         st.rerun()
+        
     st.markdown("---")
     
- 
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
         for k in ["logged_in", "username", "nama", "role"]: 
             st.session_state[k] = False if k == "logged_in" else ""
         st.rerun()
+
+# ==================== KONTEN MENU ====================
 
 # ==================== KONTEN MENU ====================
 
