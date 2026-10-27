@@ -1,52 +1,46 @@
 import time
-from playwright.sync_api import sync_playwright
 import streamlit as st
 import pandas as pd
-import sqlite3
-import hashlib
-import os
-import io
-import json
-import re
-import calendar
-import altair as alt
-import base64
-import zipfile
-from datetime import datetime, timedelta, date
-from urllib.parse import quote
-from io import StringIO
+# ... (import lainnya) ...
 
-# ==================== KONFIGURASI ====================
-st.set_page_config(
-    page_title="HRIS & GA Amoey",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="HRIS & GA Amoey", layout="wide")
 
-os.makedirs("uploads/foto", exist_ok=True)
-os.makedirs("uploads/dokumen", exist_ok=True)
-os.makedirs("uploads/flyer", exist_ok=True)
-
-    /* --- CSS DASHBOARD WALLPAPER STYLE --- */
-   # ==================== CUSTOM CSS ====================
+# ==================== CUSTOM CSS ====================
+# PERHATIKAN: st.markdown harus diawali dengan """ (tiga kutip)
 st.markdown("""
 <style>
-    .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
-    
     /* CSS DASHBOARD WALLPAPER STYLE */
+    /* <-- Tulis komentar CSS di dalam tag <style> ini, bukan di luar */
+    
+    .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
     .main-header { 
         background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
         padding: 30px; border-radius: 24px; color: white; text-align: center; margin-bottom: 25px; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
     }
     
-    /* Card Glassmorphism */
-    .metric-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
-        gap: 15px; margin-bottom: 25px; 
-    }
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .metric-card { padding: 20px; border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); color: white; }
+    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; font-weight: 600; }
+    .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; }
+    
+    .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
+    .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .card-orange { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
+    .card-red { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
+    .card-teal { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
+    .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
+    .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
+
+    /* ... (CSS lainnya) ... */
+</style>
+""", unsafe_allow_html=True)
+# ====================================================
+
+# --- Kode Python selanjutnya (Database, dsb) ---
+conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
+# ...
     .metric-card { 
         padding: 20px; border-radius: 20px; 
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
