@@ -8,10 +8,10 @@ import io
 import json
 import re
 import altair as alt
-import base64
 import zipfile
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
+from fpdf import FPDF # Library untuk Cetak PDF
 
 # ==================== KONFIGURASI ====================
 st.set_page_config(page_title="HRIS & GA Amoey", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
@@ -35,17 +35,21 @@ st.markdown("""
     .card-orange { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
     .card-red { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
     .card-teal { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .card-gold { background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%); }
     .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .section-header h3 { margin: 0; color: #1e3c72; }
     section[data-testid="stSidebar"] { background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); }
     section[data-testid="stSidebar"] * { color: #ecf0f1 !important; }
     .stButton > button { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 600; width: 100%; }
     .form-title { text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 20px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 10px; }
+    
+    /* CSS Flyer */
+    .flyer-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 4px solid #2a5298; color: #333; }
+    .flyer-title { font-size: 1.1em; font-weight: bold; color: #1e3c72; margin-bottom: 5px; }
+    .flyer-sub { font-size: 0.85em; color: #666; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== DATABASE ====================
+# ==================== DATABASE & HELPER ====================
 @st.cache_resource
 def get_conn(): return sqlite3.connect('hris_ga.db', check_same_thread=False)
 conn = get_conn()
@@ -55,20 +59,88 @@ def clean(val, default=""):
     if val is None: return default
     try:
         if pd.isna(val): return default
-    except (TypeError, ValueError): pass
+    except: pass
     s = str(val).strip()
-    if s.lower() in ("nan", "none", "null", "nat", ""): return default
-    return s
+    return default if s.lower() in ("nan", "none", "null", "nat", "") else s
 
 def clean_date(val):
     if val is None: return None
     try:
         if pd.isna(val): return None
-    except (TypeError, ValueError): pass
+    except: pass
     try: return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
-    except Exception: return None
+    except: return None
 
-# TABEL UTAMA
+def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
+def format_rp(n):
+    try: return f"Rp {float(n):,.0f}".replace(",", ".")
+    except: return "Rp 0"
+
+def log_aksi(u, a, d=""):
+    c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+
+def metric_card(label, value, sub="", warna="card-blue"):
+    sub_html = f'<div class="sub">{sub}</div>' if sub else ''
+    return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
+
+# Helper PDF
+def generate_pdf(title, data_dict):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=16, style='B')
+    pdf.cell(200, 10, txt=title.upper(), ln=True, align='C')
+    pdf.line(10, 20, 200, 20)
+    pdf.ln(10)
+    
+    for key, val in data_dict.items():
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(50, 8, txt=f"{key}: ", ln=False)
+        pdf.set_font("Arial", size=11)
+        if isinstance(val, str) and len(val) > 50:
+            pdf.multi_cell(0, 8, txt=str(val))
+        else:
+            pdf.cell(0, 8, txt=str(val), ln=True)
+        pdf.ln(2)
+    return bytes(pdf.output())
+
+def get_karyawan_dropdown(key, label="Pilih Karyawan", allow_none=False):
+    df_kar = pd.read_sql_query("SELECT id, employee_id, full_name, job_position, divisi FROM karyawan WHERE aktif=1 ORDER BY full_name", conn)
+    if df_kar.empty:
+        st.warning("⚠️ Belum ada data karyawan. Silakan Import Excel di menu Backup.")
+        return None, None, None, None, None
+    options = [f"{row['employee_id']} | {row['full_name']}" for _, row in df_kar.iterrows()]
+    if allow_none: options = ["-"] + options
+    selected = st.selectbox(label, options, key=key)
+    if selected == "-": return None, None, None, None, None
+    idx = options.index(selected) - (1 if allow_none else 0)
+    row = df_kar.iloc[idx]
+    return row['id'], row['employee_id'], row['full_name'], row['job_position'], row['divisi']
+
+def render_edit_delete_table(table_name, query, editable_cols, display_cols, key_prefix):
+    df = pd.read_sql_query(query, conn)
+    if df.empty:
+        st.info(f"Belum ada data {table_name}.")
+        return
+    df['Hapus?'] = False
+    edited_df = st.data_editor(df[display_cols + ['Hapus?']], num_rows="dynamic", use_container_width=True, hide_index=True, key=f"ed_{table_name}_{key_prefix}")
+    if st.button("💾 Simpan Perubahan / Hapus", key=f"sv_{table_name}_{key_prefix}", type="primary"):
+        to_delete = edited_df[edited_df['Hapus?'] == True]['id'].dropna().tolist()
+        for did in to_delete:
+            c.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
+        for _, row in edited_df.iterrows():
+            if row['Hapus?']: continue
+            row_id = row.get('id')
+            vals = [None if pd.isna(row.get(col)) else row.get(col) for col in editable_cols]
+            if pd.isna(row_id):
+                c.execute(f"INSERT INTO {table_name} ({', '.join(editable_cols)}) VALUES ({', '.join(['?'] * len(editable_cols))})", tuple(vals))
+            else:
+                c.execute(f"UPDATE {table_name} SET {', '.join([f'{col}=?' for col in editable_cols])} WHERE id=?", tuple(vals) + (int(row_id),))
+        conn.commit()
+        st.success("✅ Data tersimpan.")
+        time.sleep(1); st.rerun()
+
+# ==================== TABEL ====================
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, tahapan TEXT)''')
@@ -100,70 +172,27 @@ c.execute('''CREATE TABLE IF NOT EXISTS formulir_izin (id INTEGER PRIMARY KEY AU
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_perubahan (id INTEGER PRIMARY KEY AUTOINCREMENT, no_urut TEXT, tanggal TEXT, data_json TEXT, pengaju TEXT, created_by TEXT, created_at TEXT)''')
 conn.commit()
 
-# ==================== SEEDING & HELPER ====================
+# SEEDING
 c.execute("SELECT COUNT(*) FROM users")
 if c.fetchone()[0] == 0:
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "OKANAHARIANTO", "admin"))
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashlib.sha256("hrd123".encode()).hexdigest(), "HRD Staff", "hrd"))
+    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hash_password("admin123"), "OKANAHARIANTO", "admin"))
     conn.commit()
 
-def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
-def format_rp(n):
-    try: return f"Rp {float(n):,.0f}".replace(",", ".")
-    except: return "Rp 0"
-def log_aksi(u, a, d=""):
-    c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+c.execute("SELECT COUNT(*) FROM lowongan")
+if c.fetchone()[0] == 0:
+    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka) VALUES (?,?,?,?,?,?)''', ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 5, "Buka", "Pengganti: La Hajar dkk", str(date.today())))
+    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka) VALUES (?,?,?,?,?,?)''', ("Mekanik 3 (M3)", "PRODUCT SUPPORT", 4, "Buka", "Pengganti: Indra S dkk", str(date.today())))
     conn.commit()
-def metric_card(label, value, sub="", warna="card-blue"):
-    sub_html = f'<div class="sub">{sub}</div>' if sub else ''
-    return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
-
-def get_karyawan_dropdown(key, label="Pilih Karyawan", allow_none=False):
-    df_kar = pd.read_sql_query("SELECT id, employee_id, full_name, job_position, divisi FROM karyawan WHERE aktif=1 ORDER BY full_name", conn)
-    if df_kar.empty:
-        st.warning("⚠️ Belum ada data karyawan aktif di database. Silakan tambah atau Import Excel terlebih dahulu.")
-        return None, None, None, None, None
-    options = [f"{row['employee_id']} | {row['full_name']}" for _, row in df_kar.iterrows()]
-    if allow_none: options = ["-"] + options
-    selected = st.selectbox(label, options, key=key)
-    if selected == "-": return None, None, None, None, None
-    idx = options.index(selected) - (1 if allow_none else 0)
-    row = df_kar.iloc[idx]
-    return row['id'], row['employee_id'], row['full_name'], row['job_position'], row['divisi']
-
-def render_edit_delete_table(table_name, query, editable_cols, display_cols, key_prefix):
-    df = pd.read_sql_query(query, conn)
-    if df.empty:
-        st.info(f"Belum ada data {table_name}.")
-        return
-    df['Hapus?'] = False
-    edited_df = st.data_editor(df[display_cols + ['Hapus?']], num_rows="dynamic", use_container_width=True, hide_index=True, key=f"ed_{table_name}_{key_prefix}")
-    if st.button("💾 Simpan Perubahan / Hapus", key=f"sv_{table_name}_{key_prefix}", type="primary", use_container_width=True):
-        to_delete = edited_df[edited_df['Hapus?'] == True]['id'].dropna().tolist()
-        for did in to_delete:
-            c.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
-        for _, row in edited_df.iterrows():
-            if row['Hapus?']: continue
-            row_id = row.get('id')
-            vals = [None if pd.isna(row.get(col)) else row.get(col) for col in editable_cols]
-            if pd.isna(row_id):
-                c.execute(f"INSERT INTO {table_name} ({', '.join(editable_cols)}) VALUES ({', '.join(['?'] * len(editable_cols))})", tuple(vals))
-            else:
-                c.execute(f"UPDATE {table_name} SET {', '.join([f'{col}=?' for col in editable_cols])} WHERE id=?", tuple(vals) + (int(row_id),))
-        conn.commit()
-        st.success("✅ Data tersimpan.")
-        time.sleep(1); st.rerun()
 
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False; st.session_state.username = ""; st.session_state.nama = ""; st.session_state.role = ""
 
 if not st.session_state.logged_in:
-    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1></div>', unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1, 1])
     with col2:
         with st.form("login"):
-            st.subheader("🔐 Login Sistem")
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
             if st.form_submit_button("Masuk"):
@@ -175,10 +204,11 @@ if not st.session_state.logged_in:
         st.info("🔑 Default: **admin** / **admin123**")
     st.stop()
 
-# ==================== SIDEBAR ====================
+# ==================== SIDEBAR & FLYER ====================
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3>{st.session_state.nama}</h3><p>Role: {st.session_state.role.upper()}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
+    
     menu = [
         "🏠 Dashboard HRIS", "🗂️ Filing Data Manpower", "👥 Data Karyawan", "📅 Absensi & Kehadiran", 
         "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", 
@@ -188,7 +218,27 @@ with st.sidebar:
         "📋 Formulir HRD (Official)", "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"
     ]
     if st.session_state.role == "admin": menu += ["👤 Manajemen User", "📝 Log Aktivitas"]
+    
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
+    st.markdown("---")
+    
+    # FITUR FLYER
+    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
+    if tampilkan_flyer:
+        df_loker = pd.read_sql_query("SELECT posisi, departemen, jumlah_dibutuhkan FROM lowongan WHERE status='Buka'", conn)
+        st.markdown("### 📢 Lowongan Tersedia")
+        if not df_loker.empty:
+            for _, row in df_loker.iterrows():
+                st.markdown(f"""
+                <div class="flyer-card">
+                    <div class="flyer-title">{row['posisi']}</div>
+                    <div class="flyer-sub">Dept: {row['departemen']}</div>
+                    <div class="flyer-sub">Butuh: {row['jumlah_dibutuhkan']} Orang</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Belum ada lowongan buka.")
+            
     st.markdown("---")
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
@@ -236,7 +286,7 @@ elif pilihan == "👥 Data Karyawan":
 
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi</h1></div>', unsafe_allow_html=True)
-    st.info("Gunakan menu Formulir HRD untuk input form absensi lengkap.")
+    st.info("Modul Absensi harian.")
 
 elif pilihan == "🏖️ Cuti & Izin":
     st.markdown('<div class="main-header"><h1>🏖️ Cuti & Izin</h1></div>', unsafe_allow_html=True)
@@ -245,9 +295,8 @@ elif pilihan == "🏖️ Cuti & Izin":
 
 elif pilihan == "💰 Payroll & Slip Gaji":
     st.markdown('<div class="main-header"><h1>💰 Payroll</h1></div>', unsafe_allow_html=True)
-    st.info("Modul Payroll siap digunakan.")
-
-elif pilihan == "📋 Rekrutmen & CV":
+    st.info("Modul Payroll.")
+    elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen</h1></div>', unsafe_allow_html=True)
     df_k = pd.read_sql_query("SELECT id, nama, posisi_dilamar, status FROM kandidat", conn)
     st.dataframe(df_k, use_container_width=True)
@@ -284,7 +333,7 @@ elif pilihan == "⚠️ Disiplin & SP":
 
 elif pilihan == "📤 Exit Clearance":
     st.markdown('<div class="main-header"><h1>📤 Exit Clearance</h1></div>', unsafe_allow_html=True)
-    st.info("Gunakan menu Formulir HRD -> Tab Exit & Clearance.")
+    st.info("Lihat menu Formulir HRD -> Tab Exit & Clearance.")
 
 elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WA Reminder</h1></div>', unsafe_allow_html=True)
@@ -299,8 +348,10 @@ elif pilihan == "🚛 Aset & Properti":
 elif pilihan == "🏪 Ruko & Tenant":
     st.markdown('<div class="main-header"><h1>🏪 Ruko & Tenant</h1></div>', unsafe_allow_html=True)
     tab_a, tab_b = st.tabs(["Ruko", "Tenant"])
-    with tab_a: render_edit_delete_table("ruko", "SELECT id, nama, penyewa, status FROM ruko", ["nama", "penyewa", "status"], ["id", "nama", "penyewa", "status"], "ruko")
-    with tab_b: render_edit_delete_table("tenant", "SELECT id, nama, penghuni, biaya_bulanan FROM tenant", ["nama", "penghuni", "biaya_bulanan"], ["id", "nama", "penghuni", "biaya_bulanan"], "tenant")
+    with tab_a: 
+        render_edit_delete_table("ruko", "SELECT id, nama, penyewa, status FROM ruko", ["nama", "penyewa", "status"], ["id", "nama", "penyewa", "status"], "ruko")
+    with tab_b: 
+        render_edit_delete_table("tenant", "SELECT id, nama, penghuni, biaya_bulanan FROM tenant", ["nama", "penghuni", "biaya_bulanan"], ["id", "nama", "penghuni", "biaya_bulanan"], "tenant")
 
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility</h1></div>', unsafe_allow_html=True)
@@ -308,19 +359,42 @@ elif pilihan == "💡 Utility Melak":
 
 elif pilihan == "📁 Arsip Dokumen (E-Filing)":
     st.markdown('<div class="main-header"><h1>📁 Arsip Dokumen</h1></div>', unsafe_allow_html=True)
-    df_arsip = pd.read_sql_query("SELECT id, tanggal_upload, nama_dokumen, kategori FROM arsip_dokumen", conn)
-    st.dataframe(df_arsip, use_container_width=True)
+    with st.form("arsip_form", clear_on_submit=True):
+        st.subheader("📤 Upload Dokumen Baru")
+        ar_nama = st.text_input("Nama Dokumen *")
+        ar_kategori = st.selectbox("Kategori", ["Kontrak Kerja", "KTP", "NPWP", "Ijazah", "Sertifikat", "Lainnya"])
+        ar_ket = st.text_area("Keterangan")
+        ar_file = st.file_uploader("Upload File")
+        if st.form_submit_button("💾 Upload Dokumen", type="primary"):
+            if ar_nama and ar_file:
+                file_data = ar_file.read()
+                c.execute("INSERT INTO arsip_dokumen (tanggal_upload, nama_dokumen, kategori, keterangan, file_data, file_name, file_type) VALUES (?,?,?,?,?,?,?)",
+                          (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ar_nama, ar_kategori, ar_ket, file_data, ar_file.name, ar_file.type))
+                conn.commit(); st.success(f"✅ File {ar_file.name} tersimpan."); time.sleep(1); st.rerun()
+    df_arsip = pd.read_sql_query("SELECT id, tanggal_upload, nama_dokumen, kategori FROM arsip_dokumen ORDER BY id DESC", conn)
+    st.dataframe(df_arsip, use_container_width=True, hide_index=True)
 
 elif pilihan == "📎 Lampiran / Attachment":
     st.markdown('<div class="main-header"><h1>📎 Lampiran</h1></div>', unsafe_allow_html=True)
-    df_lm = pd.read_sql_query("SELECT id, ref_modul, ref_id, file_name, tanggal_upload FROM lampiran", conn)
-    st.dataframe(df_lm, use_container_width=True)
-
+    with st.form("lampiran_form", clear_on_submit=True):
+        lm_modul = st.selectbox("Referensi Modul *", ["cuti", "kandidat", "karyawan", "resign", "disiplin", "payroll", "lainnya"])
+        lm_id = st.text_input("Referensi ID (misal: 15) *")
+        lm_ket = st.text_area("Keterangan")
+        lm_file = st.file_uploader("Upload File")
+        if st.form_submit_button("💾 Upload Lampiran", type="primary"):
+            if lm_id and lm_file:
+                file_data = lm_file.read()
+                c.execute("INSERT INTO lampiran (ref_modul, ref_id, file_name, file_type, file_data, tanggal_upload, keterangan) VALUES (?,?,?,?,?,?,?)",
+                          (lm_modul, lm_id, lm_file.name, lm_file.type, file_data, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), lm_ket))
+                conn.commit(); st.success(f"✅ File {lm_file.name} tersimpan."); time.sleep(1); st.rerun()
+    df_lm = pd.read_sql_query("SELECT id, ref_modul, ref_id, file_name FROM lampiran ORDER BY id DESC", conn)
+    st.dataframe(df_lm, use_container_width=True, hide_index=True)
 # ==================== FORMULIR HRD (OFFICIAL) ====================
 elif pilihan == "📋 Formulir HRD (Official)":
     st.markdown('<div class="main-header"><h1>📋 Formulir HRD (Official)</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Wawancara & Coaching", "🌴 Permohonan Cuti", "🧑‍💼 Data Pelamar", "📋 Permintaan Karyawan (FPK)", "🚪 Exit & Clearance", "⏱️ Izin & Kehadiran"])
     
+    # --- TAB 1: WAWANCARA & COACHING ---
     with tab1:
         st.subheader("Formulir Laporan Wawancara")
         with st.container(border=True):
@@ -331,11 +405,11 @@ elif pilihan == "📋 Formulir HRD (Official)":
             with c3: st.text_input("Usia", key="w_usia")
             with c4: st.date_input("Tanggal Wawancara", key="w_tgl")
             st.info("5 = Baik Sekali, 4 = Baik, 3 = Cukup, 2 = Kurang, 1 = Kurang Sekali")
-            f1 = st.radio("1. KUALIFIKASI (Pendidikan, Training, Organisasi, Jenis Kelamin, Usia, dsb.)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f1")
-            f2 = st.radio("2. PENGALAMAN (Pengalaman bekerja yang dimiliki berhubungan dengan jabatan yang dilamar.)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f2")
-            f3 = st.radio("3. PENGETAHUAN DAN KETERAMPILAN (Pengetahuan/ketrampilan yang digunakan dalam jabatan yang dilamar.)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f3")
-            f4 = st.radio("4. KARAKTERISTIK KEPRIBADIAN (Unity, Responsibility, & Enthusiasm)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f4")
-            f5 = st.radio("5. KOMUNIKASI (Lancar > Tidak lancar/berbelit-belit)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f5")
+            f1 = st.radio("1. KUALIFIKASI", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f1")
+            f2 = st.radio("2. PENGALAMAN", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f2")
+            f3 = st.radio("3. PENGETAHUAN & KETERAMPILAN", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f3")
+            f4 = st.radio("4. KARAKTERISTIK KEPRIBADIAN", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f4")
+            f5 = st.radio("5. KOMUNIKASI", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f5")
             st.markdown("---")
             c_kiri, c_kanan = st.columns(2)
             with c_kiri:
@@ -345,6 +419,25 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.markdown("**KEPUTUSAN**")
                 st.checkbox("DITOLAK", key="w_dec_tolak"); st.checkbox("DIPERTIMBANGKAN", key="w_dec_pertimbangkan"); st.checkbox("DITERIMA", key="w_dec_terima")
                 st.text_input("Pewawancara* (I / II / III / IV)", key="w_pewawancara"); st.text_input("Nama Pewawancara", key="w_nama_pewawancara"); st.text_input("Jabatan Pewawancara", key="w_jabatan_pewawancara")
+            
+            # FITUR PDF WAWANCARA
+            if st.button("📥 Cetak PDF Wawancara", key="pdf_wawancara"):
+                data_pdf = {
+                    "Nama": st.session_state.get("w_nama",""),
+                    "Jabatan Dilamar": st.session_state.get("w_jabatan",""),
+                    "Usia": st.session_state.get("w_usia",""),
+                    "Tanggal": str(st.session_state.get("w_tgl","")),
+                    "Kualifikasi": st.session_state.get("w_f1",""),
+                    "Pengalaman": st.session_state.get("w_f2",""),
+                    "Pengetahuan": st.session_state.get("w_f3",""),
+                    "Karakteristik": st.session_state.get("w_f4",""),
+                    "Komunikasi": st.session_state.get("w_f5",""),
+                    "Kelebihan": st.session_state.get("w_kelebihan",""),
+                    "Kekurangan": st.session_state.get("w_kekurangan",""),
+                    "Pewawancara": st.session_state.get("w_pewawancara","") + " - " + st.session_state.get("w_nama_pewawancara","")
+                }
+                pdf_bytes = generate_pdf("Formulir Laporan Wawancara", data_pdf)
+                st.download_button("💾 Download PDF Wawancara", data=pdf_bytes, file_name="Wawancara.pdf", mime="application/pdf")
 
         st.divider()
         st.subheader("2. Form Coaching & Counselling")
@@ -357,7 +450,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 with c2: st.text_input("Tanggal Masuk", key="co_tgl_masuk"); st.text_input("Jabatan / Departemen", value=f"{co_jabatan} / {co_divisi}", disabled=True)
                 st.radio("Status Karyawan", ["Tetap", "Kontrak (PKWT)", "Percobaan"], horizontal=True, key="co_status")
                 st.text_area("Isu/Permasalahan & Penyebabnya", height=80, key="co_isu")
-                st.text_area("Observasi/Kesaksian (Kolom saksi jika ada saksinya)", height=80, key="co_obs")
+                st.text_area("Observasi/Kesaksian", height=80, key="co_obs")
                 st.text_area("Langkah perbaikan yang akan dilakukan", height=80, key="co_langkah")
                 st.text_area("Komitmen Karyawan akan sanksi", height=80, key="co_komit")
                 st.markdown("**Rekomendasi (Atasan/HRD):**")
@@ -366,12 +459,30 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 r3 = st.checkbox("Mendapat sanksi", key="co_r3")
                 r4 = st.checkbox("Masa kerja tidak dapat dilanjutkan (termination)", key="co_r4")
                 st.text_area("Hal yang akan dilakukan (Atasan/HRD)", height=80, key="co_hal")
-                if st.button("Simpan Coaching", type="primary"):
-                    rekom = [x for x, v in [("Kesempatan", r1), ("Relokasi", r2), ("Sanksi", r3), ("Termination", r4)] if v]
-                    c.execute("INSERT INTO formulir_coaching (nama_karyawan, nik, tanggal_masuk, jabatan, status_karyawan, isu, observasi, langkah_perbaikan, komitmen, rekomendasi, hal_dilakukan, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                              (co_nama, co_emp_id, st.session_state.get("co_tgl_masuk",""), co_jabatan, st.session_state.get("co_status",""), st.session_state.get("co_isu",""), st.session_state.get("co_obs",""), st.session_state.get("co_langkah",""), st.session_state.get("co_komit",""), ", ".join(rekom), st.session_state.get("co_hal",""), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("Simpan Coaching", type="primary"):
+                        rekom = [x for x, v in [("Kesempatan", r1), ("Relokasi", r2), ("Sanksi", r3), ("Termination", r4)] if v]
+                        c.execute("INSERT INTO formulir_coaching (nama_karyawan, nik, tanggal_masuk, jabatan, status_karyawan, isu, observasi, langkah_perbaikan, komitmen, rekomendasi, hal_dilakukan, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                  (co_nama, co_emp_id, st.session_state.get("co_tgl_masuk",""), co_jabatan, st.session_state.get("co_status",""), st.session_state.get("co_isu",""), st.session_state.get("co_obs",""), st.session_state.get("co_langkah",""), st.session_state.get("co_komit",""), ", ".join(rekom), st.session_state.get("co_hal",""), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                        conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Coaching"):
+                        data_pdf = {
+                            "Nama Karyawan": co_nama, "NIK": co_emp_id, "Jabatan": co_jabatan,
+                            "Tanggal Masuk": st.session_state.get("co_tgl_masuk",""),
+                            "Status": st.session_state.get("co_status",""),
+                            "Isu": st.session_state.get("co_isu",""),
+                            "Observasi": st.session_state.get("co_obs",""),
+                            "Langkah Perbaikan": st.session_state.get("co_langkah",""),
+                            "Komitmen": st.session_state.get("co_komit",""),
+                            "Hal Dilakukan": st.session_state.get("co_hal","")
+                        }
+                        pdf_bytes = generate_pdf("Form Coaching & Counselling", data_pdf)
+                        st.download_button("💾 Download PDF Coaching", data=pdf_bytes, file_name="Coaching.pdf", mime="application/pdf")
 
+    # --- TAB 2: PERMOHONAN CUTI ---
     with tab2:
         st.subheader("1. Surat Permohonan Cuti (Standard)")
         with st.container(border=True):
@@ -391,10 +502,23 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 with c3: c_lama = st.number_input("Lama Cuti (Hari)", min_value=1, step=1, key="c_lama")
                 with c4: c_tgl = st.text_input("Mulai s/d", key="c_tgl")
                 c_ket = st.text_area("Keterangan", key="c_ket")
-                if st.button("Simpan Cuti Standard", type="primary"):
-                    c.execute("INSERT INTO cuti (karyawan_id, jenis_cuti, tanggal_mulai, tanggal_selesai, lama_hari, alasan, status) VALUES (?,?,?,?,?,?,?)",
-                              (c_kid, ", ".join(jc), st.session_state.get("c_tgl",""), st.session_state.get("c_tgl",""), st.session_state.get("c_lama",1), st.session_state.get("c_ket",""), "Menunggu"))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("Simpan Cuti Standard", type="primary"):
+                        c.execute("INSERT INTO cuti (karyawan_id, jenis_cuti, tanggal_mulai, tanggal_selesai, lama_hari, alasan, status) VALUES (?,?,?,?,?,?,?)",
+                                  (c_kid, ", ".join(jc), st.session_state.get("c_tgl",""), st.session_state.get("c_tgl",""), st.session_state.get("c_lama",1), st.session_state.get("c_ket",""), "Menunggu"))
+                        conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Cuti Standard"):
+                        data_pdf = {
+                            "Nama": c_nama_val, "NIK": c_emp_id, "Divisi": c_divisi,
+                            "Jenis Cuti": ", ".join(jc), "Lama Cuti": f"{st.session_state.get('c_lama',1)} Hari",
+                            "Mulai s/d": st.session_state.get("c_tgl",""),
+                            "Keterangan": st.session_state.get("c_ket","")
+                        }
+                        pdf_bytes = generate_pdf("Surat Permohonan Cuti", data_pdf)
+                        st.download_button("💾 Download PDF Cuti", data=pdf_bytes, file_name="Cuti_Standard.pdf", mime="application/pdf")
 
         st.divider()
         st.subheader("2. Permohonan Cuti Khusus")
@@ -402,23 +526,165 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.markdown('<div class="form-title">PERMOHONAN CUTI KHUSUS</div>', unsafe_allow_html=True)
             ck_kid, ck_emp_id, ck_nama_val, ck_jabatan, ck_divisi = get_karyawan_dropdown("ck_dropdown", "Pilih Karyawan (Cuti Khusus)")
             if ck_nama_val:
-                st.text_input("Nama", value=ck_nama_val, disabled=True)
-                st.text_input("Dept. / NIK", value=f"{ck_divisi} / {ck_emp_id}", disabled=True)
-                ck_alasan = st.radio("Alasan Cuti Khusus", ["Menikah (3 Hari Kerja)", "Pernikahan anak (2 Hari Kerja)", "Mengkhitankan / membaptiskan anak (2 Hari Kerja)", "Istri Melahirkan / Gugur kandungan (2 Hari Kerja)", "Istri/ Suami/ Anak meninggal (2 Hari Kerja)", "Orang tua/ Mertua / Menantu meninggal (2 Hari Kerja)", "Anggota keluarga Karyawan yang serumah meninggal dunia (1 Hari Kerja)", "Melahirkan / Keguguran (45 hari sblm dan ssdh melahirkan)", "Ibadah Haji (40 hari, hanya 1 kali pengajuan)", "Bencana alam (Max. 2 Hari Kerja)"], key="ck_alasan")
+                c1, c2 = st.columns(2)
+                with c1: st.text_input("Nama", value=ck_nama_val, disabled=True)
+                with c2: st.text_input("NIK / Divisi", value=f"{ck_emp_id} / {ck_divisi}", disabled=True)
+                
+                ck_alasan = st.radio("Alasan Cuti Khusus", [
+                    "Menikah (3 Hari Kerja)", "Pernikahan anak (2 Hari Kerja)", 
+                    "Mengkhitankan / membaptiskan anak (2 Hari Kerja)", 
+                    "Istri Melahirkan / Gugur kandungan (2 Hari Kerja)", 
+                    "Istri/ Suami/ Anak meninggal (2 Hari Kerja)", 
+                    "Orang tua/ Mertua / Menantu meninggal (2 Hari Kerja)", 
+                    "Anggota keluarga Karyawan yang serumah meninggal dunia (1 Hari Kerja)", 
+                    "Melahirkan / Keguguran (45 hari sblm dan ssdh melahirkan)", 
+                    "Ibadah Haji (40 hari, hanya 1 kali pengajuan)", 
+                    "Bencana alam (Max. 2 Hari Kerja)"
+                ], key="ck_alasan")
+                
                 st.warning("Catatan: Setiap pengajuan cuti khusus ini harus melampirkan dokumen resmi sebagai pendukungnya.")
-                if st.button("Simpan Cuti Khusus", type="primary"):
-                    c.execute("INSERT INTO formulir_izin (jenis_form, nama, jabatan, tanggal, alasan, created_by, created_at) VALUES (?,?,?,?,?,?,?)",
-                              ("CUTI_KHUSUS", ck_nama_val, ck_jabatan, datetime.now().strftime("%Y-%m-%d"), st.session_state.get("ck_alasan",""), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
-
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("Simpan Cuti Khusus", type="primary"):
+                        c.execute("INSERT INTO formulir_izin (jenis_form, nama, jabatan, tanggal, alasan, created_by, created_at) VALUES (?,?,?,?,?,?,?)",
+                                  ("CUTI_KHUSUS", ck_nama_val, ck_jabatan, datetime.now().strftime("%Y-%m-%d"), st.session_state.get("ck_alasan",""), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                        conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Cuti Khusus"):
+                        data_pdf = {
+                            "Nama": ck_nama_val, "NIK": ck_emp_id, "Divisi": ck_divisi,
+                            "Alasan Cuti Khusus": st.session_state.get("ck_alasan",""),
+                            "Tanggal Pengajuan": datetime.now().strftime("%Y-%m-%d")
+                        }
+                        pdf_bytes = generate_pdf("Permohonan Cuti Khusus", data_pdf)
+                        st.download_button("💾 Download PDF Cuti Khusus", data=pdf_bytes, file_name="Cuti_Khusus.pdf", mime="application/pdf")
+                            # --- TAB 3: DATA PELAMAR ---
     with tab3:
         st.subheader("Formulir Data Pelamar")
-        st.info("Fitur Data Pelamar lengkap (11 Expander) siap diisi.")
+        with st.container(border=True):
+            st.markdown('<div class="form-title">FORMULIR DATA PELAMAR</div>', unsafe_allow_html=True)
+            with st.expander("A. DATA PRIBADI", expanded=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.text_input("Pekerjaan yang Dilamar", key="dp_pekerjaan")
+                    st.text_input("Nama Lengkap", key="dp_nama")
+                    st.text_input("Nama Panggilan", key="dp_panggilan")
+                    st.radio("Jenis Kelamin", ["Laki-Laki", "Perempuan"], horizontal=True, key="dp_jk")
+                    st.text_area("Alamat Tempat Tinggal", key="dp_alamat_tinggal")
+                    st.text_area("Alamat Sesuai KTP", key="dp_alamat_ktp")
+                with c2:
+                    st.text_input("Email", key="dp_email")
+                    st.text_input("Tempat & Tanggal Lahir", key="dp_ttl")
+                    st.selectbox("Agama", ["Islam", "Kristen", "Katholik", "Hindu", "Budha"], key="dp_agama")
+                    st.selectbox("Status Perkawinan", ["Menikah", "Tidak Menikah", "Janda/Duda"], key="dp_status_perkawinan")
+                    st.selectbox("Tempat Tinggal", ["Sendiri", "Ikut Orang Tua", "Kost/Kontrak"], key="dp_tempat_tinggal")
+                    st.text_input("Nomor KTP", key="dp_no_ktp")
+                    st.text_input("Nomor SIM", key="dp_no_sim")
+            
+            with st.expander("B. SUSUNAN KELUARGA"):
+                df_keluarga = st.data_editor(pd.DataFrame(columns=["Hubungan", "Nama", "Pendidikan", "Pekerjaan", "Jabatan", "Perusahaan", "Telepon", "Keterangan"]), num_rows="dynamic", use_container_width=True, key="dp_de_keluarga")
+            with st.expander("C. LATAR BELAKANG PENDIDIKAN FORMAL / INFORMAL"):
+                df_pendidikan = st.data_editor(pd.DataFrame(columns=["Tingkat", "Nama Sekolah", "Tempat/Kota", "Jurusan", "Tahun Masuk", "Tahun Keluar", "Lulus/Tidak"]), num_rows="dynamic", use_container_width=True, key="dp_de_pendidikan")
+            with st.expander("D. KURSUS / PELATIHAN YANG PERNAH DIKUTI"):
+                df_kursus = st.data_editor(pd.DataFrame(columns=["Bidang/Jenis", "Lembaga", "Tempat/Kota", "Lama Kursus", "Tahun", "Dibiayai Oleh"]), num_rows="dynamic", use_container_width=True, key="dp_de_kursus")
+            with st.expander("E. PENGETAHUAN BAHASA ASING"):
+                df_bahasa = st.data_editor(pd.DataFrame(columns=["Bahasa", "Bicara", "Mendengar", "Membaca", "Menulis", "Pemakaian"]), num_rows="dynamic", use_container_width=True, key="dp_de_bahasa")
+            with st.expander("F. KEGIATAN SOSIAL"):
+                df_sosial = st.data_editor(pd.DataFrame(columns=["Tahun", "Nama Organisasi", "Jenis Kegiatan", "Jabatan"]), num_rows="dynamic", use_container_width=True, key="dp_de_sosial")
+            with st.expander("G. HOBBY DAN KEGIATAN WAKTU LUANG"):
+                st.text_area("Hobby", key="dp_hobby")
+            with st.expander("H. RIWAYAT PEKERJAAN"):
+                df_pekerjaan = st.data_editor(pd.DataFrame(columns=["Nama/Perusahaan", "Jabatan", "Awal", "Akhir", "Lama Kerja", "Jenis Usaha", "Alasan Berhenti", "Atasan Langsung", "Direktur", "Gaji Terakhir"]), num_rows="dynamic", use_container_width=True, key="dp_de_pekerjaan")
+            with st.expander("I. REFERENSI"):
+                df_referensi = st.data_editor(pd.DataFrame(columns=["Nama", "Alamat", "Telepon", "Pekerjaan", "Hubungan"]), num_rows="dynamic", use_container_width=True, key="dp_de_referensi")
+            with st.expander("J. URAIAN TUGAS DAN TANGGUNG JAWAB"):
+                st.text_area("Uraikan tugas dan tanggung jawab Anda pada jabatan terakhir Anda:", height=100, key="dp_uraian_tugas")
+            with st.expander("K. HAL-HAL POSITIF & NEGATIF"):
+                st.text_area("Hal-Hal Yang Positif", height=100, key="dp_positif")
+                st.text_area("Hal-Hal Yang Negatif", height=100, key="dp_negatif")
+            with st.expander("PERTANYAAN 1 (Aset Pribadi)"):
+                df_pertanyaan1 = st.data_editor(pd.DataFrame(columns=["Pertanyaan", "Ya", "Tidak", "Penjelasan"]), num_rows="dynamic", use_container_width=True, key="dp_de_pertanyaan1")
+            with st.expander("PERTANYAAN 2"):
+                df_pertanyaan2 = st.data_editor(pd.DataFrame(columns=["Pertanyaan", "Ya", "Tidak", "Penjelasan"]), num_rows="dynamic", use_container_width=True, key="dp_de_pertanyaan2")
+                
+            st.markdown("**Pernyataan:** DENGAN INI SAYA MENYATAKAN BAHWA KETERANGAN YANG SAYA BERIKAN DIATAS ADALAH BENAR. APABILA DIKEMUDIAN HARI DITEMUKAN KETIDAKSESUAIAN, SAYA BERTANGGUNG JAWAB PENUH ATAS AKIBATNYA.")
+            st.text_input("JAKARTA, (Tanggal)", key="dp_tgl_pernyataan")
+            st.text_input("PELAMAR (Nama Terang)", key="dp_nama_terang")
 
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            if st.button("💾 Simpan Data Pelamar", type="primary", use_container_width=True):
+                try:
+                    data_json = json.dumps({
+                        "nama": st.session_state.get("dp_nama",""), "pekerjaan": st.session_state.get("dp_pekerjaan",""),
+                        "email": st.session_state.get("dp_email",""), "ttl": st.session_state.get("dp_ttl",""),
+                        "keluarga": df_keluarga.to_dict("records"), "pendidikan": df_pendidikan.to_dict("records"),
+                        "pekerjaan_riwayat": df_pekerjaan.to_dict("records")
+                    }, ensure_ascii=False, default=str)
+                    c.execute("INSERT INTO formulir_exit (jenis_form, nama, posisi, data_json, created_by, created_at) VALUES (?,?,?,?,?,?)",
+                              ("DATA_PELAMAR", st.session_state.get("dp_nama",""), st.session_state.get("dp_pekerjaan",""), data_json, st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    conn.commit(); st.success("✅ Data Pelamar tersimpan."); time.sleep(1); st.rerun()
+                except Exception as e: st.error(f"Gagal: {e}")
+        with c_btn2:
+            if st.button("📥 Cetak PDF Data Pelamar", use_container_width=True):
+                data_pdf = {
+                    "Nama Lengkap": st.session_state.get("dp_nama",""),
+                    "Pekerjaan Dilamar": st.session_state.get("dp_pekerjaan",""),
+                    "Email": st.session_state.get("dp_email",""),
+                    "TTL": st.session_state.get("dp_ttl",""),
+                    "Jenis Kelamin": st.session_state.get("dp_jk",""),
+                    "Agama": st.session_state.get("dp_agama",""),
+                    "Status Kawin": st.session_state.get("dp_status_perkawinan","")
+                }
+                pdf_bytes = generate_pdf("Formulir Data Pelamar", data_pdf)
+                st.download_button("💾 Download PDF", data=pdf_bytes, file_name="Data_Pelamar.pdf", mime="application/pdf")
+
+    # --- TAB 4: PERMINTAAN KARYAWAN (FPK) ---
     with tab4:
         st.subheader("Formulir Permintaan Karyawan (FPK)")
-        st.info("Fitur FPK lengkap siap diisi.")
+        with st.container(border=True):
+            st.markdown('<div class="form-title">FORMULIR PERMINTAAN KARYAWAN<br>UNTUK PEMENUHAN INTERNAL</div>', unsafe_allow_html=True)
+            st.markdown("**I. POSISI KARYAWAN YANG DIAJUKAN**")
+            c1, c2 = st.columns(2)
+            with c1: st.text_input("Posisi", key="fpk_posisi"); st.text_input("Divisi/Departemen", key="fpk_divisi"); st.number_input("Jumlah", min_value=1, key="fpk_jumlah")
+            with c2: st.radio("Penempatan", ["Head Office", "Cabang", "Site"], horizontal=True, key="fpk_penempatan"); st.text_input("Lokasi", key="fpk_lokasi"); st.date_input("Tanggal Pengajuan", key="fpk_tgl")
+            
+            st.markdown("**II. TUJUAN PERMINTAAN**")
+            st.checkbox("Penambahan", key="fpk_penambahan"); st.text_input("Alasan", key="fpk_alasan")
+            st.checkbox("Magang", key="fpk_magang"); st.text_input("Jangka Waktu (Bulan)", key="fpk_jangka_waktu")
+            
+            st.markdown("**III. PERSYARATAN JABATAN**")
+            st.text_input("1. Pendidikan", key="fpk_pendidikan"); st.text_input("2. Rentang Usia", key="fpk_rentang_usia")
+            st.radio("3. Jenis Kelamin", ["Laki-Laki", "Perempuan", "Tidak Spesifik"], horizontal=True, key="fpk_jk")
+            st.text_input("4. Pengalaman", key="fpk_pengalaman"); st.text_input("5. Keahlian Umum", key="fpk_keahlian")
+            st.text_input("6. Kemampuan Bahasa", key="fpk_bahasa"); st.text_input("7. Sertifikasi", key="fpk_sertifikasi"); st.text_input("8. Persyaratan Tambahan", key="fpk_persyaratan_tambahan")
+            
+            st.markdown("**IV. PROSES PENCARIAN KARYAWAN**")
+            st.radio("Sumber Kandidat", ["Internal Hiring", "External Hiring", "Labor Supply"], horizontal=True, key="fpk_sumber")
+            st.radio("Proses Rekrutmen", ["Publish", "Hide"], horizontal=True, key="fpk_proses")
+            st.radio("Technical Tes", ["Ya", "Tidak"], horizontal=True, key="fpk_tes")
+            
+            st.markdown("**V. URAIAN JABATAN**")
+            st.text_area("Deskripsi Pekerjaan & Tanggung Jawab", height=150, key="fpk_deskripsi")
+            
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                if st.button("💾 Simpan FPK", type="primary"):
+                    c.execute("""INSERT INTO formulir_fpk (posisi, divisi, jumlah, penempatan, lokasi, tanggal_pengajuan, alasan, deskripsi_pekerjaan, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                              (st.session_state.get("fpk_posisi",""), st.session_state.get("fpk_divisi",""), st.session_state.get("fpk_jumlah",1), st.session_state.get("fpk_penempatan",""), st.session_state.get("fpk_lokasi",""), str(st.session_state.get("fpk_tgl","")), st.session_state.get("fpk_alasan",""), st.session_state.get("fpk_deskripsi",""), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    conn.commit(); st.success("✅ FPK tersimpan."); time.sleep(1); st.rerun()
+            with c_btn2:
+                if st.button("📥 Cetak PDF FPK"):
+                    data_pdf = {
+                        "Posisi": st.session_state.get("fpk_posisi",""), "Divisi": st.session_state.get("fpk_divisi",""),
+                        "Jumlah": st.session_state.get("fpk_jumlah",1), "Penempatan": st.session_state.get("fpk_penempatan",""),
+                        "Alasan": st.session_state.get("fpk_alasan",""), "Deskripsi": st.session_state.get("fpk_deskripsi","")
+                    }
+                    pdf_bytes = generate_pdf("Formulir Permintaan Karyawan (FPK)", data_pdf)
+                    st.download_button("💾 Download PDF FPK", data=pdf_bytes, file_name="FPK.pdf", mime="application/pdf")
 
+    # --- TAB 5: EXIT & CLEARANCE ---
     with tab5:
         st.subheader("Formulir Karyawan Keluar dari Perusahaan")
         with st.container(border=True):
@@ -430,11 +696,21 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 with c2: st.text_input("NIK", value=e_emp_id, disabled=True); st.text_input("DEPARTEMEN", value=e_div, disabled=True)
                 st.write("Dengan ini menyerahkan inventaris kantor yang telah saya terima selama saya bekerja di PT.UNITED EQUIPMENT INDONESIA, berupa:")
                 df_inv = st.data_editor(pd.DataFrame(columns=["No", "Nama Barang", "Jumlah", "Keterangan"]), num_rows="dynamic", use_container_width=True, key="e_inv")
-                if st.button("Simpan Inventaris", type="primary"):
-                    c.execute("INSERT INTO formulir_exit (jenis_form, nama, nik, posisi, departemen, data_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)",
-                              ("SERAH_TERIMA_INVENTARIS", e_nama_val, e_emp_id, e_jab, e_div, json.dumps(df_inv.to_dict("records")), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("Simpan Inventaris", type="primary"):
+                        c.execute("INSERT INTO formulir_exit (jenis_form, nama, nik, posisi, departemen, data_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                                  ("SERAH_TERIMA_INVENTARIS", e_nama_val, e_emp_id, e_jab, e_div, json.dumps(df_inv.to_dict("records")), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                        conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Inventaris"):
+                        items_str = "\n".join([f"{r['Nama Barang']} ({r['Jumlah']}) - {r['Keterangan']}" for _, r in df_inv.iterrows()])
+                        data_pdf = {"Nama": e_nama_val, "NIK": e_emp_id, "Jabatan": e_jab, "Divisi": e_div, "Daftar Barang": items_str}
+                        pdf_bytes = generate_pdf("Serah Terima Inventaris", data_pdf)
+                        st.download_button("💾 Download PDF Inventaris", data=pdf_bytes, file_name="Inventaris.pdf", mime="application/pdf")
 
+    # --- TAB 6: IZIN & KEHADIRAN ---
     with tab6:
         st.subheader("1. Permohonan Izin Pulang Cepat")
         with st.container(border=True):
@@ -445,11 +721,20 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 c1, c2 = st.columns(2)
                 with c1: st.text_input("Nama Karyawan", value=pc_nama_val, disabled=True); st.text_input("Hari/Tanggal", key="pc_tgl"); st.text_area("Alasan", key="pc_alasan")
                 with c2: st.text_input("Jabatan/Divisi", value=f"{pc_jab} / {pc_div}", disabled=True); st.text_input("Pukul (s/d)", key="pc_pukul")
-                if st.button("Simpan Izin Pulang Cepat", type="primary"):
-                    c.execute("INSERT INTO formulir_izin (jenis_form, nama, jabatan, tanggal, alasan, pukul, data_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                              ("IZIN_PULANG_CEPAT", pc_nama_val, pc_jab, st.session_state.get("pc_tgl",""), st.session_state.get("pc_alasan",""), st.session_state.get("pc_pukul",""), json.dumps({"hrd_no": st.session_state.get("pc_hrd","")}), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("Simpan Izin Pulang Cepat", type="primary"):
+                        c.execute("INSERT INTO formulir_izin (jenis_form, nama, jabatan, tanggal, alasan, pukul, data_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                                  ("IZIN_PULANG_CEPAT", pc_nama_val, pc_jab, st.session_state.get("pc_tgl",""), st.session_state.get("pc_alasan",""), st.session_state.get("pc_pukul",""), json.dumps({"hrd_no": st.session_state.get("pc_hrd","")}), st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                        conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Izin"):
+                        data_pdf = {"Nama": pc_nama_val, "Jabatan": pc_jab, "Divisi": pc_div, "Tanggal": st.session_state.get("pc_tgl",""), "Alasan": st.session_state.get("pc_alasan",""), "Pukul": st.session_state.get("pc_pukul","")}
+                        pdf_bytes = generate_pdf("Permohonan Izin Pulang Cepat", data_pdf)
+                        st.download_button("💾 Download PDF Izin", data=pdf_bytes, file_name="Izin_Pulang.pdf", mime="application/pdf")
 
+    # --- EXPANDER: PERUBAHAN DATA ---
     with st.expander("Form Perubahan Data Karyawan"):
         with st.container(border=True):
             st.markdown('<div class="form-title">FORM PERUBAHAN DATA KARYAWAN</div>', unsafe_allow_html=True)
@@ -458,32 +743,45 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.text_input("Nama Karyawan", value=pd_nama_val, disabled=True)
                 st.date_input("Tanggal Pengisian", key="pd_tgl")
                 df_perubahan = st.data_editor(pd.DataFrame({"Keterangan": ["No. ID", "Nama", "No. REK BCA", "Alamat Tinggal Sebenarnya", "Kota", "Kode POS", "Alamat di KTP", "No Telp", "Pendidikan Terakhir", "Agama", "Jabatan", "Status Menikah", "Tanggungan"], "Data Sebelumnya": [""] * 13, "Data Sekarang": [""] * 13}), hide_index=True, use_container_width=True, disabled=["Keterangan"], key="pd_table")
-                if st.button("💾 Simpan Perubahan Data", type="primary"):
-                    c.execute("INSERT INTO formulir_perubahan (no_urut, tanggal, data_json, pengaju, created_by, created_at) VALUES (?,?,?,?,?,?)",
-                              (pd_emp_id, str(st.session_state.get("pd_tgl","")), json.dumps(df_perubahan.to_dict("records")), pd_nama_val, st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                    conn.commit(); st.success("Tersimpan"); time.sleep(1); st.rerun()
+                
+                c_btn1, c_btn2 = st.columns(2)
+                with c_btn1:
+                    if st.button("💾 Simpan Perubahan", type="primary"):
+                        c.execute("INSERT INTO formulir_perubahan (no_urut, tanggal, data_json, pengaju, created_by, created_at) VALUES (?,?,?,?,?,?)",
+                                  (pd_emp_id, str(st.session_state.get("pd_tgl","")), json.dumps(df_perubahan.to_dict("records")), pd_nama_val, st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                        conn.commit(); st.success("✅ Perubahan Data tersimpan."); time.sleep(1); st.rerun()
+                with c_btn2:
+                    if st.button("📥 Cetak PDF Perubahan Data"):
+                        pdf_bytes = generate_pdf("Form Perubahan Data Karyawan", {"Nama": pd_nama_val, "NIK": pd_emp_id, "Tanggal": str(st.session_state.get("pd_tgl",""))})
+                        st.download_button("💾 Download PDF Perubahan", data=pdf_bytes, file_name="Perubahan_Data.pdf", mime="application/pdf")
 
 # ==================== LAPORAN & MANPOWER ====================
 elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1></div>', unsafe_allow_html=True)
-    st.info("Fitur Analitik siap digunakan.")
+    st.info("Fitur Analitik siap digunakan. Anda dapat menambahkan grafik Altair di sini.")
 
 elif pilihan == "📈 Manpower Report":
     st.markdown('<div class="main-header"><h1>📈 Manpower Report</h1></div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
-    with col1: filter_div = st.selectbox("Filter Divisi", ["(Semua)"] + [r[0] for r in c.execute("SELECT DISTINCT divisi FROM karyawan WHERE divisi IS NOT NULL AND divisi != ''").fetchall()], key="mp_div")
-    with col2: filter_status = st.selectbox("Filter Status", ["(Semua)", "Contract", "Permanent", "Percobaan"], key="mp_stat")
+    with col1: 
+        filter_div = st.selectbox("Filter Divisi", ["(Semua)"] + [r[0] for r in c.execute("SELECT DISTINCT divisi FROM karyawan WHERE divisi IS NOT NULL AND divisi != ''").fetchall()], key="mp_div")
+    with col2: 
+        filter_status = st.selectbox("Filter Status", ["(Semua)", "Contract", "Permanent", "Percobaan"], key="mp_stat")
+        
     q = "SELECT * FROM karyawan WHERE 1=1"
     params = []
     if filter_div != "(Semua)": q += " AND divisi=?"; params.append(filter_div)
     if filter_status != "(Semua)": q += " AND status_employee=?"; params.append(filter_status)
+    
     df_man = pd.read_sql_query(q, conn, params=tuple(params))
     st.markdown(f"**Total Data: {len(df_man)} Karyawan**")
+    
     cols_tampil = ["employee_id", "full_name", "organization", "job_position", "job_level", "join_date", "resign_date", "status_employee", "email", "mobile_phone", "branch_name", "divisi"]
     cols_ada = [c for c in cols_tampil if c in df_man.columns]
     st.dataframe(df_man[cols_ada], use_container_width=True, hide_index=True)
+    
     csv_man = df_man.to_csv(index=False).encode('utf-8-sig')
-    st.download_button("📥 Download Laporan (CSV)", data=csv_man, file_name=f"manpower_report_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True)
+    st.download_button("📥 Download Laporan (CSV)", data=csv_man, file_name=f"manpower_report.csv", mime="text/csv")
 
 # ==================== IMPORT, EXPORT & BACKUP ====================
 elif pilihan == "💾 Import, Export & Backup":
