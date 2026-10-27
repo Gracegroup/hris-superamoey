@@ -239,7 +239,7 @@ if pilihan == "🏠 Dashboard HRIS":
     html += metric_card("🚛 Aset", str(ta), "", "card-teal")
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
-    elif pilihan == "🗂️ Filing Data Manpower":
+elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1></div>', unsafe_allow_html=True)
     search = st.text_input("🔍 Cari (nama / employee ID)")
     q = "SELECT id, employee_id, full_name, divisi, job_position, status_employee FROM karyawan WHERE aktif=1"
@@ -319,7 +319,7 @@ elif pilihan == "📱 WhatsApp Reminder":
     phone = st.text_input("No HP (62xxx)")
     msg = st.text_area("Pesan")
     if phone and msg: st.markdown(f"[Buka WhatsApp](https://wa.me/{phone}?text={quote(msg)})")
-        elif pilihan == "🚛 Aset & Properti":
+elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1></div>', unsafe_allow_html=True)
     render_edit_delete_table("aset", "SELECT id, kode, nama, kategori, status FROM aset", ["kode", "nama", "kategori", "status"], ["id", "kode", "nama", "kategori", "status"], "aset")
 
@@ -367,7 +367,7 @@ elif pilihan == "📎 Lampiran / Attachment":
                 conn.commit(); st.success(f"✅ File {lm_file.name} tersimpan."); time.sleep(1); st.rerun()
     df_lm = pd.read_sql_query("SELECT id, ref_modul, ref_id, file_name FROM lampiran ORDER BY id DESC", conn)
     st.dataframe(df_lm, use_container_width=True, hide_index=True)
-    elif pilihan == "📋 Formulir HRD (Official)":
+elif pilihan == "📋 Formulir HRD (Official)":
     st.markdown('<div class="main-header"><h1>📋 Formulir HRD (Official)</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Wawancara & Coaching", "🌴 Permohonan Cuti", "🧑‍💼 Data Pelamar", "📋 Permintaan Karyawan (FPK)", "🚪 Exit & Clearance", "⏱️ Izin & Kehadiran"])
     
