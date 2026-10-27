@@ -115,6 +115,8 @@ c.execute('''CREATE TABLE IF NOT EXISTS ci (id INTEGER PRIMARY KEY AUTOINCREMENT
 c.execute('''CREATE TABLE IF NOT EXISTS skd (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal TEXT, no_surat TEXT, nama_karyawan TEXT, jenis_surat TEXT, keterangan TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS im (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal TEXT, no_memo TEXT, perihal TEXT, pengirim TEXT, penerima TEXT, isi TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS arsip_dokumen (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal_upload TEXT, nama_dokumen TEXT, kategori TEXT, keterangan TEXT, file_data BLOB, file_name TEXT, file_type TEXT)''')
+# Tabel Baru untuk Lampiran / Attachment
+c.execute('''CREATE TABLE IF NOT EXISTS lampiran (id INTEGER PRIMARY KEY AUTOINCREMENT, ref_modul TEXT, ref_id TEXT, file_name TEXT, file_type TEXT, file_data BLOB, tanggal_upload TEXT, keterangan TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
 conn.commit()
 
@@ -438,8 +440,8 @@ with st.sidebar:
         "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", 
         "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", 
         "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", 
-        "📁 Arsip Dokumen (E-Filing)", "📊 Laporan & Analitik", 
-        "📈 Manpower Report", "💾 Import, Export & Backup"
+        "📁 Arsip Dokumen (E-Filing)", "📎 Lampiran / Attachment", 
+        "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"
     ]
     
     if st.session_state.role == "admin": 
@@ -630,19 +632,65 @@ elif pilihan == "📋 Rekrutmen & CV":
                     st.error("⚠️ Nama Kandidat wajib diisi!")
 
     with tab2:
-        st.subheader("Edit / Hapus Data Pipeline Kandidat")
-        render_edit_delete_table(
-            table_name="kandidat",
-            query="SELECT id, nama, posisi_dilamar, telepon, status, jadwal_interview, jam_interview, tipe_interview, tahapan, catatan FROM kandidat",
-            editable_cols=['nama', 'posisi_dilamar', 'telepon', 'status', 'jadwal_interview', 'jam_interview', 'tipe_interview', 'tahapan', 'catatan'],
-            display_cols=['id', 'nama', 'posisi_dilamar', 'telepon', 'status', 'jadwal_interview', 'jam_interview', 'tipe_interview', 'tahapan', 'catatan'],
-            key_prefix="kandidat_main",
-            col_config={
-                "status": st.column_config.SelectboxColumn("Status", options=["Proses", "Wawancara", "Diterima", "Ditolak"]),
-                "tipe_interview": st.column_config.SelectboxColumn("Tipe Interview", options=["Offline (Kantor)", "Online (Zoom/Meet)"]),
-                "tahapan": st.column_config.SelectboxColumn("Tahapan", options=["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"])
-            }
-        )
+        df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
+        if not df_k.empty:
+            html = '<div class="metric-grid">'
+            html += metric_card("Total Kandidat", str(len(df_k)), "", "card-blue")
+            html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
+            html += metric_card("Ditolak", str(len(df_k[df_k['status']=='Ditolak'])), "", "card-red")
+            html += metric_card("Proses", str(len(df_k[df_k['status']=='Proses'])), "", "card-gold")
+            html += metric_card("Wawancara", str(len(df_k[df_k['status']=='Wawancara'])), "", "card-purple")
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
+            
+            filter_status = st.selectbox("🔍 Filter Status:", ["Semua", "Proses", "Wawancara", "Diterima", "Ditolak"])
+            df_filtered = df_k if filter_status == "Semua" else df_k[df_k['status'] == filter_status]
+            
+            st.markdown("### 📋 Daftar Kandidat & Jadwal (Klik untuk Edit Langsung)")
+            
+            # Menggunakan data_editor agar rapi seperti dataframe tapi bisa diedit
+            edited_df = st.data_editor(
+                df_filtered[['id','nama','posisi_dilamar','status','jadwal_interview','jam_interview','tipe_interview','tahapan','catatan']],
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True, width="small"),
+                    "status": st.column_config.SelectboxColumn("Status", options=["Proses", "Wawancara", "Diterima", "Ditolak"]),
+                    "tipe_interview": st.column_config.SelectboxColumn("Tipe", options=["Offline (Kantor)", "Online (Zoom/Meet)"]),
+                    "tahapan": st.column_config.SelectboxColumn("Tahapan", options=["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"])
+                },
+                hide_index=True,
+                use_container_width=True,
+                num_rows="fixed", # Agar tampilannya rapi (tanpa tombol plus di bawah)
+                key="editor_kandidat_clean"
+            )
+            
+            if st.button("💾 Simpan Perubahan Tabel", type="primary", use_container_width=True):
+                sukses = 0
+                for _, row in edited_df.iterrows():
+                    try:
+                        c.execute('''UPDATE kandidat SET nama=?, posisi_dilamar=?, status=?, jadwal_interview=?, jam_interview=?, tipe_interview=?, tahapan=?, catatan=? WHERE id=?''',
+                                  (row['nama'], row['posisi_dilamar'], row['status'], row['jadwal_interview'], row['jam_interview'], row['tipe_interview'], row['tahapan'], row['catatan'], row['id']))
+                        sukses += 1
+                    except Exception as e:
+                        st.error(f"Gagal update ID {row['id']}: {e}")
+                conn.commit()
+                st.success(f"✅ {sukses} data berhasil disimpan!")
+                time.sleep(1)
+                st.rerun()
+            
+            st.markdown("---")
+            
+            # FITUR DELETE DI BAWAH TABEL
+            st.markdown("### 🗑️ Hapus Kandidat")
+            opsi_hapus = {f"ID #{r['id']} - {r['nama']} ({r['posisi_dilamar']})": r['id'] for _, r in df_filtered.iterrows()}
+            pilih_hapus = st.selectbox("Pilih kandidat yang ingin dihapus:", ["-- Pilih --"] + list(opsi_hapus.keys()), key="hapus_kand")
+            if pilih_hapus != "-- Pilih --":
+                if st.button(f"❌ Hapus Kandidat Terpilih", type="primary"):
+                    c.execute("DELETE FROM kandidat WHERE id=?", (opsi_hapus[pilih_hapus],))
+                    conn.commit()
+                    st.success("Kandidat berhasil dihapus!")
+                    st.rerun()
+        else: 
+            st.info("Belum ada data kandidat. Silakan input melalui Tab 'Input Kandidat'.")
 
     with tab3:
         st.markdown("### 📢 Daftar Open Vacant (Lowongan)")
@@ -1635,6 +1683,87 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
                 except Exception as e:
                     st.error(f"❌ Gagal import: {e}")
 
+# --- 20b. LAMPIRAN / ATTACHMENT ---
+elif pilihan == "📎 Lampiran / Attachment":
+    st.markdown('<div class="main-header"><h1>📎 Lampiran / Attachment</h1><p>Sistem Manajemen Dokumen Terpusat (DPD, Memo, dll)</p></div>', unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["📤 Upload Lampiran", "📄 Preview & Daftar Lampiran"])
+    
+    with tab1:
+        st.subheader("Upload File Baru")
+        with st.form("form_upload_lampiran", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                ref_modul = st.selectbox("Modul Referensi", ["Deklarasi Perjalanan Dinas (DPD)", "Internal Memo", "SKD", "Kandidat", "Aset", "Lainnya"])
+                ref_id = st.text_input("ID / No Referensi *", placeholder="Contoh: DPD-001 atau 105")
+            with c2:
+                keterangan = st.text_input("Keterangan Singkat")
+                file_up = st.file_uploader("Pilih File *", type=["pdf", "jpg", "jpeg", "png", "docx", "xlsx"])
+            
+            if st.form_submit_button("💾 Simpan Lampiran", type="primary"):
+                if ref_id and file_up is not None:
+                    try:
+                        file_bytes = file_up.read()
+                        file_name = file_up.name
+                        file_type = file_up.type
+                        
+                        c.execute('''INSERT INTO lampiran (ref_modul, ref_id, file_name, file_type, file_data, tanggal_upload, keterangan) 
+                                     VALUES (?,?,?,?,?,?,?)''', 
+                                  (ref_modul, ref_id, file_name, file_type, file_bytes, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), keterangan))
+                        conn.commit()
+                        st.success("✅ Lampiran berhasil diunggah!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Gagal upload: {e}")
+                else:
+                    st.warning("⚠️ ID Referensi dan File wajib diisi!")
+                    
+    with tab2:
+        st.subheader("Daftar & Preview Lampiran")
+        df_lam = pd.read_sql_query("SELECT id, ref_modul, ref_id, file_name, tanggal_upload, keterangan FROM lampiran ORDER BY id DESC", conn)
+        
+        if df_lam.empty:
+            st.info("Belum ada lampiran yang diunggah.")
+        else:
+            st.dataframe(df_lam, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            st.markdown("### 👁️ Preview Dokumen")
+            
+            # Filter berdasarkan modul/ref_id
+            opsi_preview = {f"#{r['id']} - {r['file_name']} ({r['ref_modul']} : {r['ref_id']})": r['id'] for _, r in df_lam.iterrows()}
+            pilih_preview = st.selectbox("Pilih Lampiran untuk Dilihat:", ["-- Pilih --"] + list(opsi_preview.keys()))
+            
+            if pilih_preview != "-- Pilih --":
+                lam_id = opsi_preview[pilih_preview]
+                dok = pd.read_sql_query("SELECT * FROM lampiran WHERE id=?", conn, params=(lam_id,)).iloc[0]
+                
+                file_data = dok['file_data']
+                file_type = dok['file_type']
+                file_name = dok['file_name']
+                
+                col_act1, col_act2 = st.columns([1, 4])
+                with col_act1:
+                    st.download_button("📥 Download", bytes(file_data), file_name, mime=file_type or "application/octet-stream", use_container_width=True)
+                with col_act2:
+                    if st.button("🗑️ Hapus Lampiran Ini", type="primary", use_container_width=True):
+                        c.execute("DELETE FROM lampiran WHERE id=?", (lam_id,))
+                        conn.commit()
+                        st.success("Lampiran dihapus!")
+                        st.rerun()
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                # Tampilkan Preview
+                if file_type in ["application/pdf"]:
+                    base64_pdf = base64.b64encode(file_data).decode('utf-8')
+                    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="700" type="application/pdf" style="border: 1px solid #ccc; border-radius: 10px;"></iframe>'
+                    st.markdown(pdf_display, unsafe_allow_html=True)
+                elif file_type in ["image/jpeg", "image/png", "image/jpg"]:
+                    st.image(file_data, caption=file_name, use_column_width=True)
+                else:
+                    st.info("Preview hanya tersedia untuk file PDF dan Gambar. Silakan klik tombol Download untuk melihat file.")
+                    
 # --- 21. LAPORAN & ANALITIK ---
 elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1></div>', unsafe_allow_html=True)
