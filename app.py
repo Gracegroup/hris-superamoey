@@ -27,7 +27,7 @@ os.makedirs("uploads/foto", exist_ok=True)
 os.makedirs("uploads/dokumen", exist_ok=True)
 os.makedirs("uploads/flyer", exist_ok=True)
 
-# ==================== CUSTOM CSS (DASHBOARD WALLPAPER STYLE) ====================
+# ==================== CUSTOM CSS ====================
 st.markdown("""
 <style>
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
@@ -101,71 +101,6 @@ st.markdown("""
 conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
 c = conn.cursor()
 
-# Fitur Auto-Repair: Memastikan database lama tidak menyebabkan error
-try:
-    c.execute("SELECT divisi FROM karyawan LIMIT 1")
-except sqlite3.OperationalError:
-    c.execute("DROP TABLE IF EXISTS karyawan")
-    conn.commit()
-# --- Kode Python selanjutnya (Database, dsb) ---
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
-# ...
-    .metric-card { 
-        padding: 20px; border-radius: 20px; 
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
-        backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
-        transition: transform 0.3s ease, box-shadow 0.3s ease; 
-        color: white; position: relative; overflow: hidden;
-    }
-    .metric-card::before {
-        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
-    }
-    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.3); }
-    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-    .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
-    .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
-
-    /* Warna Gradient Modern */
-    .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
-    .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .card-orange { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
-    .card-red { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
-    .card-teal { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
-    .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
-    .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
-
-    .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .section-header h3 { margin: 0; color: #1e3c72; }
-    
-    section[data-testid="stSidebar"] { background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); }
-    section[data-testid="stSidebar"] * { color: #ecf0f1 !important; }
-    
-    .stButton > button { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 600; transition: all 0.3s; width: 100%; }
-    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(42,82,152,0.5); }
-    
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background: white; border-radius: 10px 10px 0 0; padding: 10px 20px; font-weight: 600; }
-    .stTabs [aria-selected="true"] { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; }
-    
-    .payroll-slip { background: white; padding: 20px; border-radius: 10px; border: 2px solid #2a5298; }
-    .payroll-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e0e0e0; }
-    .payroll-total { font-weight: bold; border-top: 2px solid #2a5298; border-bottom: none; margin-top: 8px; padding-top: 8px; }
-    
-    /* CSS Khusus Form Official */
-    .form-box { background: white; padding: 25px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: black;}
-    .form-title { text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 20px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 10px; }
-    .form-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-    .form-table th, .form-table td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; }
-    .form-table th { background: #f0f0f0; text-align: center; }
-</style>
-""", unsafe_allow_html=True)
-# ==================== DATABASE & AUTO-REPAIR ====================
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
-c = conn.cursor()
-
-# Fitur Auto-Repair: Memastikan database lama tidak menyebabkan error
 try:
     c.execute("SELECT divisi FROM karyawan LIMIT 1")
 except sqlite3.OperationalError:
@@ -301,7 +236,9 @@ def render_edit_delete_table(table_name, query, editable_cols, display_cols, key
             except Exception as e: st.error(f"Error pada baris ID {row_id}: {e}")
         conn.commit()
         st.success(f"✅ Berhasil menyimpan {success_count} data dan menghapus {delete_count} data.")
-        time.sleep(1); st.rerun()# ==================== LOGIN SYSTEM ====================
+        time.sleep(1); st.rerun()
+
+# ==================== LOGIN SYSTEM ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
@@ -360,10 +297,7 @@ with st.sidebar:
             st.session_state[k] = False if k == "logged_in" else ""
         st.rerun()
 
-# ==================== KONTEN MENU ====================
-
-# --- 1. DASHBOARD HRIS (LAYOUT 2 KOLOM & METRIK LENGKAP) ---
-# --- 1. DASHBOARD HRIS (WALLPAPER STYLE) ---
+# ==================== KONTEN MENU ====================# --- 1. DASHBOARD HRIS (WALLPAPER STYLE) ---
 if pilihan == "🏠 Dashboard HRIS":
     # Header Elegan
     st.markdown("""
@@ -491,7 +425,8 @@ if pilihan == "🏠 Dashboard HRIS":
                 st.markdown(marquee_html, unsafe_allow_html=True)
             else:
                 st.info("Belum ada gambar flyer.")
-2. FILING DATA MANPOWER ---
+
+# --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
     
@@ -647,8 +582,9 @@ elif pilihan == "📈 Manpower Report":
                     log_aksi(st.session_state.username, "IMPORT_EXCEL_MANPOWER", f"{berhasil} data")
                     time.sleep(2); st.rerun()
             except Exception as e:
-                st.error(f"Gagal membaca file: {e}")# --- 
-               # --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN + IMPORT EXCEL) ---
+                st.error(f"Gagal membaca file: {e}")
+
+# --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN + IMPORT EXCEL) ---
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1><p>Pencatatan Kehadiran Harian & Import Excel</p></div>', unsafe_allow_html=True)
     
@@ -843,6 +779,7 @@ elif pilihan == "📅 Absensi & Kehadiran":
         st.dataframe(df_abs, use_container_width=True, hide_index=True)
     else:
         st.info("Belum ada data absensi yang cocok dengan filter.")
+
 # --- 6. CUTI & IZIN ---
 elif pilihan == "🏖️ Cuti & Izin":
     st.markdown('<div class="main-header"><h1>🏖️ Cuti & Izin</h1><p>Pengajuan & Approval Cuti Karyawan</p></div>', unsafe_allow_html=True)
@@ -917,9 +854,7 @@ elif pilihan == "🏖️ Cuti & Izin":
                     log_aksi(st.session_state.username, "REJECT_CUTI", f"ID {cuti_id}")
                     time.sleep(1); st.rerun()
     else:
-        st.info("Belum ada pengajuan cuti.")
-
-# --- 7. PAYROLL & SLIP GAJI ---
+        st.info("Belum ada pengajuan cuti.")# --- 7. PAYROLL & SLIP GAJI ---
 elif pilihan == "💰 Payroll & Slip Gaji":
     st.markdown('<div class="main-header"><h1>💰 Payroll & Slip Gaji</h1><p>Generate & Riwayat Payroll</p></div>', unsafe_allow_html=True)
     
@@ -989,7 +924,6 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             if not df_pr.empty:
                 st.dataframe(df_pr, use_container_width=True, hide_index=True)
                 
-                # Slip gaji viewer
                 st.markdown("---")
                 st.subheader("🖨️ Lihat Slip Gaji")
                 slip_id = st.number_input("ID Payroll", min_value=0, step=1, key="slip_id")
@@ -1028,18 +962,15 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                         else:
                             st.warning(f"❌ Payroll ID {slip_id} tidak ditemukan.")
             else:
-                st.info("Belum ada riwayat payroll.")# --- 8. REKRUTMEN & CV ---
+                st.info("Belum ada riwayat payroll.")
+
 # --- 8. REKRUTMEN & CV (UPGRADE SESUAI GAMBAR PDF) ---
-# --- 8. REKRUTMEN & CV ---
-# --- 8. REKRUTMEN & CV ---
-# --- 8. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1><p>Manajemen Kandidat & Lowongan</p></div>', unsafe_allow_html=True)
     
     tab_rek1, tab_rek2 = st.tabs(["🎯 Kandidat", "📢 Lowongan"])
     
     with tab_rek1:
-        # ================= FORM TAMBAH =================
         with st.expander("➕ Tambah Kandidat Baru", expanded=False):
             with st.form("kandidat_form_v3"):
                 col1, col2, col3 = st.columns(3)
@@ -1063,7 +994,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                     if not k_nama or not k_posisi:
                         st.error("❌ Nama dan Posisi wajib diisi.")
                     else:
-                        # CEK DOUBLE (Berdasarkan Nama & Telepon)
                         cek_dobel = c.execute("SELECT id FROM kandidat WHERE nama=? AND telepon=?", (k_nama, k_telp)).fetchone()
                         if cek_dobel:
                             st.warning(f"⚠️ Kandidat **{k_nama}** dengan nomor telepon tersebut sudah ada di database. Proses dibatalkan untuk mencegah data ganda.")
@@ -1084,8 +1014,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                             except Exception as e:
                                 st.error(f"Gagal: {e}")
         
-        # ================= FILTER & PENCARIAN =================
-               # ================= FILTER & PENCARIAN =================
         st.markdown('<div class="section-header"><h3>📝 Daftar Kandidat & Jadwal</h3></div>', unsafe_allow_html=True)
         
         col_f1, col_f2, col_f3 = st.columns(3)
@@ -1096,7 +1024,6 @@ elif pilihan == "📋 Rekrutmen & CV":
         with col_f3:
             f_tahapan = st.selectbox("Filter Tahapan", ["(Semua)", "-", "Berkas", "Interview HR", "Interview User", "Ground Test", "Induksi", "MCU", "Sign Contract"], key="f_tahapan")
 
-        # Query dengan Filter
         q_k = """SELECT id, nama, posisi_dilamar, status, jadwal_interview, jam_interview, tipe_interview, tahapan, catatan 
                  FROM kandidat WHERE 1=1"""
         params_k = []
@@ -1111,29 +1038,19 @@ elif pilihan == "📋 Rekrutmen & CV":
             q_k += " AND tahapan=?"
             params_k.append(f_tahapan)
             
-        # --- PERUBAHAN DI SINI: URUTKAN JAM ---
         q_k += " ORDER BY jadwal_interview ASC, jam_interview ASC"
         
         df_k = pd.read_sql_query(q_k, conn, params=tuple(params_k))
         
-        # ================= TABEL DATA EDITOR =================
-       
-        
-               # ================= TABEL DATA EDITOR =================
         if not df_k.empty:
-            # 1. Bersihkan data sampah (header palsu) & pastikan ID valid
             df_k = df_k[df_k['nama'].astype(str).str.lower().str.strip() != 'nama'] 
             df_k = df_k[df_k['id'].astype(str).str.isnumeric()]
             
-            # 2. Konversi Tipe Data agar tidak error
             df_k['jadwal_interview'] = pd.to_datetime(df_k['jadwal_interview'], errors='coerce').dt.date
             df_k['jam_interview'] = pd.to_datetime(df_k['jam_interview'], format='%H:%M', errors='coerce').dt.time
             df_k = df_k.fillna("") 
             
-            # 3. Beri ID unik (Prefix 'row_') agar st.data_editor tidak bentrok
             df_k['id'] = "row_" + df_k['id'].astype(str)
-            
-            # Tambah kolom kontrol Hapus
             df_k['Hapus?'] = False
             
             edited_df = st.data_editor(
@@ -1166,22 +1083,18 @@ elif pilihan == "📋 Rekrutmen & CV":
                 key="editor_kandidat_anti_error_v3"
             )
             
-            # Tombol Eksekusi Perubahan
             if st.button("💾 Simpan Perubahan / Hapus Data Terpilih", type="primary", use_container_width=True):
                 deleted_count = 0
                 updated_count = 0
                 
                 for _, row in edited_df.iterrows():
-                    # Ambil ID angka asli (buang prefix 'row_')
                     raw_id = str(row['id']).replace("row_", "").strip()
                     
-                    # JIKA DICENTANG HAPUS
                     if row['Hapus?'] and raw_id.isnumeric():
                         c.execute("DELETE FROM kandidat WHERE id=?", (int(raw_id),))
                         deleted_count += 1
                         continue 
                     
-                    # JIKA BARIS DIEDIT
                     jadwal_str = str(row['jadwal_interview']) if pd.notna(row['jadwal_interview']) and row['jadwal_interview'] != "" else ""
                     
                     jam_str = ""
@@ -1205,7 +1118,6 @@ elif pilihan == "📋 Rekrutmen & CV":
                 st.success(f"✅ Berhasil! {updated_count} data diperbarui, {deleted_count} data dihapus.")
                 time.sleep(1); st.rerun()
     
-    # ================= TAB LOWONGAN (TETAP) =================
     with tab_rek2:
         with st.expander("➕ Tambah Lowongan Baru", expanded=False):
             with st.form("lowongan_form"):
@@ -1247,6 +1159,7 @@ elif pilihan == "📋 Rekrutmen & CV":
             st.dataframe(df_l, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada data lowongan.")
+
 # --- 9. JOBDESK ---
 elif pilihan == "📋 Jobdesk":
     st.markdown('<div class="main-header"><h1>📋 Jobdesk</h1><p>Deskripsi Pekerjaan & KPI per Posisi</p></div>', unsafe_allow_html=True)
@@ -1651,7 +1564,9 @@ elif pilihan == "📱 WhatsApp Reminder":
                 st.code(wa_url, language="text")
                 st.success("✅ Copy URL di atas dengan Ctrl+C / Cmd+C")
         else:
-            st.warning("⚠️ Isi nomor WA dan pesan dulu.")# --- 18. ASET & PROPERTI ---
+            st.warning("⚠️ Isi nomor WA dan pesan dulu.")
+
+# --- 18. ASET & PROPERTI ---
 elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Aset Perusahaan</p></div>', unsafe_allow_html=True)
     
@@ -1723,7 +1638,6 @@ elif pilihan == "🏪 Ruko & Tenant":
     
     tab_rt1, tab_rt2 = st.tabs(["🏪 Ruko", "🏠 Tenant"])
     
-    # --- TAB RUKO ---
     with tab_rt1:
         with st.expander("➕ Tambah Ruko Baru", expanded=False):
             with st.form("ruko_form"):
@@ -1775,7 +1689,6 @@ elif pilihan == "🏪 Ruko & Tenant":
             "main_ruko"
         )
     
-    # --- TAB TENANT ---
     with tab_rt2:
         with st.expander("➕ Tambah Tenant Baru", expanded=False):
             with st.form("tenant_form"):
@@ -2080,25 +1993,22 @@ elif pilihan == "📎 Lampiran / Attachment":
                 key="dl_lm_btn"
             )
     else:
-        st.info("Belum ada lampiran.")# --- 23. FORMULIR HRD (OFFICIAL) ---
+        st.info("Belum ada lampiran.")
+
+# --- 23. FORMULIR HRD (OFFICIAL) ---
 elif pilihan == "📋 Formulir HRD (Official)":
     st.markdown('<div class="main-header"><h1>📋 Formulir HRD (Official)</h1><p>Cetak & Input Data Formulir Standar Perusahaan</p></div>', unsafe_allow_html=True)
     
-    # Membuat 7 Tab (Tab 7 adalah form perubahan data yang akan kita buat di stage terakhir)
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📝 Wawancara & Coaching", "🌴 Permohonan Cuti", "🧑‍💼 Data Pelamar", 
         "📋 Permintaan Karyawan (FPK)", "🚪 Exit & Clearance", "⏱️ Izin & Kehadiran",
         "📝 Perubahan Data"
     ])
     
-    # ================= TAB 1: WAWANCARA & COACHING =================
     with tab1:
         st.subheader("Formulir Laporan Wawancara & Data Fisik Pelamar")
-        
-        # --- FORM 1: LAPORAN WAWANCARA ---
         with st.container(border=True):
             st.markdown('<div class="form-title">FORMULIR LAPORAN WAWANCARA</div>', unsafe_allow_html=True)
-            
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.text_input("Nama", key="w_nama")
             with c2: st.text_input("Jabatan yang dilamar", key="w_jabatan")
@@ -2115,7 +2025,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.radio("5. KOMUNIKASI (Lancar > Tidak lancar/berbelit-belit)", ["5", "4", "3", "2", "1"], horizontal=True, key="w_f5")
             
             st.markdown("---")
-            
             c_kiri, c_kanan = st.columns(2)
             with c_kiri:
                 st.text_area("Kelebihan", height=100, key="w_kelebihan")
@@ -2129,11 +2038,9 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.text_input("Nama Pewawancara", key="w_nama_pewawancara")
                 st.text_input("Jabatan Pewawancara", key="w_jabatan_pewawancara")
 
-        # --- FORM 2: DATA FISIK & CHECKLIST PELAMAR ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown('<div class="form-title">DATA PELAMAR & CHECKLIST FISIK</div>', unsafe_allow_html=True)
-            
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.text_input("Posisi", key="p_posisi")
@@ -2183,7 +2090,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.text_input("Nama Pewawancara", key="p_nama_pewawancara")
                 st.text_input("Jabatan Pewawancara", key="p_jabatan_pewawancara")
 
-        # Tombol Simpan Wawancara & Fisik
         if st.button("💾 Simpan Formulir Wawancara & Fisik", type="primary", use_container_width=True, key="btn_save_wawancara_full"):
             try:
                 w_nama_val = st.session_state.get("w_nama", "")
@@ -2253,7 +2159,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
             except Exception as e:
                 st.error(f"❌ Gagal menyimpan: {e}")
 
-        # Riwayat Wawancara
         st.markdown("---")
         st.markdown("**📋 Riwayat Formulir Wawancara:**")
         df_waw = pd.read_sql_query(
@@ -2312,7 +2217,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 except Exception as e:
                     st.error(f"❌ Gagal menyimpan: {e}")
 
-        # Riwayat Coaching
         st.markdown("---")
         st.markdown("**📋 Riwayat Form Coaching:**")
         df_co = pd.read_sql_query(
@@ -2323,7 +2227,8 @@ elif pilihan == "📋 Formulir HRD (Official)":
         if not df_co.empty:
             st.dataframe(df_co, use_container_width=True, hide_index=True)
         else:
-            st.info("Belum ada form coaching yang tersimpan.")    # ================= TAB 2: PERMOHONAN CUTI =================
+            st.info("Belum ada form coaching yang tersimpan.")
+
     with tab2:
         st.subheader("1. Surat Permohonan Cuti (Standard)")
         with st.container(border=True):
@@ -2422,7 +2327,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada riwayat permohonan cuti.")
 
-    # ================= TAB 3: DATA PELAMAR =================
     with tab3:
         st.subheader("Formulir Data Pelamar")
         with st.container(border=True):
@@ -2540,7 +2444,8 @@ elif pilihan == "📋 Formulir HRD (Official)":
         if not df_dp_hr.empty:
             st.dataframe(df_dp_hr, use_container_width=True, hide_index=True)
         else:
-            st.info("Belum ada formulir data pelamar yang tersimpan.")    # ================= TAB 4: PERMINTAAN KARYAWAN (FPK) =================
+            st.info("Belum ada formulir data pelamar yang tersimpan.")
+
     with tab4:
         st.subheader("Formulir Permintaan Karyawan (FPK)")
         with st.container(border=True):
@@ -2631,7 +2536,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada formulir FPK yang tersimpan.")
 
-    # ================= TAB 5: EXIT & CLEARANCE =================
     with tab5:
         st.subheader("Formulir Karyawan Keluar dari Perusahaan")
         
@@ -2819,7 +2723,8 @@ elif pilihan == "📋 Formulir HRD (Official)":
         if not df_exit_hr.empty:
             st.dataframe(df_exit_hr, use_container_width=True, hide_index=True)
         else:
-            st.info("Belum ada form Exit & Clearance yang tersimpan.")    # ================= TAB 6: IZIN & KEHADIRAN =================
+            st.info("Belum ada form Exit & Clearance yang tersimpan.")
+
     with tab6:
         st.subheader("1. Permohonan Izin Pulang Cepat")
         with st.container(border=True):
@@ -2966,7 +2871,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada riwayat form izin & kehadiran.")
 
-    # ================= TAB 7: PERUBAHAN DATA =================
     with tab7:
         st.subheader("Form Perubahan Data Karyawan")
         with st.container(border=True):
@@ -3012,7 +2916,9 @@ elif pilihan == "📋 Formulir HRD (Official)":
         if not df_per_hr.empty:
             st.dataframe(df_per_hr, use_container_width=True, hide_index=True)
         else:
-            st.info("Belum ada formulir perubahan data yang tersimpan.")# --- 24. LAPORAN & ANALITIK ---
+            st.info("Belum ada formulir perubahan data yang tersimpan.")
+
+# --- 24. LAPORAN & ANALITIK ---
 elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1><p>Rekapitulasi Data HRIS</p></div>', unsafe_allow_html=True)
     
