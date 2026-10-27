@@ -278,7 +278,17 @@ with st.sidebar:
     st.markdown("---")
     tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
     st.markdown("---")
+        st.markdown("---")
+    # TOMBOL DARURAT UNTUK MENGHAPUS DATABASE LAMA
+    if st.button("🛠️ Reset Database (Perbaikan Error)"):
+        if os.path.exists("hris_ga.db"):
+            os.remove("hris_ga.db")
+        st.success("✅ Database lama dihapus. Silakan refresh halaman (F5).")
+        time.sleep(2)
+        st.rerun()
+    st.markdown("---")
     
+ 
     if st.button("🚪 Logout"):
         log_aksi(st.session_state.username, "LOGOUT")
         for k in ["logged_in", "username", "nama", "role"]: 
