@@ -282,7 +282,8 @@ if pilihan == "🏠 Dashboard HRIS":
     total_kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     total_lowongan = c.execute("SELECT COUNT(*) FROM lowongan WHERE status='Buka'").fetchone()[0]
     total_cuti = c.execute("SELECT COUNT(*) FROM cuti WHERE status='Menunggu'").fetchone()[0]
-    total_resign = c.execute("SELECT COUNT(*) FROM resign").fetchone()[0]
+    # Menghitung resign dari tabel resign DAN karyawan yang statusnya sudah tidak aktif (aktif=0)
+    total_resign = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=0").fetchone()[0]
     
     total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE status='Aktif'").fetchone()[0]
     total_ruko = c.execute("SELECT COUNT(*) FROM ruko").fetchone()[0]
