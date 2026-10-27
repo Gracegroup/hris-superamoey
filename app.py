@@ -918,6 +918,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                                 st.error(f"Gagal: {e}")
         
         # ================= FILTER & PENCARIAN =================
+               # ================= FILTER & PENCARIAN =================
         st.markdown('<div class="section-header"><h3>📝 Daftar Kandidat & Jadwal</h3></div>', unsafe_allow_html=True)
         
         col_f1, col_f2, col_f3 = st.columns(3)
@@ -943,9 +944,89 @@ elif pilihan == "📋 Rekrutmen & CV":
             q_k += " AND tahapan=?"
             params_k.append(f_tahapan)
             
-        q_k += " ORDER BY id DESC"
+        # --- PERUBAHAN DI SINI: URUTKAN JAM ---
+        q_k += " ORDER BY jadwal_interview ASC, jam_interview ASC"
         
         df_k = pd.read_sql_query(q_k, conn, params=tuple(params_k))
+        
+        # ================= TABEL DATA EDITOR =================
+        if not df_k.empty:
+            # Konversi tipe data agar aman dari error
+            df_k['jadwal_interview'] = pd.to_datetime(df_k['jadwal_interview'], errors='coerce').dt.date
+            df_k['jam_interview'] = pd.to_datetime(df_k['jam_interview'], format='%H:%M', errors='coerce').dt.time
+            df_k = df_k.fillna("") 
+            
+            # Tambah kolom kontrol Hapus
+            df_k['Hapus?'] = False
+            
+            edited_df = st.data_editor(
+                df_k,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True, width="small"),
+                    "nama": st.column_config.TextColumn("nama", width="medium"),
+                    "posisi_dilamar": st.column_config.TextColumn("posisi_dilamar", width="medium"),
+                    "status": st.column_config.SelectboxColumn(
+                        "Status",
+                        options=["Baru", "Screening", "Wawancara", "MCU", "Diterima", "Ditolak"],
+                        required=True
+                    ),
+                    "jadwal_interview": st.column_config.DateColumn("jadwal_interview", format="YYYY-MM-DD"),
+                    "jam_interview": st.column_config.TimeColumn("jam_interview", format="HH:mm"),
+                    "tipe_interview": st.column_config.SelectboxColumn(
+                        "Tipe",
+                        options=["Online (Zoom/Meet)", "Offline (Kantor)", "Telepon", ""]
+                    ),
+                    "tahapan": st.column_config.SelectboxColumn(
+                        "Tahapan",
+                        options=["-", "Berkas", "Interview HR", "Interview User", "Ground Test", "Induksi", "MCU", "Sign Contract", ""]
+                    ),
+                    "catatan": st.column_config.TextColumn("catatan", width="large"),
+                    "Hapus?": st.column_config.CheckboxColumn("Hapus?", default=False, width="small")
+                },
+                num_rows="dynamic", 
+                key="editor_kandidat_final"
+            )
+            
+            # Tombol Eksekusi Perubahan
+            if st.button("💾 Simpan Perubahan / Hapus Data Terpilih", type="primary", use_container_width=True):
+                deleted_count = 0
+                updated_count = 0
+                
+                for _, row in edited_df.iterrows():
+                    # 1. JIKA DICENTANG HAPUS
+                    if row['Hapus?'] and pd.notna(row['id']) and str(row['id']).strip() != "":
+                        c.execute("DELETE FROM kandidat WHERE id=?", (int(row['id']),))
+                        deleted_count += 1
+                        continue # Lanjut ke baris berikutnya, skip proses update
+                    
+                    # 2. JIKA BARIS DIEDIT
+                    jadwal_str = str(row['jadwal_interview']) if pd.notna(row['jadwal_interview']) and row['jadwal_interview'] != "" else ""
+                    
+                    # PENGAMAN ERROR: Cek apakah row['jam_interview'] berupa objek time atau string
+                    jam_str = ""
+                    if pd.notna(row['jam_interview']) and row['jam_interview'] != "":
+                        if hasattr(row['jam_interview'], 'strftime'):
+                            jam_str = row['jam_interview'].strftime("%H:%M")
+                        else:
+                            jam_str = str(row['jam_interview'])
+                    
+                    if pd.notna(row['id']) and str(row['id']).strip() != "": 
+                        c.execute("""UPDATE kandidat SET 
+                                     nama=?, posisi_dilamar=?, status=?, 
+                                     jadwal_interview=?, jam_interview=?, tipe_interview=?, 
+                                     tahapan=?, catatan=? WHERE id=?""",
+                                  (row['nama'], row['posisi_dilamar'], row['status'], 
+                                   jadwal_str, jam_str, row['tipe_interview'],
+                                   row['tahapan'], row['catatan'], int(row['id'])))
+                        updated_count += 1
+                
+                conn.commit()
+                st.success(f"✅ Berhasil! {updated_count} data diperbarui, {deleted_count} data dihapus.")
+                time.sleep(1); st.rerun()
+        else:
+            st.info("Tidak ada data kandidat yang cocok dengan filter.")
         
         # ================= TABEL DATA EDITOR =================
         if not df_k.empty:
