@@ -328,7 +328,34 @@ if pilihan == "🏠 Dashboard HRIS":
         st.altair_chart(chart_div, use_container_width=True)
     else:
         st.info("Belum ada data karyawan aktif.")
-
+    # --- FLYER LOWONGAN (MUNCUL JIKA CHECKBOX DICENTANG) ---
+    if tampilkan_flyer:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-header"><h3>📢 Flyer Lowongan Tersedia</h3></div>', unsafe_allow_html=True)
+        
+        # Ambil data lowongan yang statusnya 'Buka'
+        df_loker = pd.read_sql_query("SELECT posisi, departemen, jumlah_dibutuhkan, deskripsi FROM lowongan WHERE status='Buka'", conn)
+        
+        if not df_loker.empty:
+            # Bagi menjadi 3 kolom (menyesuaikan jumlah lowongan)
+            cols = st.columns(min(len(df_loker), 3))
+            for idx, row in df_loker.iterrows():
+                with cols[idx % 3]:
+                    # Desain Flyer ala Poster
+                    st.markdown(f"""
+                    <div style="background: white; padding: 20px; border-radius: 12px; border-top: 6px solid #7e57c2; box-shadow: 0 6px 20px rgba(0,0,0,0.1); margin-bottom: 15px; text-align: center;">
+                        <h3 style="color: #1e3c72; margin-top: 0;">{row['posisi']}</h3>
+                        <p style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Divisi: <b>{row['departemen']}</b></p>
+                        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Dibutuhkan: <b>{row['jumlah_dibutuhkan']} Orang</b></p>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                            <p style="font-size: 0.85em; color: #555; margin: 0;">{row['deskripsi'] if row['deskripsi'] else 'Segera bergabung dengan tim kami!'}</p>
+                        </div>
+                        <hr style="margin: 10px 0; border-top: 1px dashed #ccc;">
+                        <p style="font-size: 0.8em; color: #2a5298; font-weight: bold; margin-bottom: 0;">Kirim CV ke: hrd@amoey.com</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("Saat ini tidak ada lowongan yang dibuka.")
 # --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
