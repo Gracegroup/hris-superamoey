@@ -386,7 +386,7 @@ if pilihan == "🏠 Dashboard HRIS":
         # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
         if tampilkan_flyer:
             st.markdown("""
-                       st.markdown("""
+          
             <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 12px; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; text-align: center;">
                 <h3 style="color: #fff; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
             </div>
