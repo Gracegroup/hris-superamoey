@@ -77,7 +77,7 @@ def get_conn(): return sqlite3.connect('hris_ga.db', check_same_thread=False)
 conn = get_conn()
 c = conn.cursor()
 
-# ==================== FIX BUG #5: Helper anti-NaN ====================
+# ==================== HELPER ANTI-NAN ====================
 def clean(val, default=""):
     if val is None: return default
     try:
@@ -95,7 +95,7 @@ def clean_date(val):
     try: return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
     except Exception: return None
 
-# ==================== Pembuatan Tabel ====================
+# ==================== PEMBUATAN TABEL ====================
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, versatility TEXT, pendidikan_terakhir TEXT, asal_sekolah TEXT, no_ktp TEXT, no_kk TEXT, poh TEXT, status_poh TEXT, mine_permit_start TEXT, mine_permit_end TEXT, status_mine_permit TEXT, peringatan_pkwt TEXT, gaji REAL DEFAULT 0, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, jadwal_interview TEXT, tipe_interview TEXT, jam_interview TEXT, tahapan TEXT, status_berkas TEXT, catatan_berkas TEXT, tgl_interview TEXT, hasil_interview TEXT, tgl_ground_test TEXT, hasil_ground_test TEXT, tgl_induksi TEXT, hasil_induksi TEXT, tgl_mcu TEXT, hasil_mcu TEXT, tgl_sign_contract TEXT, tmk TEXT, lead_time_hari INTEGER)''')
@@ -131,6 +131,88 @@ if c.fetchone()[0] == 0:
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "OKANAHARIANTO", "admin"))
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashlib.sha256("hrd123".encode()).hexdigest(), "HRD Staff", "hrd"))
     conn.commit()
+
+# ==================== FUNGSI HELPER CRUD TABEL ====================
+def render_edit_delete_table(table_name, query, editable_cols, display_cols, key_prefix, col_config=None, calc_func=None):
+    """
+    Fungsi universal untuk menampilkan tabel dengan fitur Edit, Save, dan Delete.
+    """
+    df = pd.read_sql_query(query, conn)
+    
+    if df.empty:
+        st.info(f"Belum ada data {table_name}. Silakan tambah melalui form di atas.")
+        return
+        
+    df['Hapus?'] = False
+    
+    # Konfigurasi kolom
+    config = {
+        "id": st.column_config.NumberColumn("ID", disabled=True, width="small"),
+        "Hapus?": st.column_config.CheckboxColumn("Hapus?", default=False, width="small")
+    }
+    if col_config:
+        config.update(col_config)
+        
+    # Tampilkan Editor
+    edited_df = st.data_editor(
+        df[display_cols + ['Hapus?']],
+        column_config=config,
+        num_rows="dynamic", # Memungkinkan tambah baris baru
+        use_container_width=True,
+        hide_index=True,
+        key=f"ed_{table_name}_{key_prefix}"
+    )
+    
+    # Tombol Simpan Perubahan
+    if st.button("💾 Simpan Perubahan / Hapus Data Terpilih", key=f"sv_{table_name}_{key_prefix}", type="primary", use_container_width=True):
+        success_count = 0
+        delete_count = 0
+        
+        # 1. PROSES DELETE
+        to_delete = edited_df[edited_df['Hapus?'] == True]['id'].dropna().tolist()
+        for did in to_delete:
+            try:
+                c.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
+                delete_count += 1
+            except Exception as e:
+                st.error(f"Gagal menghapus ID {did}: {e}")
+                
+        # 2. PROSES UPDATE / INSERT
+        for _, row in edited_df.iterrows():
+            if row['Hapus?']: continue
+            
+            row_id = row.get('id')
+            
+            # Ambil nilai sesuai editable_cols
+            vals = []
+            for col in editable_cols:
+                val = row.get(col)
+                if pd.isna(val): val = None
+                vals.append(val)
+                
+            # Custom calculation (misal untuk total_bayar)
+            if calc_func:
+                vals = calc_func(row, editable_cols, vals)
+                
+            try:
+                if pd.isna(row_id) or row_id == 0 or row_id == "":
+                    # INSERT (Baris baru)
+                    cols_str = ", ".join(editable_cols)
+                    phs = ", ".join(["?"] * len(editable_cols))
+                    c.execute(f"INSERT INTO {table_name} ({cols_str}) VALUES ({phs})", tuple(vals))
+                else:
+                    # UPDATE (Baris existing)
+                    set_str = ", ".join([f"{col}=?" for col in editable_cols])
+                    vals.append(int(row_id))
+                    c.execute(f"UPDATE {table_name} SET {set_str} WHERE id=?", tuple(vals))
+                success_count += 1
+            except Exception as e:
+                st.error(f"Error pada baris ID {row_id}: {e}")
+        
+        conn.commit()
+        st.success(f"✅ Berhasil menyimpan {success_count} data dan menghapus {delete_count} data.")
+        time.sleep(1)
+        st.rerun()
 
 # ==================== FUNGSI SEEDING DARI FILE ====================
 def seed_data_from_files():
@@ -273,7 +355,7 @@ def seed_data_from_files():
 
 seed_data_from_files()
 
-# ==================== HELPER FUNCTIONS ====================
+# ==================== HELPER UMUM ====================
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
 def format_rp(n):
     try: return f"Rp {float(n):,.0f}".replace(",", ".")
@@ -317,7 +399,6 @@ def tarik_data_uniquip(username, password):
             if not rows: return "⚠️ Belum ada data / selector perlu disesuaikan."
             return pd.DataFrame(rows)
     except Exception as e: return f"❌ Scraping gagal: {e}"
-        # === SAMBUNGAN CHUNK 1 ===
 
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
@@ -350,7 +431,6 @@ with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
     
-    # MENU LENGKAP (26 menu sesuai aslinya)
     menu = [
         "🏠 Dashboard HRIS", "🗂️ Filing Data Manpower", "👥 Data Karyawan", 
         "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", 
@@ -380,7 +460,6 @@ with st.sidebar:
 
 # --- 1. DASHBOARD HRIS ---
 if pilihan == "🏠 Dashboard HRIS":
-    # Tampilkan Flyer jika dicentang
     if tampilkan_flyer:
         img_mekanik_b64 = get_image_base64(["flyer_mekanik.png", "flyer_mekanik.png.jpeg", "flyer_mekanik.jpeg", "flyer_mekanik.jpg"])
         img_warehouse_b64 = get_image_base64(["flyer_warehouse.png", "flyer_warehouse.png.jpeg", "flyer_warehouse.jpeg", "flyer_warehouse.jpg"])
@@ -402,7 +481,6 @@ if pilihan == "🏠 Dashboard HRIS":
 
     st.markdown(f'<div class="main-header"><h1>⚡ HRIS, GA & ASET DASHBOARD</h1><p>Selamat datang, <b>{st.session_state.nama}</b> • Update: {datetime.now().strftime("%d/%m/%Y, %H.%M.%S")}</p></div>', unsafe_allow_html=True)
     
-    # KPI Cards
     st.markdown('<div class="section-header"><h3>👥 KPI HRIS & GENERAL AFFAIR</h3></div>', unsafe_allow_html=True)
     aktif = c.execute("SELECT COUNT(*) FROM karyawan WHERE resign_date IS NULL OR resign_date='' OR resign_date='None'").fetchone()[0]
     kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
@@ -426,7 +504,6 @@ if pilihan == "🏠 Dashboard HRIS":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-    # Detail Vacant
     st.markdown('<div class="section-header"><h3>📢 Detail Kebutuhan (Open Vacant)</h3></div>', unsafe_allow_html=True)
     df_vacant = pd.read_sql_query("SELECT posisi AS 'Posisi / Level', departemen AS 'Departemen', jumlah_dibutuhkan AS 'Jumlah Dibutuhkan', deskripsi AS 'Keterangan' FROM lowongan WHERE status='Buka' ORDER BY id DESC", conn)
     if not df_vacant.empty: 
@@ -434,7 +511,6 @@ if pilihan == "🏠 Dashboard HRIS":
     else: 
         st.info("✅ Tidak ada posisi yang sedang open vacant saat ini.")
         
-    # KPI Utility
     st.markdown('<div class="section-header"><h3>💡 KPI Utility Melak</h3></div>', unsafe_allow_html=True)
     total_util = c.execute("SELECT COALESCE(SUM(total_bayar),0) FROM utility").fetchone()[0]
     util_belum = c.execute("SELECT COUNT(*) FROM utility WHERE status!='Lunas'").fetchone()[0]
@@ -452,7 +528,6 @@ if pilihan == "🏠 Dashboard HRIS":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-    # Grafik Analitik
     st.markdown('<div class="section-header"><h3>📊 Analitik</h3></div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -511,12 +586,12 @@ elif pilihan == "🗂️ Filing Data Manpower":
                     st.info("Tidak ada data utilitas terkait manpower ini.")
         else:
             st.warning("Data tidak ditemukan di database Karyawan, Kandidat, Aset, maupun Utilitas. Pastikan ejaan nama sudah benar.")
-            # --- 3. REKRUTMEN & CV (DENGAN JADWAL LENGKAP) ---
+
+# --- 3. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1></div>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["➕ Input Kandidat", "📋 Pipeline & Jadwal", "📢 Open Vacant"])
     
-    # TAB 1: INPUT KANDIDAT BARU
     with tab1:
         with st.form("form_kandidat_baru", clear_on_submit=True):
             st.subheader("Formulir Kandidat Baru")
@@ -540,7 +615,6 @@ elif pilihan == "📋 Rekrutmen & CV":
             
             if st.form_submit_button("💾 Simpan Kandidat", type="primary"):
                 if nama:
-                    # === FITUR ALERT DUPLIKAT ===
                     cek_duplikat = c.execute("SELECT id FROM kandidat WHERE LOWER(nama)=LOWER(?) AND LOWER(posisi_dilamar)=LOWER(?)", (nama.strip(), posisi.strip())).fetchone()
                     if cek_duplikat:
                         st.error(f"⚠️ Data Kandidat **{nama}** untuk posisi **{posisi}** sudah ada (ID: {cek_duplikat[0]}). Silakan edit di tab Pipeline & Jadwal.")
@@ -555,71 +629,23 @@ elif pilihan == "📋 Rekrutmen & CV":
                 else:
                     st.error("⚠️ Nama Kandidat wajib diisi!")
 
-    # TAB 2: PIPELINE & JADWAL (FITUR EDIT & DELETE)
     with tab2:
-        df_k = pd.read_sql_query("SELECT * FROM kandidat ORDER BY id DESC", conn)
-        if not df_k.empty:
-            html = '<div class="metric-grid">'
-            html += metric_card("Total Kandidat", str(len(df_k)), "", "card-blue")
-            html += metric_card("Diterima", str(len(df_k[df_k['status']=='Diterima'])), "", "card-green")
-            html += metric_card("Ditolak", str(len(df_k[df_k['status']=='Ditolak'])), "", "card-red")
-            html += metric_card("Proses", str(len(df_k[df_k['status']=='Proses'])), "", "card-gold")
-            html += metric_card("Wawancara", str(len(df_k[df_k['status']=='Wawancara'])), "", "card-purple")
-            html += '</div>'
-            st.markdown(html, unsafe_allow_html=True)
-            
-            filter_status = st.selectbox("🔍 Filter Status:", ["Semua", "Proses", "Wawancara", "Diterima", "Ditolak"])
-            df_filtered = df_k if filter_status == "Semua" else df_k[df_k['status'] == filter_status]
-            
-            st.markdown("### 📋 Daftar Kandidat & Jadwal")
-            st.dataframe(df_filtered[['id','nama','posisi_dilamar','status','jadwal_interview','jam_interview','tipe_interview','tahapan','catatan']], use_container_width=True, hide_index=True)
-            
-            st.markdown("---")
-            opsi_kandidat = {f"{row['id']} - {row['nama']} ({row['posisi_dilamar']})": row['id'] for _, row in df_filtered.iterrows()}
-            if opsi_kandidat:
-                pilihan_edit = st.selectbox("Pilih Kandidat untuk Edit/Hapus Pipeline:", ["-- Pilih --"] + list(opsi_kandidat.keys()))
-                if pilihan_edit != "-- Pilih --":
-                    kandidat_id = opsi_kandidat[pilihan_edit]
-                    s = pd.read_sql_query("SELECT * FROM kandidat WHERE id=?", conn, params=(kandidat_id,)).iloc[0]
-                    
-                    with st.form("form_update_pipeline"):
-                        st.markdown(f"**✏️ Edit Data: {s['nama']}**")
-                        colA, colB = st.columns(2)
-                        with colA:
-                            e_nama = st.text_input("Nama Kandidat", value=s['nama'])
-                            e_posisi = st.text_input("Posisi", value=s['posisi_dilamar'])
-                            e_telepon = st.text_input("Telepon/WA", value=s['telepon'] or "")
-                            e_status = st.selectbox("Status Akhir", ["Proses", "Wawancara", "Diterima", "Ditolak"], 
-                                                    index=["Proses", "Wawancara", "Diterima", "Ditolak"].index(s['status']) if s['status'] in ["Proses", "Wawancara", "Diterima", "Ditolak"] else 0)
-                        with colB:
-                            e_tgl_int = st.text_input("Tgl Interview (YYYY-MM-DD)", value=s['jadwal_interview'] or "")
-                            e_jam_int = st.text_input("Jam Interview (HH:MM)", value=s['jam_interview'] or "")
-                            e_tipe_int = st.selectbox("Tipe Interview", ["Offline (Kantor)", "Online (Zoom/Meet)"], 
-                                                      index=0 if s['tipe_interview']=="Offline (Kantor)" else 1)
-                            e_tahapan = st.selectbox("Tahapan", ["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"], 
-                                                     index=["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"].index(s['tahapan']) if s['tahapan'] in ["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"] else 0)
-                        
-                        e_catatan = st.text_area("Catatan / Keterangan", value=s['catatan'] or "")
-                        
-                        if st.form_submit_button("💾 Simpan Perubahan", type="primary"):
-                            c.execute('''UPDATE kandidat SET nama=?, posisi_dilamar=?, telepon=?, status=?, jadwal_interview=?, jam_interview=?, tipe_interview=?, tahapan=?, catatan=? WHERE id=?''', 
-                                      (e_nama, e_posisi, e_telepon, e_status, e_tgl_int, e_jam_int, e_tipe_int, e_tahapan, e_catatan, kandidat_id))
-                            conn.commit()
-                            st.success("✅ Data Pipeline berhasil diperbarui!")
-                            st.rerun()
-                            
-                    if st.button(f"🗑️ Hapus Kandidat {s['nama']}", type="primary"):
-                        c.execute("DELETE FROM kandidat WHERE id=?", (kandidat_id,))
-                        conn.commit()
-                        st.success("Kandidat berhasil dihapus!")
-                        st.rerun()
-        else: 
-            st.info("Belum ada data kandidat. Silakan input melalui Tab 'Input Kandidat'.")
-            
-    # TAB 3: OPEN VACANT
+        st.subheader("Edit / Hapus Data Pipeline Kandidat")
+        render_edit_delete_table(
+            table_name="kandidat",
+            query="SELECT id, nama, posisi_dilamar, telepon, status, jadwal_interview, jam_interview, tipe_interview, tahapan, catatan FROM kandidat",
+            editable_cols=['nama', 'posisi_dilamar', 'telepon', 'status', 'jadwal_interview', 'jam_interview', 'tipe_interview', 'tahapan', 'catatan'],
+            display_cols=['id', 'nama', 'posisi_dilamar', 'telepon', 'status', 'jadwal_interview', 'jam_interview', 'tipe_interview', 'tahapan', 'catatan'],
+            key_prefix="kandidat_main",
+            col_config={
+                "status": st.column_config.SelectboxColumn("Status", options=["Proses", "Wawancara", "Diterima", "Ditolak"]),
+                "tipe_interview": st.column_config.SelectboxColumn("Tipe Interview", options=["Offline (Kantor)", "Online (Zoom/Meet)"]),
+                "tahapan": st.column_config.SelectboxColumn("Tahapan", options=["Screening", "Interview HR", "Interview User", "MCU", "Offering", "Selesai"])
+            }
+        )
+
     with tab3:
         st.markdown("### 📢 Daftar Open Vacant (Lowongan)")
-        
         with st.expander("➕ Tambah Lowongan Baru"):
             with st.form("form_lowongan_baru", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
@@ -642,152 +668,80 @@ elif pilihan == "📋 Rekrutmen & CV":
                         st.rerun()
                     else:
                         st.error("Posisi wajib diisi!")
-
+        
         st.markdown("---")
-        df_vac = pd.read_sql_query("SELECT * FROM lowongan ORDER BY id DESC", conn)
-        if not df_vac.empty:
-            for _, r in df_vac.iterrows():
-                pelamar = c.execute("SELECT COUNT(*) FROM kandidat WHERE posisi_dilamar LIKE ?", (f"%{r['posisi']}%",)).fetchone()[0]
-                
-                st.markdown(f"""
-                <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {'#2a5298' if r['status']=='Buka' else '#eb3349'};">
-                    <h4 style="margin:0; color:#1e3c72;">{r['posisi']} <span style="font-size:0.6em; background:#e0e7ff; padding:2px 8px; border-radius:10px;">{r['departemen']}</span></h4>
-                    <p style="margin:5px 0; font-size:0.9em;">Status: <b>{r['status']}</b> | Batas: {r['tanggal_ditutup']}</p>
-                    <div style="display:flex; gap:20px; margin-top:10px;">
-                        <div><b>Butuh:</b> {r['jumlah_dibutuhkan']}</div>
-                        <div><b>Pelamar:</b> {pelamar}</div>
-                        <div style="color:{'#11998e' if pelamar >= r['jumlah_dibutuhkan'] else '#eb3349'};"><b>Sisa:</b> {max(0, r['jumlah_dibutuhkan'] - pelamar)}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                colA, colB, colC, _ = st.columns([1, 1, 1, 3])
-                with colA:
-                    if r['status'] == 'Buka':
-                        if st.button(f"🔒 Tutup", key=f"tutup_{r['id']}", use_container_width=True): 
-                            c.execute("UPDATE lowongan SET status='Tutup' WHERE id=?", (r['id'],))
-                            conn.commit()
-                            st.rerun()
-                    else:
-                        if st.button(f"🔓 Buka", key=f"buka_{r['id']}", use_container_width=True): 
-                            c.execute("UPDATE lowongan SET status='Buka' WHERE id=?", (r['id'],))
-                            conn.commit()
-                            st.rerun()
-                with colC:
-                    if st.button(f"🗑️ Hapus", key=f"hapus_{r['id']}", use_container_width=True): 
-                        c.execute("DELETE FROM lowongan WHERE id=?", (r['id'],))
-                        conn.commit()
-                        st.rerun()
+        render_edit_delete_table(
+            table_name="lowongan",
+            query="SELECT id, posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup FROM lowongan",
+            editable_cols=['posisi', 'departemen', 'jumlah_dibutuhkan', 'status', 'deskripsi', 'tanggal_dibuka', 'tanggal_ditutup'],
+            display_cols=['id', 'posisi', 'departemen', 'jumlah_dibutuhkan', 'status', 'deskripsi', 'tanggal_dibuka', 'tanggal_ditutup'],
+            key_prefix="lowongan_main",
+            col_config={
+                "status": st.column_config.SelectboxColumn("Status", options=["Buka", "Tutup"])
+            }
+        )
 
 # --- 4. DATA KARYAWAN ---
 elif pilihan == "👥 Data Karyawan":
     st.markdown('<div class="main-header"><h1>👥 Data Karyawan</h1><p>Master Data Seluruh Karyawan</p></div>', unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["📋 Daftar Karyawan", "✏️ Tambah / Edit"])
+    tab1, tab2 = st.tabs(["📋 Daftar & Edit Karyawan", "➕ Tambah Karyawan Manual"])
     
-    # TAB 1: DAFTAR KARYAWAN
     with tab1:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            q_kar = st.text_input("🔍 Cari Nama / NRP / NIK", "")
-        with c2:
-            df_org_opts = pd.read_sql_query("SELECT DISTINCT organization FROM karyawan WHERE organization IS NOT NULL AND organization != '' ORDER BY organization", conn)
-            list_org = ["Semua"] + df_org_opts['organization'].tolist()
-            f_org_kar = st.selectbox("🏢 Organisasi", list_org)
-        with c3:
-            f_status_kar = st.selectbox("📌 Status", ["Aktif", "Resign", "Semua"])
-            
-        q_kar_sql = "SELECT id, employee_id AS NRP, full_name AS Nama, organization AS Organisasi, job_position AS Jabatan, job_level AS Level, gender AS Gender, join_date AS 'Tgl Masuk', status_employee AS Status, end_date AS 'Akhir Kontrak', mobile_phone AS HP, email AS Email, gaji AS 'Gaji Pokok' FROM karyawan WHERE 1=1"
-        p_kar = []
-        
-        if q_kar:
-            q_kar_sql += " AND (full_name LIKE ? OR employee_id LIKE ? OR no_ktp LIKE ?)"
-            p_kar.extend([f"%{q_kar}%"] * 3)
-        if f_org_kar != "Semua":
-            q_kar_sql += " AND organization = ?"
-            p_kar.append(f_org_kar)
-        if f_status_kar == "Aktif":
-            q_kar_sql += " AND (resign_date IS NULL OR resign_date='' OR resign_date='None')"
-        elif f_status_kar == "Resign":
-            q_kar_sql += " AND resign_date IS NOT NULL AND resign_date != '' AND resign_date != 'None'"
-            
-        q_kar_sql += " ORDER BY full_name"
-        df_kar = pd.read_sql_query(q_kar_sql, conn, params=p_kar)
-        
-        st.markdown(f"**Total: {len(df_kar)} karyawan ditemukan**")
-        st.dataframe(df_kar.drop(columns=['id']), use_container_width=True, hide_index=True)
-        
-        csv_kar = df_kar.drop(columns=['id']).to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Export Data Karyawan (CSV)", csv_kar, f"data_karyawan_{date.today()}.csv", "text/csv")
+        st.subheader("Tabel Data Karyawan")
+        render_edit_delete_table(
+            table_name="karyawan",
+            query="""SELECT id, employee_id, full_name, organization, job_position, gender, join_date, status_employee, end_date, mobile_phone, email, gaji FROM karyawan ORDER BY full_name""",
+            editable_cols=['employee_id', 'full_name', 'organization', 'job_position', 'gender', 'join_date', 'status_employee', 'end_date', 'mobile_phone', 'email', 'gaji'],
+            display_cols=['id', 'employee_id', 'full_name', 'organization', 'job_position', 'gender', 'join_date', 'status_employee', 'end_date', 'mobile_phone', 'email', 'gaji'],
+            key_prefix="karyawan_main",
+            col_config={
+                "gender": st.column_config.SelectboxColumn("Gender", options=["L", "P"]),
+                "gaji": st.column_config.NumberColumn("Gaji Pokok", format="Rp %d")
+            }
+        )
 
-    # TAB 2: TAMBAH / EDIT KARYAWAN
     with tab2:
-        st.subheader("Formulir Tambah / Edit Karyawan")
-        
-        list_kar_all = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan ORDER BY full_name", conn)
-        opt_kar_all = {"-- Karyawan Baru --": 0}
-        for _, r in list_kar_all.iterrows():
-            opt_kar_all[f"{r['employee_id']} - {r['full_name']}"] = r['id']
-            
-        pilih_kar_all = st.selectbox("Pilih Karyawan (Kosongkan jika ingin tambah baru)", list(opt_kar_all.keys()), key="pilih_kar_all")
-        edit_kar_id = opt_kar_all[pilih_kar_all]
-        
-        s_kar = {}
-        if edit_kar_id > 0:
-            s_kar = pd.read_sql_query("SELECT * FROM karyawan WHERE id=?", conn, params=(edit_kar_id,)).iloc[0]
-            
-        with st.form("form_karyawan"):
+        st.subheader("Formulir Tambah Karyawan")
+        with st.form("form_karyawan_baru"):
             c1, c2, c3 = st.columns(3)
             with c1:
-                e_nrp = st.text_input("NRP / Employee ID *", value=str(s_kar.get('employee_id', '')) if edit_kar_id else "")
-                e_nama = st.text_input("Nama Lengkap *", value=str(s_kar.get('full_name', '')) if edit_kar_id else "")
-                e_org = st.text_input("Organisasi/Dept", value=str(s_kar.get('organization', '') or '') if edit_kar_id else "")
-                e_pos = st.text_input("Jabatan", value=str(s_kar.get('job_position', '') or '') if edit_kar_id else "")
-                e_lvl = st.text_input("Level", value=str(s_kar.get('job_level', '') or '') if edit_kar_id else "")
+                e_nrp = st.text_input("NRP / Employee ID *")
+                e_nama = st.text_input("Nama Lengkap *")
+                e_org = st.text_input("Organisasi/Dept")
+                e_pos = st.text_input("Jabatan")
+                e_lvl = st.text_input("Level")
             with c2:
                 list_gender = ["L", "P"]
-                e_gender = st.selectbox("Gender", list_gender, index=list_gender.index(s_kar.get('gender')) if edit_kar_id and s_kar.get('gender') in list_gender else 0)
-                e_tgl_masuk = st.text_input("Tanggal Masuk (YYYY-MM-DD)", value=str(s_kar.get('join_date', '') or '') if edit_kar_id else "")
-                e_status_kar = st.text_input("Status Karyawan (Kontrak/Tetap)", value=str(s_kar.get('status_employee', '') or '') if edit_kar_id else "")
-                e_tgl_akhir = st.text_input("Tanggal Akhir Kontrak (YYYY-MM-DD)", value=str(s_kar.get('end_date', '') or '') if edit_kar_id else "")
-                e_tgl_resign = st.text_input("Tanggal Resign (YYYY-MM-DD)", value=str(s_kar.get('resign_date', '') or '') if edit_kar_id else "")
+                e_gender = st.selectbox("Gender", list_gender)
+                e_tgl_masuk = st.text_input("Tanggal Masuk (YYYY-MM-DD)")
+                e_status_kar = st.text_input("Status Karyawan (Kontrak/Tetap)")
+                e_tgl_akhir = st.text_input("Tanggal Akhir Kontrak (YYYY-MM-DD)")
+                e_tgl_resign = st.text_input("Tanggal Resign (YYYY-MM-DD)")
             with c3:
-                e_hp = st.text_input("HP / WA", value=str(s_kar.get('mobile_phone', '') or '') if edit_kar_id else "")
-                e_email = st.text_input("Email", value=str(s_kar.get('email', '') or '') if edit_kar_id else "")
-                e_ktp = st.text_input("No KTP", value=str(s_kar.get('no_ktp', '') or '') if edit_kar_id else "")
-                e_ptkp = st.text_input("PTKP Status", value=str(s_kar.get('ptkp_status', '') or 'TK/0') if edit_kar_id else "TK/0")
-                e_gaji = st.number_input("Gaji Pokok", min_value=0.0, value=float(s_kar.get('gaji', 0) or 0) if edit_kar_id else 0.0, step=100000.0)
+                e_hp = st.text_input("HP / WA")
+                e_email = st.text_input("Email")
+                e_ktp = st.text_input("No KTP")
+                e_ptkp = st.text_input("PTKP Status", value="TK/0")
+                e_gaji = st.number_input("Gaji Pokok", min_value=0.0, step=100000.0)
             
-            e_aktif = st.checkbox("Status Aktif", value=bool(s_kar.get('aktif', 1)) if edit_kar_id else True)
-            
-            if st.form_submit_button("💾 Simpan Data Karyawan", type="primary", use_container_width=True):
+            if st.form_submit_button("💾 Simpan Karyawan Baru", type="primary", use_container_width=True):
                 if e_nrp and e_nama:
-                    if edit_kar_id > 0:
-                        c.execute('''UPDATE karyawan SET employee_id=?, full_name=?, organization=?, job_position=?, job_level=?, gender=?, join_date=?, status_employee=?, end_date=?, resign_date=?, mobile_phone=?, email=?, no_ktp=?, ptkp_status=?, gaji=?, aktif=? WHERE id=?''', 
-                                  (e_nrp, e_nama, e_org, e_pos, e_lvl, e_gender, e_tgl_masuk, e_status_kar, e_tgl_akhir, e_tgl_resign, e_hp, e_email, e_ktp, e_ptkp, e_gaji, 1 if e_aktif else 0, edit_kar_id))
-                        st.success("✅ Data Karyawan berhasil diperbarui!")
-                    else:
+                    try:
                         c.execute('''INSERT INTO karyawan (employee_id, full_name, organization, job_position, job_level, gender, join_date, status_employee, end_date, resign_date, mobile_phone, email, no_ktp, ptkp_status, gaji, aktif) 
                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                  (e_nrp, e_nama, e_org, e_pos, e_lvl, e_gender, e_tgl_masuk, e_status_kar, e_tgl_akhir, e_tgl_resign, e_hp, e_email, e_ktp, e_ptkp, e_gaji, 1 if e_aktif else 0))
+                                  (e_nrp, e_nama, e_org, e_pos, e_lvl, e_gender, e_tgl_masuk, e_status_kar, e_tgl_akhir, e_tgl_resign, e_hp, e_email, e_ktp, e_ptkp, e_gaji, 1))
+                        conn.commit()
                         st.success("✅ Karyawan baru berhasil ditambahkan!")
-                    conn.commit()
-                    st.rerun()
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("❌ NRP / Employee ID sudah ada!")
                 else:
                     st.error("⚠️ NRP dan Nama Lengkap wajib diisi!")
-                    
-        if edit_kar_id > 0:
-            st.markdown("---")
-            if st.button("🗑️ Hapus Karyawan Ini", type="primary"):
-                c.execute("DELETE FROM karyawan WHERE id=?", (edit_kar_id,))
-                conn.commit()
-                st.success("Karyawan dihapus!")
-                st.rerun()
 
 # --- 5. ASET & PROPERTI ---
 elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Inventaris Perusahaan</p></div>', unsafe_allow_html=True)
     
-    # KPI Aset
     total_aset = c.execute("SELECT COUNT(*) FROM aset").fetchone()[0]
     total_nilai = c.execute("SELECT COALESCE(SUM(nilai),0) FROM aset").fetchone()[0]
     html = '<div class="metric-grid">'
@@ -796,16 +750,19 @@ elif pilihan == "🚛 Aset & Properti":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["📋 Daftar Aset", "➕ Tambah Aset"])
+    tab1, tab2 = st.tabs(["📋 Daftar & Edit Aset", "➕ Tambah Aset"])
     
     with tab1:
-        df_aset = pd.read_sql_query("SELECT kode AS Kode, nama AS 'Nama Aset', kategori AS Kategori, lokasi AS Lokasi, kondisi AS Kondisi, penanggung_jawab AS 'Penanggung Jawab', status AS Status, catatan AS Catatan FROM aset ORDER BY id DESC", conn)
-        if not df_aset.empty:
-            st.dataframe(df_aset, use_container_width=True, hide_index=True)
-            csv_aset = df_aset.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export CSV Aset", csv_aset, f"data_aset_{date.today()}.csv", "text/csv")
-        else:
-            st.info("Belum ada data aset.")
+        render_edit_delete_table(
+            table_name="aset",
+            query="SELECT id, kode, nama, kategori, lokasi, kondisi, penanggung_jawab, status, catatan FROM aset",
+            editable_cols=['kode', 'nama', 'kategori', 'lokasi', 'kondisi', 'penanggung_jawab', 'status', 'catatan'],
+            display_cols=['id', 'kode', 'nama', 'kategori', 'lokasi', 'kondisi', 'penanggung_jawab', 'status', 'catatan'],
+            key_prefix="aset_main",
+            col_config={
+                "kondisi": st.column_config.SelectboxColumn("Kondisi", options=["Baik", "Rusak Ringan", "Rusak Berat"])
+            }
+        )
             
     with tab2:
         with st.form("form_tambah_aset"):
@@ -832,7 +789,8 @@ elif pilihan == "🚛 Aset & Properti":
                         st.error("❌ Kode Aset sudah digunakan!")
                 else:
                     st.error("⚠️ Kode dan Nama Aset wajib diisi!")
-                    # --- 6. UTILITY MELAK ---
+
+# --- 6. UTILITY MELAK ---
 elif pilihan == "💡 Utility Melak":
     st.markdown('<div class="main-header"><h1>💡 Utility Melak</h1><p>PDAM • Listrik • Internet • Telepon</p></div>', unsafe_allow_html=True)
     
@@ -847,15 +805,33 @@ elif pilihan == "💡 Utility Melak":
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["📋 Daftar Utility", "➕ Input Utility"])
+    tab1, tab2 = st.tabs(["📋 Daftar & Edit Utility", "➕ Input Utility"])
     
     with tab1:
-        # PERBAIKAN: Menambahkan 'id_pelanggan' ke dalam query SELECT
-        df_util = pd.read_sql_query("SELECT kategori AS Kategori, periode AS Periode, id_pelanggan AS 'ID Pelanggan', label AS 'Nama / Lokasi', penanggung_jawab AS 'Penanggung Jawab', total_bayar AS Nominal, status AS Status, tanggal_bayar AS 'Tgl Bayar' FROM utility ORDER BY id DESC", conn)
-        if not df_util.empty:
-            st.dataframe(df_util, use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data utility.")
+        def calc_utility(row, editable_cols, vals):
+            nom = row.get('nominal') or 0
+            adm = row.get('admin') or 0
+            tot = nom + adm
+            if 'total_bayar' in editable_cols:
+                idx = editable_cols.index('total_bayar')
+                vals[idx] = tot
+            return vals
+            
+        render_edit_delete_table(
+            table_name="utility",
+            query="SELECT id, kategori, id_pelanggan, label, nominal, admin, total_bayar, status, tanggal_bayar, penanggung_jawab, catatan FROM utility",
+            editable_cols=['kategori', 'id_pelanggan', 'label', 'nominal', 'admin', 'total_bayar', 'status', 'tanggal_bayar', 'penanggung_jawab', 'catatan'],
+            display_cols=['id', 'kategori', 'id_pelanggan', 'label', 'nominal', 'admin', 'total_bayar', 'status', 'tanggal_bayar', 'penanggung_jawab', 'catatan'],
+            key_prefix="utility_main",
+            col_config={
+                "kategori": st.column_config.SelectboxColumn("Kategori", options=["PDAM", "Listrik", "Internet", "Telepon", "Lainnya"]),
+                "status": st.column_config.SelectboxColumn("Status", options=["Lunas", "Belum Lunas"]),
+                "nominal": st.column_config.NumberColumn("Nominal", format="Rp %d"),
+                "admin": st.column_config.NumberColumn("Admin", format="Rp %d"),
+                "total_bayar": st.column_config.NumberColumn("Total Bayar", format="Rp %d", disabled=True)
+            },
+            calc_func=calc_utility
+        )
             
     with tab2:
         with st.form("form_tambah_utility"):
@@ -874,7 +850,6 @@ elif pilihan == "💡 Utility Melak":
             
             if st.form_submit_button("💾 Simpan Utility", type="primary"):
                 total_bayar = u_nominal + u_admin
-                # PERBAIKAN: Memasukkan id_pelanggan ke dalam query INSERT
                 c.execute('''INSERT INTO utility (kategori, id_pelanggan, tanggal_bayar, periode, label, nominal, admin, total_bayar, status, penanggung_jawab, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', 
                           (u_kategori, u_id_pel, str(u_tgl), u_periode, u_label, u_nominal, u_admin, total_bayar, u_status, u_pj, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 conn.commit()
@@ -887,23 +862,33 @@ elif pilihan == "🏪 Ruko & Tenant":
     tab1, tab2 = st.tabs(["🏪 Data Ruko", "🏠 Data Tenant"])
     
     with tab1:
-        df_ruko = pd.read_sql_query("SELECT nama AS 'Nama Ruko', alamat AS Cabang, status AS 'Status Kepemilikan', penyewa AS 'Nama Penyewa', nilai_sewa AS 'Nilai Sewa', mulai_sewa AS 'Mulai', akhir_sewa AS 'Akhir' FROM ruko ORDER BY id DESC", conn)
-        if not df_ruko.empty:
-            st.dataframe(df_ruko, use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data Ruko.")
+        render_edit_delete_table(
+            table_name="ruko",
+            query="SELECT id, nama, alamat, status, penyewa, nilai_sewa, mulai_sewa, akhir_sewa, catatan FROM ruko",
+            editable_cols=['nama', 'alamat', 'status', 'penyewa', 'nilai_sewa', 'mulai_sewa', 'akhir_sewa', 'catatan'],
+            display_cols=['id', 'nama', 'alamat', 'status', 'penyewa', 'nilai_sewa', 'mulai_sewa', 'akhir_sewa', 'catatan'],
+            key_prefix="ruko_main",
+            col_config={
+                "nilai_sewa": st.column_config.NumberColumn("Nilai Sewa", format="Rp %d")
+            }
+        )
             
     with tab2:
-        df_tenant = pd.read_sql_query("SELECT nama AS 'Nama Tenant', lokasi AS Lokasi, penghuni AS Penghuni, status_ci AS 'Status CI', mulai AS Mulai FROM tenant ORDER BY id DESC", conn)
-        if not df_tenant.empty:
-            st.dataframe(df_tenant, use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data Tenant.")
+        render_edit_delete_table(
+            table_name="tenant",
+            query="SELECT id, nama, lokasi, kamar, penghuni, biaya_bulanan, status_ci, mulai, catatan FROM tenant",
+            editable_cols=['nama', 'lokasi', 'kamar', 'penghuni', 'biaya_bulanan', 'status_ci', 'mulai', 'catatan'],
+            display_cols=['id', 'nama', 'lokasi', 'kamar', 'penghuni', 'biaya_bulanan', 'status_ci', 'mulai', 'catatan'],
+            key_prefix="tenant_main",
+            col_config={
+                "biaya_bulanan": st.column_config.NumberColumn("Biaya Bulanan", format="Rp %d")
+            }
+        )
 
 # --- 8. ABSENSI & KEHADIRAN ---
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["➕ Input Harian", "📋 Rekap Harian", "📊 Statistik Bulanan"])
+    tab1, tab2, tab3 = st.tabs(["➕ Input Harian", "📋 Rekap & Edit", "📊 Statistik Bulanan"])
     
     list_kar_abs = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='') ORDER BY full_name", conn)
     opt_abs = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_abs.iterrows()}
@@ -936,24 +921,17 @@ elif pilihan == "📅 Absensi & Kehadiran":
                     st.rerun()
 
     with tab2:
-        c1, c2 = st.columns(2)
-        with c1:
-            filter_tgl_abs = st.date_input("Filter Tanggal", date.today(), key="f_abs_tgl")
-        with c2:
-            filter_status_abs = st.selectbox("Filter Status", ["Semua", "Hadir", "Terlambat", "Izin", "Sakit", "Cuti", "Alpha", "Libur"])
-            
-        q_abs = """SELECT a.id, a.tanggal, k.employee_id AS NRP, k.full_name AS Nama, a.jam_masuk AS Masuk, a.jam_keluar AS Keluar, a.status AS Status, a.terlambat_menit AS 'Terlambat (menit)', a.keterangan AS Keterangan FROM absensi a JOIN karyawan k ON a.karyawan_id = k.id WHERE a.tanggal = ?"""
-        p_abs = [str(filter_tgl_abs)]
-        if filter_status_abs != "Semua":
-            q_abs += " AND a.status = ?"
-            p_abs.append(filter_status_abs)
-        q_abs += " ORDER BY k.full_name"
-        
-        df_abs = pd.read_sql_query(q_abs, conn, params=p_abs)
-        if not df_abs.empty:
-            st.dataframe(df_abs.drop(columns=['id']), use_container_width=True, hide_index=True)
-        else:
-            st.info("Tidak ada data absensi untuk filter ini")
+        st.subheader("Edit / Hapus Data Absensi")
+        render_edit_delete_table(
+            table_name="absensi",
+            query="SELECT a.id, k.full_name AS 'Nama', a.tanggal, a.jam_masuk, a.jam_keluar, a.status, a.keterangan FROM absensi a JOIN karyawan k ON a.karyawan_id = k.id ORDER BY a.tanggal DESC",
+            editable_cols=['tanggal', 'jam_masuk', 'jam_keluar', 'status', 'keterangan'],
+            display_cols=['id', 'Nama', 'tanggal', 'jam_masuk', 'jam_keluar', 'status', 'keterangan'],
+            key_prefix="absensi_main",
+            col_config={
+                "status": st.column_config.SelectboxColumn("Status", options=["Hadir", "Terlambat", "Izin", "Sakit", "Cuti", "Alpha", "Libur"])
+            }
+        )
 
     with tab3:
         st.markdown("### 📊 Statistik Kehadiran Bulanan")
@@ -1000,42 +978,20 @@ elif pilihan == "🏖️ Cuti & Izin":
                     st.rerun()
 
     with tab2:
-        filter_status_cuti = st.selectbox("Filter Status", ["Semua", "Menunggu", "Disetujui", "Ditolak"])
-        q_cuti = """SELECT c.id, k.employee_id AS NRP, k.full_name AS Nama, c.jenis_cuti AS Jenis, c.tanggal_mulai AS Mulai, c.tanggal_selesai AS Selesai, c.lama_hari AS 'Lama (hari)', c.status AS Status, c.alasan AS Alasan FROM cuti c JOIN karyawan k ON c.karyawan_id = k.id"""
-        p_cuti = []
-        if filter_status_cuti != "Semua":
-            q_cuti += " WHERE c.status = ?"
-            p_cuti.append(filter_status_cuti)
-        q_cuti += " ORDER BY c.id DESC"
-        
-        df_cuti = pd.read_sql_query(q_cuti, conn, params=p_cuti)
-        if not df_cuti.empty:
-            st.dataframe(df_cuti.drop(columns=['id']), use_container_width=True, hide_index=True)
-            pending_df = df_cuti[df_cuti['Status'] == 'Menunggu']
-            if not pending_df.empty:
-                st.markdown("### ✅ Approval Cuti")
-                opt_appr = {f"#{r['id']} - {r['Nama']} ({r['Mulai']})": r['id'] for _, r in pending_df.iterrows()}
-                pilih_appr = st.selectbox("Pilih Pengajuan", list(opt_appr.keys()))
-                cA, cB = st.columns(2)
-                with cA:
-                    if st.button("✅ Setujui", type="primary", use_container_width=True):
-                        c.execute("UPDATE cuti SET status='Disetujui', approved_by=?, approved_at=? WHERE id=?", (st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), opt_appr[pilih_appr]))
-                        conn.commit()
-                        st.success("Disetujui!")
-                        st.rerun()
-                with cB:
-                    if st.button("❌ Tolak", use_container_width=True):
-                        c.execute("UPDATE cuti SET status='Ditolak', approved_by=?, approved_at=? WHERE id=?", (st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), opt_appr[pilih_appr]))
-                        conn.commit()
-                        st.success("Ditolak!")
-                        st.rerun()
-        else:
-            st.info("Belum ada pengajuan cuti")
+        st.subheader("Edit / Hapus Data Cuti")
+        render_edit_delete_table(
+            table_name="cuti",
+            query="""SELECT c.id, k.full_name AS Nama, c.jenis_cuti, c.tanggal_mulai, c.tanggal_selesai, c.lama_hari, c.status, c.alasan FROM cuti c JOIN karyawan k ON c.karyawan_id = k.id ORDER BY c.id DESC""",
+            editable_cols=['jenis_cuti', 'tanggal_mulai', 'tanggal_selesai', 'lama_hari', 'status', 'alasan'],
+            display_cols=['id', 'Nama', 'jenis_cuti', 'tanggal_mulai', 'tanggal_selesai', 'lama_hari', 'status', 'alasan'],
+            key_prefix="cuti_main",
+            col_config={
+                "status": st.column_config.SelectboxColumn("Status", options=["Menunggu", "Disetujui", "Ditolak"])
+            }
+        )
 
 # --- 10. PAYROLL & SLIP GAJI ---
 elif pilihan == "💰 Payroll & Slip Gaji":
-    # === FIX BUG #3: Helper payroll didefinisikan DI DALAM block Payroll ===
-    # Sebelumnya di file asli posisinya di antara rantai elif → menyebabkan SyntaxError
     def hitung_bpjs(gaji_pokok, tunjangan_tetap):
         upah = gaji_pokok + tunjangan_tetap
         upah_kes = min(upah, 12000000)
@@ -1076,10 +1032,9 @@ elif pilihan == "💰 Payroll & Slip Gaji":
         "TK/0": 54000000, "TK/1": 58500000, "TK/2": 63000000, "TK/3": 67500000,
         "K/0": 58500000, "K/1": 63000000, "K/2": 67500000, "K/3": 72000000
     }
-    # === END FIX BUG #3 ===
 
     st.markdown('<div class="main-header"><h1>💰 Payroll & Slip Gaji</h1></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["⚙️ Generate Payroll", "📋 Data Payroll", "🧾 Slip Gaji"])
+    tab1, tab2, tab3 = st.tabs(["⚙️ Generate Payroll", "📋 Data & Edit Payroll", "🧾 Slip Gaji"])
     
     with tab1:
         with st.form("form_gen_payroll"):
@@ -1121,18 +1076,20 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                     st.rerun()
 
     with tab2:
-        periode_filter = st.text_input("Filter Periode (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
-        df_pay = pd.read_sql_query("""SELECT p.id, p.periode, k.employee_id AS NRP, k.full_name AS Nama, p.gaji_pokok AS 'Gaji Pokok', p.total_penghasilan_bruto AS Bruto, p.total_potongan AS Potongan, p.gaji_bersih AS 'Gaji Bersih', p.status AS Status FROM payroll p JOIN karyawan k ON p.karyawan_id = k.id WHERE p.periode = ? ORDER BY k.full_name""", conn, params=(periode_filter,))
-        if not df_pay.empty:
-            html = '<div class="metric-grid">'
-            html += metric_card("👥 Karyawan", str(len(df_pay)), "baris", "card-blue")
-            html += metric_card("💰 Total Bruto", format_rp(df_pay['Bruto'].sum()), "", "card-purple")
-            html += metric_card("✅ Total Bersih", format_rp(df_pay['Gaji Bersih'].sum()), "", "card-green")
-            html += '</div>'
-            st.markdown(html, unsafe_allow_html=True)
-            st.dataframe(df_pay.drop(columns=['id']).style.format({'Gaji Pokok': 'Rp {:,.0f}', 'Bruto': 'Rp {:,.0f}', 'Potongan': 'Rp {:,.0f}', 'Gaji Bersih': 'Rp {:,.0f}'}), use_container_width=True, hide_index=True)
-        else:
-            st.info(f"Belum ada payroll untuk periode {periode_filter}")
+        st.subheader("Edit / Hapus Data Payroll")
+        render_edit_delete_table(
+            table_name="payroll",
+            query="""SELECT p.id, k.full_name AS Nama, p.periode, p.gaji_pokok, p.total_penghasilan_bruto, p.total_potongan, p.gaji_bersih, p.status FROM payroll p JOIN karyawan k ON p.karyawan_id = k.id ORDER BY p.id DESC""",
+            editable_cols=['periode', 'gaji_pokok', 'total_penghasilan_bruto', 'total_potongan', 'gaji_bersih', 'status'],
+            display_cols=['id', 'Nama', 'periode', 'gaji_pokok', 'total_penghasilan_bruto', 'total_potongan', 'gaji_bersih', 'status'],
+            key_prefix="payroll_main",
+            col_config={
+                "gaji_pokok": st.column_config.NumberColumn("Gaji Pokok", format="Rp %d"),
+                "total_penghasilan_bruto": st.column_config.NumberColumn("Bruto", format="Rp %d"),
+                "total_potongan": st.column_config.NumberColumn("Potongan", format="Rp %d"),
+                "gaji_bersih": st.column_config.NumberColumn("Gaji Bersih", format="Rp %d")
+            }
+        )
 
     with tab3:
         q_slip_opts = pd.read_sql_query("SELECT p.id, p.periode, k.employee_id, k.full_name FROM payroll p JOIN karyawan k ON p.karyawan_id=k.id ORDER BY p.periode DESC, k.full_name", conn)
@@ -1164,37 +1121,17 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             """, unsafe_allow_html=True)
         else:
             st.info("Belum ada data payroll untuk ditampilkan")
-            # --- 11. JOBDESK ---
-elif pilihan == "📋 Jobdesk":
-    # === FIX BUG #3 (varian 2): helper didefinisikan di dalam blok Jobdesk ===
-    def render_crud_table(table_name, title, original_df):
-        st.markdown(f"### 📋 Data {title}")
-        edited_df = st.data_editor(original_df, num_rows="dynamic", use_container_width=True, hide_index=True)
-        if st.button(f"💾 Simpan Perubahan {title}", type="primary", use_container_width=True):
-            cur = conn.cursor()
-            edited_df['id'] = pd.to_numeric(edited_df['id'], errors='coerce').fillna(0).astype(int)
-            old_ids = set(original_df['id'].dropna().astype(int).tolist()) if not original_df.empty else set()
-            new_ids = set(edited_df[edited_df['id'] > 0]['id'].tolist())
-            
-            for did in (old_ids - new_ids): 
-                cur.execute(f"DELETE FROM {table_name} WHERE id=?", (did,))
-                
-            cols = [col for col in edited_df.columns if col != 'id']
-            for _, row in edited_df.iterrows():
-                vals = [None if pd.isna(row[col]) else row[col] for col in cols]
-                if row['id'] == 0:
-                    ph = ", ".join(["?"] * len(cols))
-                    cur.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({ph})", tuple(vals))
-                else:
-                    set_c = ", ".join([f"{col}=?" for col in cols])
-                    cur.execute(f"UPDATE {table_name} SET {set_c} WHERE id=?", tuple(vals) + (row['id'],))
-            conn.commit()
-            st.success(f"✅ Perubahan data {title} berhasil disimpan!")
-            st.rerun()
 
+# --- 11. JOBDESK ---
+elif pilihan == "📋 Jobdesk":
     st.markdown('<div class="main-header"><h1>📋 Jobdesk & KPI</h1></div>', unsafe_allow_html=True)
-    df_jd = pd.read_sql_query("SELECT id, posisi, departemen, tugas_utama, kpi FROM jobdesk ORDER BY id", conn)
-    render_crud_table("jobdesk", "Jobdesk", df_jd)
+    render_edit_delete_table(
+        table_name="jobdesk",
+        query="SELECT id, posisi, departemen, tugas_utama, kpi FROM jobdesk",
+        editable_cols=['posisi', 'departemen', 'tugas_utama', 'kpi'],
+        display_cols=['id', 'posisi', 'departemen', 'tugas_utama', 'kpi'],
+        key_prefix="jobdesk_main"
+    )
 
 # --- 12. CI REPORT ---
 elif pilihan == "💡 CI Report":
@@ -1214,16 +1151,18 @@ elif pilihan == "💡 CI Report":
                 conn.commit()
                 st.success("✅ Tersimpan!")
                 st.rerun()
-    df_ci = pd.read_sql_query("SELECT * FROM ci ORDER BY id DESC", conn)
-    if not df_ci.empty:
-        for _, r in df_ci.iterrows():
-            with st.expander(f"💡 [{r['tanggal']}] {r['judul']} — {r['status']}"):
-                st.markdown(f"**Dept:** {r['departemen']}")
-                st.markdown(f"**Deskripsi:**\n\n{r['deskripsi']}")
-                if st.button(f"🗑️ Hapus", key=f"del_ci_{r['id']}"):
-                    c.execute("DELETE FROM ci WHERE id=?", (r['id'],))
-                    conn.commit()
-                    st.rerun()
+                
+    st.markdown("---")
+    render_edit_delete_table(
+        table_name="ci",
+        query="SELECT id, tanggal, judul, departemen, deskripsi, status FROM ci",
+        editable_cols=['tanggal', 'judul', 'departemen', 'deskripsi', 'status'],
+        display_cols=['id', 'tanggal', 'judul', 'departemen', 'deskripsi', 'status'],
+        key_prefix="ci_main",
+        col_config={
+            "status": st.column_config.SelectboxColumn("Status", options=["Draft", "Proses", "Selesai", "Ditolak"])
+        }
+    )
 
 # --- 13. SKD ---
 elif pilihan == "🏥 SKD":
@@ -1243,9 +1182,18 @@ elif pilihan == "🏥 SKD":
                 conn.commit()
                 st.success("✅ Tersimpan!")
                 st.rerun()
-    df_skd = pd.read_sql_query("SELECT * FROM skd ORDER BY id DESC", conn)
-    if not df_skd.empty:
-        st.dataframe(df_skd[['id','tanggal','no_surat','nama_karyawan','jenis_surat','keterangan']], use_container_width=True, hide_index=True)
+                
+    st.markdown("---")
+    render_edit_delete_table(
+        table_name="skd",
+        query="SELECT id, tanggal, no_surat, nama_karyawan, jenis_surat, keterangan FROM skd",
+        editable_cols=['tanggal', 'no_surat', 'nama_karyawan', 'jenis_surat', 'keterangan'],
+        display_cols=['id', 'tanggal', 'no_surat', 'nama_karyawan', 'jenis_surat', 'keterangan'],
+        key_prefix="skd_main",
+        col_config={
+            "jenis_surat": st.column_config.SelectboxColumn("Jenis", options=["SKD Umum", "SKD Sakit", "SKD Hamil", "SKD Kecelakaan Kerja"])
+        }
+    )
 
 # --- 14. INTERNAL MEMO ---
 elif pilihan == "📝 Internal Memo":
@@ -1266,18 +1214,20 @@ elif pilihan == "📝 Internal Memo":
                 conn.commit()
                 st.success("✅ Tersimpan!")
                 st.rerun()
-    df_im = pd.read_sql_query("SELECT * FROM im ORDER BY id DESC", conn)
-    if not df_im.empty:
-        for _, r in df_im.iterrows():
-            label = f"📝 {r['no_memo'] or 'No. ' + str(r['id'])} — {r['perihal']} ({r['tanggal']})"
-            with st.expander(label):
-                st.markdown(f"**Dari:** {r['pengirim'] or '-'} &nbsp;➡️&nbsp; **Kepada:** {r['penerima'] or '-'}")
-                st.markdown(f"**Isi:**\n\n{r['isi']}")
+                
+    st.markdown("---")
+    render_edit_delete_table(
+        table_name="im",
+        query="SELECT id, tanggal, no_memo, perihal, pengirim, penerima, isi FROM im",
+        editable_cols=['tanggal', 'no_memo', 'perihal', 'pengirim', 'penerima', 'isi'],
+        display_cols=['id', 'tanggal', 'no_memo', 'perihal', 'pengirim', 'penerima', 'isi'],
+        key_prefix="im_main"
+    )
 
 # --- 15. MUTASI & PKWT ---
 elif pilihan == "🔄 Mutasi & PKWT":
     st.markdown('<div class="main-header"><h1>🔄 Mutasi & PKWT</h1><p>Riwayat Mutasi & Kontrak Karyawan</p></div>', unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["➕ Input Mutasi", "📋 Daftar Mutasi", "📅 PKWT Habis (30 Hari)"])
+    tab1, tab2, tab3 = st.tabs(["➕ Input Mutasi", "📋 Daftar & Edit Mutasi", "📅 PKWT Habis (30 Hari)"])
     
     list_kar_mut = pd.read_sql_query("SELECT id, employee_id, full_name FROM karyawan WHERE aktif=1 AND (resign_date IS NULL OR resign_date='' OR resign_date='None') ORDER BY full_name", conn)
     opt_mut = {f"{r['employee_id']} - {r['full_name']}": r['id'] for _, r in list_kar_mut.iterrows()}
@@ -1302,11 +1252,13 @@ elif pilihan == "🔄 Mutasi & PKWT":
                     st.rerun()
                     
     with tab2:
-        df_mut = pd.read_sql_query("SELECT m.id, k.employee_id AS NRP, k.full_name AS Nama, m.tanggal_mutasi AS Tanggal, m.dari_divisi AS 'Dari', m.ke_divisi AS 'Ke', m.alasan AS Alasan FROM mutasi m JOIN karyawan k ON m.karyawan_id=k.id ORDER BY m.id DESC", conn)
-        if not df_mut.empty:
-            st.dataframe(df_mut.drop(columns=['id']), use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data mutasi.")
+        render_edit_delete_table(
+            table_name="mutasi",
+            query="SELECT m.id, k.full_name AS 'Nama', m.tanggal_mutasi, m.dari_divisi, m.ke_divisi, m.alasan FROM mutasi m JOIN karyawan k ON m.karyawan_id = k.id",
+            editable_cols=['tanggal_mutasi', 'dari_divisi', 'ke_divisi', 'alasan'],
+            display_cols=['id', 'Nama', 'tanggal_mutasi', 'dari_divisi', 'ke_divisi', 'alasan'],
+            key_prefix="mutasi_main"
+        )
             
     with tab3:
         tgl_skrg_m = date.today().strftime("%Y-%m-%d")
@@ -1350,15 +1302,17 @@ elif pilihan == "📉 Resign & Turnover":
                     st.rerun()
                     
     with tab2:
-        df_res = pd.read_sql_query("SELECT r.id, k.employee_id AS NRP, k.full_name AS Nama, r.tanggal_resign AS Tanggal, r.jenis AS Jenis, r.kategori_penyebab AS Kategori, r.alasan AS Alasan, r.clearance_status AS Clearance FROM resign r JOIN karyawan k ON r.karyawan_id=k.id ORDER BY r.id DESC", conn)
-        if not df_res.empty:
-            st.dataframe(df_res.drop(columns=['id']), use_container_width=True, hide_index=True)
-            stat_kategori = df_res['Kategori'].value_counts().reset_index()
-            stat_kategori.columns = ['Kategori', 'Jumlah']
-            chart = alt.Chart(stat_kategori).mark_bar(cornerRadiusTopRight=8).encode(x=alt.X('Jumlah:Q'), y=alt.Y('Kategori:N', sort='-x'), color=alt.Color('Jumlah:Q', scale=alt.Scale(scheme='reds'), legend=None)).properties(height=250, title="Turnover per Kategori")
-            st.altair_chart(chart, use_container_width=True)
-        else:
-            st.info("Belum ada data resign.")
+        render_edit_delete_table(
+            table_name="resign",
+            query="SELECT r.id, k.full_name AS 'Nama', r.tanggal_resign, r.jenis, r.kategori_penyebab, r.alasan, r.clearance_status FROM resign r JOIN karyawan k ON r.karyawan_id = k.id",
+            editable_cols=['tanggal_resign', 'jenis', 'kategori_penyebab', 'alasan', 'clearance_status'],
+            display_cols=['id', 'Nama', 'tanggal_resign', 'jenis', 'kategori_penyebab', 'alasan', 'clearance_status'],
+            key_prefix="resign_main",
+            col_config={
+                "clearance_status": st.column_config.SelectboxColumn("Clearance", options=["Belum", "Proses", "Selesai"]),
+                "jenis": st.column_config.SelectboxColumn("Jenis", options=["Resign", "PHK", "Pensiun", "Habis Kontrak", "Meninggal"])
+            }
+        )
 
 # --- 17. DISIPLIN & SP ---
 elif pilihan == "⚠️ Disiplin & SP":
@@ -1387,18 +1341,17 @@ elif pilihan == "⚠️ Disiplin & SP":
                     st.rerun()
 
     with tab2:
-        filter_sp = st.selectbox("Filter Status", ["Semua", "Aktif", "Berakhir", "Dibatalkan"])
-        q_sp = "SELECT d.id, k.employee_id AS NRP, k.full_name AS Nama, d.jenis_sanksi AS Sanksi, d.tanggal_mulai AS Mulai, d.tanggal_akhir AS Akhir, d.rincian_pelanggaran AS Pelanggaran, d.status AS Status FROM disiplin d JOIN karyawan k ON d.karyawan_id=k.id"
-        p_sp = []
-        if filter_sp != "Semua":
-            q_sp += " WHERE d.status = ?"
-            p_sp.append(filter_sp)
-        q_sp += " ORDER BY d.id DESC"
-        df_sp = pd.read_sql_query(q_sp, conn, params=p_sp)
-        if not df_sp.empty:
-            st.dataframe(df_sp.drop(columns=['id']), use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data SP.")
+        render_edit_delete_table(
+            table_name="disiplin",
+            query="SELECT d.id, k.full_name AS 'Nama Karyawan', d.jenis_sanksi, d.tanggal_mulai, d.tanggal_akhir, d.rincian_pelanggaran, d.status FROM disiplin d JOIN karyawan k ON d.karyawan_id = k.id",
+            editable_cols=['jenis_sanksi', 'tanggal_mulai', 'tanggal_akhir', 'rincian_pelanggaran', 'status'],
+            display_cols=['id', 'Nama Karyawan', 'jenis_sanksi', 'tanggal_mulai', 'tanggal_akhir', 'rincian_pelanggaran', 'status'],
+            key_prefix="disiplin_main",
+            col_config={
+                "status": st.column_config.SelectboxColumn("Status", options=["Aktif", "Berakhir", "Dibatalkan"]),
+                "jenis_sanksi": st.column_config.SelectboxColumn("Sanksi", options=["Teguran Lisan", "SP1", "SP2", "SP3", "Peringatan Tertulis"])
+            }
+        )
 
 # --- 18. EXIT CLEARANCE ---
 elif pilihan == "📤 Exit Clearance":
@@ -1425,7 +1378,8 @@ elif pilihan == "📤 Exit Clearance":
                 st.rerun()
     else:
         st.info("Belum ada data resign untuk exit clearance.")
-        # --- 19. WHATSAPP REMINDER ---
+
+# --- 19. WHATSAPP REMINDER ---
 elif pilihan == "📱 WhatsApp Reminder":
     st.markdown('<div class="main-header"><h1>📱 WhatsApp Reminder</h1><p>Kirim pengingat via WhatsApp</p></div>', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["📝 PKWT Habis", "💰 Utility Belum Lunas", "✉️ Template Pesan", "👨‍💼 Jadwal Interview"])
@@ -1610,7 +1564,6 @@ elif pilihan == "📁 Arsip Dokumen (E-Filing)":
         if not df_arsip.empty:
             st.dataframe(df_arsip.drop(columns=['id']), use_container_width=True, hide_index=True)
             
-            # Download per dokumen
             opt_dl = {f"#{r['id']} - {r['nama_dokumen']} ({r['file_name']})": r['id'] for _, r in df_arsip.iterrows()}
             pilih_dl = st.selectbox("Pilih dokumen untuk diunduh", ["-- Pilih --"] + list(opt_dl.keys()), key="dl_arsip")
             if pilih_dl != "-- Pilih --":
@@ -1743,7 +1696,6 @@ elif pilihan == "📈 Manpower Report":
 
 # --- 23. IMPORT, EXPORT & BACKUP ---
 elif pilihan == "💾 Import, Export & Backup":
-    # === FIX BUG #3 (varian 4): import_data_manpower_melak dipindah ke dalam blok ===
     def import_data_manpower_melak(file):
         raw = file.read(); file.seek(0)
         xls = pd.ExcelFile(io.BytesIO(raw))
@@ -1807,7 +1759,6 @@ elif pilihan == "💾 Import, Export & Backup":
             conn.commit()
             return sukses, gagal, errors
         return 0, 0, ["Format kolom tidak dikenali."]
-    # === END FIX ===
 
     st.markdown('<div class="main-header"><h1>💾 Import, Export & Backup</h1></div>', unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📥 Import Manpower", "💾 Backup Database"])
@@ -1897,7 +1848,7 @@ elif pilihan == "📝 Log Aktivitas":
         else:
             st.info("Belum ada log aktivitas")
 
-# ==================== FOOTER (FIX BUG #6: dynamic year) ====================
+# ==================== FOOTER ====================
 st.markdown(f"""
 <div style="text-align:center; padding: 25px 0 15px 0; color: #64748b; font-size: 0.85em; border-top: 1px solid #cbd5e1; margin-top: 30px;">
     ⚡ <b>HRIS, GA & Amoey</b> — Sistem Manajemen SDM Terpadu<br>
