@@ -864,6 +864,7 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                 st.info("Belum ada riwayat payroll.")# --- 8. REKRUTMEN & CV ---
 # --- 8. REKRUTMEN & CV (UPGRADE SESUAI GAMBAR PDF) ---
 # --- 8. REKRUTMEN & CV ---
+# --- 8. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1><p>Manajemen Kandidat & Lowongan</p></div>', unsafe_allow_html=True)
     
@@ -906,7 +907,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                         except Exception as e:
                             st.error(f"Gagal: {e}")
         
-        # Tabel Interaktif (Menggunakan st.data_editor seperti di PDF)
+        # Tabel Interaktif (Menggunakan st.data_editor)
         st.markdown('<div class="section-header"><h3>📝 Daftar Kandidat & Jadwal (Klik untuk Edit Langsung)</h3></div>', unsafe_allow_html=True)
         
         df_k = pd.read_sql_query(
@@ -916,7 +917,12 @@ elif pilihan == "📋 Rekrutmen & CV":
         )
         
         if not df_k.empty:
-            # Konfigurasi kolom agar sesuai dengan tipe data
+            # --- PERBAIKAN: Konversi tipe data agar st.data_editor tidak error ---
+            df_k['jadwal_interview'] = pd.to_datetime(df_k['jadwal_interview'], errors='coerce').dt.date
+            df_k['jam_interview'] = pd.to_datetime(df_k['jam_interview'], format='%H:%M', errors='coerce').dt.time
+            df_k = df_k.fillna("") 
+            # ----------------------------------------------------------------------
+
             edited_df = st.data_editor(
                 df_k,
                 use_container_width=True,
@@ -934,35 +940,38 @@ elif pilihan == "📋 Rekrutmen & CV":
                     "jam_interview": st.column_config.TimeColumn("jam_interview", format="HH:mm"),
                     "tipe_interview": st.column_config.SelectboxColumn(
                         "Tipe",
-                        options=["Online (Zoom/Meet)", "Offline (Kantor)", "Telepon"]
+                        options=["Online (Zoom/Meet)", "Offline (Kantor)", "Telepon", ""]
                     ),
                     "tahapan": st.column_config.SelectboxColumn(
                         "Tahapan",
-                        options=["-", "Berkas", "Interview HR", "Interview User", "Ground Test", "Induksi", "MCU", "Sign Contract"]
+                        options=["-", "Berkas", "Interview HR", "Interview User", "Ground Test", "Induksi", "MCU", "Sign Contract", ""]
                     ),
                     "catatan": st.column_config.TextColumn("catatan", width="large"),
                 },
-                num_rows="dynamic", # Mengizinkan tambah/hapus baris dari tabel
+                num_rows="dynamic", 
                 key="editor_kandidat_pdf"
             )
             
             # Tombol untuk menyimpan perubahan dari tabel
             if st.button("💾 Simpan Perubahan Tabel Kandidat", type="primary", use_container_width=True):
                 for _, row in edited_df.iterrows():
-                    if pd.notna(row['id']): # Jika baris sudah ada, lakukan UPDATE
+                    jadwal_str = str(row['jadwal_interview']) if pd.notna(row['jadwal_interview']) and row['jadwal_interview'] != "" else ""
+                    jam_str = row['jam_interview'].strftime("%H:%M") if pd.notna(row['jam_interview']) and row['jam_interview'] != "" else ""
+                    
+                    if pd.notna(row['id']) and str(row['id']).strip() != "": 
                         c.execute("""UPDATE kandidat SET 
                                      nama=?, posisi_dilamar=?, status=?, 
                                      jadwal_interview=?, jam_interview=?, tipe_interview=?, 
                                      tahapan=?, catatan=? WHERE id=?""",
                                   (row['nama'], row['posisi_dilamar'], row['status'], 
-                                   row['jadwal_interview'], row['jam_interview'], row['tipe_interview'],
+                                   jadwal_str, jam_str, row['tipe_interview'],
                                    row['tahapan'], row['catatan'], int(row['id'])))
-                    else: # Jika baris baru (id NaN), lakukan INSERT
+                    else: 
                         c.execute("""INSERT INTO kandidat 
                                      (nama, posisi_dilamar, status, jadwal_interview, jam_interview, tipe_interview, tahapan, catatan)
                                      VALUES (?,?,?,?,?,?,?,?)""",
                                   (row['nama'], row['posisi_dilamar'], row['status'], 
-                                   row['jadwal_interview'], row['jam_interview'], row['tipe_interview'],
+                                   jadwal_str, jam_str, row['tipe_interview'],
                                    row['tahapan'], row['catatan']))
                 conn.commit()
                 st.success("✅ Perubahan data kandidat berhasil disimpan!")
@@ -972,7 +981,6 @@ elif pilihan == "📋 Rekrutmen & CV":
             st.info("Belum ada data kandidat.")
     
     with tab_rek2:
-        # (Kode lowongan tetap sama seperti aslinya)
         with st.expander("➕ Tambah Lowongan Baru", expanded=False):
             with st.form("lowongan_form"):
                 col1, col2 = st.columns(2)
