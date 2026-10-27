@@ -621,61 +621,203 @@ elif pilihan == "📈 Manpower Report":
                     log_aksi(st.session_state.username, "IMPORT_EXCEL_MANPOWER", f"{berhasil} data")
                     time.sleep(2); st.rerun()
             except Exception as e:
-                st.error(f"Gagal membaca file: {e}")# --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN) ---
+                st.error(f"Gagal membaca file: {e}")# --- 
+                5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN) ---
+# --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN + IMPORT EXCEL) ---
 elif pilihan == "📅 Absensi & Kehadiran":
-    st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1><p>Pencatatan Kehadiran Harian</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1><p>Pencatatan Kehadiran Harian & Import Excel</p></div>', unsafe_allow_html=True)
     
-    with st.expander("➕ Input Absensi", expanded=False):
-        karyawan_options = get_karyawan_dropdown()
+    tab_abs1, tab_abs2 = st.tabs(["📝 Input Manual", "📥 Import Excel Attendance"])
+    
+    with tab_abs1:
+        with st.expander("➕ Input Absensi", expanded=False):
+            karyawan_options = get_karyawan_dropdown()
+            
+            if not karyawan_options:
+                st.warning("⚠️ Belum ada data karyawan. Silakan ke menu 'Manpower Report' dan Import Excel terlebih dahulu.")
+            else:
+                with st.form("absensi_form"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        pilih_kar = st.selectbox("Pilih Karyawan *", list(karyawan_options.keys()), key="abs_kar")
+                        emp_id_abs = karyawan_options[pilih_kar]
+                        data_kar = get_karyawan_data(emp_id_abs)
+                        
+                        st.info(f"Divisi: {data_kar.get('divisi', '-')} | Jabatan: {data_kar.get('job_position', '-')}")
+                        
+                        tgl_abs = st.date_input("Tanggal *", key="abs_tgl")
+                    with col2:
+                        jam_masuk = st.text_input("Jam Masuk (HH:MM)", key="abs_jam_in", placeholder="08:00")
+                        jam_keluar = st.text_input("Jam Keluar (HH:MM)", key="abs_jam_out", placeholder="17:00")
+                        status_abs = st.selectbox("Status *", ["Hadir", "Terlambat", "Izin", "Sakit", "Alpha", "Cuti", "Libur"], key="abs_status")
+                    with col3:
+                        terlambat_menit = st.number_input("Terlambat (menit)", min_value=0, step=1, value=0, key="abs_terlambat")
+                        ket_abs = st.text_area("Keterangan", key="abs_ket")
+                    
+                    if st.form_submit_button("💾 Simpan Absensi", type="primary", use_container_width=True):
+                        try:
+                            c.execute("""INSERT INTO absensi (karyawan_id, tanggal, jam_masuk, jam_keluar, status, keterangan, terlambat_menit)
+                                         VALUES ((SELECT id FROM karyawan WHERE employee_id=?),?,?,?,?,?,?)""",
+                                      (emp_id_abs, str(tgl_abs), jam_masuk, jam_keluar, status_abs, ket_abs, int(terlambat_menit)))
+                            conn.commit()
+                            st.success(f"✅ Absensi untuk **{data_kar['full_name']}** tersimpan.")
+                            log_aksi(st.session_state.username, "INPUT_ABSENSI", pilih_kar)
+                            time.sleep(1); st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Gagal: {e}")
+    
+    with tab_abs2:
+        st.subheader("📥 Import Data Excel dari Uniquip / Mesin Absensi")
+        st.info("Upload file Excel (format standar Export Attendance Uniquip). Sistem akan otomatis memproses data masuk/keluar, status, dan hitungan terlambat.")
         
-        if not karyawan_options:
-            st.warning("⚠️ Belum ada data karyawan. Silakan ke menu 'Manpower Report' dan Import Excel terlebih dahulu.")
-        else:
-            with st.form("absensi_form"):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    # DROPDOWN KARYAWAN
-                    pilih_kar = st.selectbox("Pilih Karyawan *", list(karyawan_options.keys()), key="abs_kar")
-                    emp_id_abs = karyawan_options[pilih_kar]
-                    data_kar = get_karyawan_data(emp_id_abs)
-                    
-                    # Otomatis tampil divisi & jabatan
-                    st.info(f"Divisi: {data_kar.get('divisi', '-')} | Jabatan: {data_kar.get('job_position', '-')}")
-                    
-                    tgl_abs = st.date_input("Tanggal *", key="abs_tgl")
-                with col2:
-                    jam_masuk = st.text_input("Jam Masuk (HH:MM)", key="abs_jam_in", placeholder="08:00")
-                    jam_keluar = st.text_input("Jam Keluar (HH:MM)", key="abs_jam_out", placeholder="17:00")
-                    status_abs = st.selectbox("Status *", ["Hadir", "Terlambat", "Izin", "Sakit", "Alpha", "Cuti"], key="abs_status")
-                with col3:
-                    terlambat_menit = st.number_input("Terlambat (menit)", min_value=0, step=1, value=0, key="abs_terlambat")
-                    ket_abs = st.text_area("Keterangan", key="abs_ket")
+        uploaded_excel = st.file_uploader("Pilih File Excel (.xlsx)", type=["xlsx"], key="up_excel_absensi")
+        
+        if uploaded_excel is not None:
+            try:
+                # Baca file, skip baris metadata (header di baris ke-2, index=1)
+                df_abs = pd.read_excel(uploaded_excel, header=1)
                 
-                if st.form_submit_button("💾 Simpan Absensi", type="primary", use_container_width=True):
-                    try:
-                        c.execute("""INSERT INTO absensi (karyawan_id, tanggal, jam_masuk, jam_keluar, status, keterangan, terlambat_menit)
-                                     VALUES ((SELECT id FROM karyawan WHERE employee_id=?),?,?,?,?,?,?)""",
-                                  (emp_id_abs, str(tgl_abs), jam_masuk, jam_keluar, status_abs, ket_abs, int(terlambat_menit)))
-                        conn.commit()
-                        st.success(f"✅ Absensi untuk **{data_kar['full_name']}** tersimpan.")
-                        log_aksi(st.session_state.username, "INPUT_ABSENSI", pilih_kar)
-                        time.sleep(1); st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Gagal: {e}")
+                st.write(f"✅ File terbaca: **{len(df_abs)} baris data**.")
+                st.dataframe(df_abs.head(3), use_container_width=True)
+                
+                if st.button("💾 Mulai Proses & Import ke Database", type="primary", use_container_width=True, key="btn_import_abs"):
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    berhasil = 0
+                    gagal = 0
+                    karyawan_tidak_ditemukan = 0
+                    
+                    total_rows = len(df_abs)
+                    
+                    for index, row in df_abs.iterrows():
+                        try:
+                            # 1. Ambil data dasar
+                            emp_id = str(row.get('Employee ID*', '')).strip()
+                            tgl_raw = row.get('Date*', '')
+                            shift = str(row.get('Shift', '')).strip()
+                            att_code = str(row.get('Attendance Code', '')).strip().upper()
+                            
+                            # Konversi Tanggal
+                            tgl_absensi = pd.to_datetime(tgl_raw, errors='coerce')
+                            if pd.isna(tgl_absensi):
+                                continue # Skip jika tanggal tidak valid
+                            tgl_str = tgl_absensi.strftime('%Y-%m-%d')
+                            
+                            # 2. Cek keberadaan Karyawan di Database
+                            cek_kar = c.execute("SELECT id FROM karyawan WHERE employee_id=?", (emp_id,)).fetchone()
+                            if not cek_kar:
+                                karyawan_tidak_ditemukan += 1
+                                continue # Skip jika karyawan belum ada di database
+                            
+                            kar_id = cek_kar[0]
+                            
+                            # 3. Ambil Jam Masuk & Keluar (Bersihkan nilai NaN)
+                            jam_in_raw = row.get('Check In', '')
+                            jam_out_raw = row.get('Check Out', '')
+                            
+                            jam_in = str(jam_in_raw).strip() if pd.notna(jam_in_raw) and str(jam_in_raw).strip() != 'NaT' else ""
+                            jam_out = str(jam_out_raw).strip() if pd.notna(jam_out_raw) and str(jam_out_raw).strip() != 'NaT' else ""
+                            
+                            # 4. Tentukan Status & Terlambat
+                            status_final = "Hadir"
+                            terlambat_menit = 0
+                            
+                            if shift.lower() == 'dayoff':
+                                status_final = "Libur"
+                            elif att_code in ['CT', 'CJ']:
+                                status_final = "Cuti"
+                            elif att_code == '' or (jam_in == "" and jam_out == "" and shift.lower() != 'dayoff'):
+                                status_final = "Alpha"
+                            elif att_code == 'H' or jam_in != "":
+                                status_final = "Hadir"
+                                # Cek Terlambat (Asumsi jadwal masuk jam 08:00)
+                                if jam_in:
+                                    try:
+                                        h, m = map(int, jam_in.split(':')[:2])
+                                        menit_masuk = h * 60 + m
+                                        menit_schedule = 8 * 60 # 08:00
+                                        if menit_masuk > menit_schedule:
+                                            status_final = "Terlambat"
+                                            terlambat_menit = menit_masuk - menit_schedule
+                                    except:
+                                        pass # Abaikan jika format jam aneh (misal 17:00:00)
+                            
+                            # 5. Insert ke Database
+                            # Cek apakah data absensi di tanggal & karyawan tersebut sudah ada (untuk mencegah duplikat)
+                            cek_absen = c.execute("SELECT id FROM absensi WHERE karyawan_id=? AND tanggal=?", (kar_id, tgl_str)).fetchone()
+                            
+                            if cek_absen:
+                                # Jika sudah ada, Update
+                                c.execute("""UPDATE absensi SET jam_masuk=?, jam_keluar=?, status=?, terlambat_menit=?, keterangan=? WHERE id=?""",
+                                          (jam_in, jam_out, status_final, terlambat_menit, f"Import: {att_code}", cek_absen[0]))
+                            else:
+                                # Jika belum ada, Insert baru
+                                c.execute("""INSERT INTO absensi (karyawan_id, tanggal, jam_masuk, jam_keluar, status, keterangan, terlambat_menit)
+                                             VALUES (?,?,?,?,?,?,?)""",
+                                          (kar_id, tgl_str, jam_in, jam_out, status_final, f"Import: {att_code}", terlambat_menit))
+                            
+                            berhasil += 1
+                        except Exception as e:
+                            gagal += 1
+                            # st.warning(f"Error pada baris {index}: {e}") # Uncomment untuk debug
+                        
+                        # Update progress bar
+                        if index % 10 == 0:
+                            progress = (index + 1) / total_rows
+                            progress_bar.progress(progress)
+                            status_text.text(f"Memproses {index + 1} dari {total_rows} baris...")
+                    
+                    conn.commit()
+                    progress_bar.progress(1.0)
+                    status_text.text("Selesai!")
+                    
+                    st.success(f"✅ Import selesai! **{berhasil}** data absensi diproses.")
+                    if karyawan_tidak_ditemukan > 0:
+                        st.warning(f"⚠️ **{karyawan_tidak_ditemukan}** baris dilewati karena Employee ID belum terdaftar di menu Data Karyawan.")
+                    if gagal > 0:
+                        st.error(f"❌ **{gagal}** baris gagal diproses karena error sistem.")
+                        
+                    log_aksi(st.session_state.username, "IMPORT_EXCEL_ABSENSI", f"{berhasil} berhasil")
+                    time.sleep(2)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Gagal membaca file: {e}")
+                st.warning("Pastikan file yang diunggah adalah file Excel 'Export Attendance' asli dari Uniquip.")
     
+    # ================= RIWAYAT ABSENSI =================
     st.markdown('<div class="section-header"><h3>📋 Riwayat Absensi (100 Terakhir)</h3></div>', unsafe_allow_html=True)
-    df_abs = pd.read_sql_query(
-        """SELECT a.id, COALESCE(k.full_name,'(N/A)') as karyawan, a.tanggal, a.jam_masuk, a.jam_keluar, 
-                  a.status, a.terlambat_menit, a.keterangan
-           FROM absensi a LEFT JOIN karyawan k ON a.karyawan_id=k.id
-           ORDER BY a.tanggal DESC, a.id DESC LIMIT 100""",
-        conn
-    )
+    
+    # Filter pencarian riwayat
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        f_cari_abs = st.text_input("🔍 Cari Nama Karyawan", key="f_cari_abs")
+    with col_f2:
+        f_status_abs = st.selectbox("Filter Status", ["(Semua)", "Hadir", "Terlambat", "Izin", "Sakit", "Alpha", "Cuti", "Libur"], key="f_status_abs")
+        
+    q_abs = """
+        SELECT a.id, COALESCE(k.full_name,'(N/A)') as karyawan, k.employee_id, a.tanggal, 
+               a.jam_masuk, a.jam_keluar, a.status, a.terlambat_menit, a.keterangan
+        FROM absensi a LEFT JOIN karyawan k ON a.karyawan_id=k.id
+        WHERE 1=1
+    """
+    params_abs = []
+    
+    if f_cari_abs:
+        q_abs += " AND k.full_name LIKE ?"
+        params_abs.append(f"%{f_cari_abs}%")
+    if f_status_abs != "(Semua)":
+        q_abs += " AND a.status = ?"
+        params_abs.append(f_status_abs)
+        
+    q_abs += " ORDER BY a.tanggal DESC, a.id DESC LIMIT 100"
+    
+    df_abs = pd.read_sql_query(q_abs, conn, params=tuple(params_abs))
+    
     if not df_abs.empty:
         st.dataframe(df_abs, use_container_width=True, hide_index=True)
     else:
-        st.info("Belum ada data absensi.")
-
+        st.info("Belum ada data absensi yang cocok dengan filter.")
 # --- 6. CUTI & IZIN ---
 elif pilihan == "🏖️ Cuti & Izin":
     st.markdown('<div class="main-header"><h1>🏖️ Cuti & Izin</h1><p>Pengajuan & Approval Cuti Karyawan</p></div>', unsafe_allow_html=True)
