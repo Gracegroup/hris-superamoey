@@ -1,21 +1,12 @@
-import time
 import streamlit as st
 import pandas as pd
 import sqlite3
-import hashlib
 import os
-import io
-import json
-import re
-import calendar
-import altair as alt
 import base64
-import zipfile
-from datetime import datetime, timedelta, date
-from urllib.parse import quote
-from io import StringIO
+from datetime import datetime
+import altair as alt
 
-# ==================== KONFIGURASI ====================
+# ==================== KONFIGURASI HALAMAN ====================
 st.set_page_config(
     page_title="HRIS & GA Amoey",
     page_icon="⚡",
@@ -23,25 +14,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-os.makedirs("uploads/foto", exist_ok=True)
-os.makedirs("uploads/dokumen", exist_ok=True)
 os.makedirs("uploads/flyer", exist_ok=True)
 
-# ==================== CUSTOM CSS ====================
+# ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
 st.markdown("""
 <style>
+    /* 1. BACKGROUND APLIKASI */
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
     
-    /* CSS DASHBOARD WALLPAPER STYLE */
+    /* 2. HEADER UTAMA */
     .main-header { 
-        .main-header { 
         background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
         padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
     }
+    .main-header h1 { margin: 0; font-weight: 800; letter-spacing: 1px; color: white; }
+    .main-header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em; color: #e0e7ff; }
     
-    /* Card Glassmorphism */
-       .metric-grid { 
+    /* 3. GRID & KARTU (GLASSMORPHISM) */
+    .metric-grid { 
         display: grid; 
         grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); 
         gap: 12px; margin-bottom: 20px; 
@@ -53,6 +44,10 @@ st.markdown("""
         transition: all 0.3s ease; 
         color: white; position: relative; overflow: hidden;
     }
+    .metric-card::before {
+        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
+    }
     .metric-card:hover { 
         transform: translateY(-5px) scale(1.03); 
         box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
@@ -61,7 +56,7 @@ st.markdown("""
     .metric-card .value { font-size: 1.5em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); word-break: break-word; }
     .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
 
-    /* Warna Gradient Modern */
+    /* 4. WARNA GRADIENT KARTU */
     .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
     .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
@@ -71,32 +66,200 @@ st.markdown("""
     .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
     .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
 
+    /* 5. HEADER SECTION */
     .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .section-header h3 { margin: 0; color: #1e3c72; }
     
+    /* 6. SIDEBAR */
     section[data-testid="stSidebar"] { background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); }
     section[data-testid="stSidebar"] * { color: #ecf0f1 !important; }
     
+    /* 7. TOMBOL */
     .stButton > button { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 600; transition: all 0.3s; width: 100%; }
     .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(42,82,152,0.5); }
-    
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background: white; border-radius: 10px 10px 0 0; padding: 10px 20px; font-weight: 600; }
-    .stTabs [aria-selected="true"] { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; }
-    
-    .payroll-slip { background: white; padding: 20px; border-radius: 10px; border: 2px solid #2a5298; }
-    .payroll-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e0e0e0; }
-    .payroll-total { font-weight: bold; border-top: 2px solid #2a5298; border-bottom: none; margin-top: 8px; padding-top: 8px; }
-    
-    /* CSS Khusus Form Official */
-    .form-box { background: white; padding: 25px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: black;}
-    .form-title { text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 20px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 10px; }
-    .form-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-    .form-table th, .form-table td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; }
-    .form-table th { background: #f0f0f0; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
 
+# ==================== DATABASE SETUP ====================
+conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
+c = conn.cursor()
+
+# Buat tabel minimalis jika belum ada (untuk kelancaran Dashboard)
+c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT, full_name TEXT, divisi TEXT, job_position TEXT, aktif INTEGER DEFAULT 1, gender TEXT, gaji REAL DEFAULT 0)''')
+c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, posisi_dilamar TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS lowongan (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, status TEXT DEFAULT 'Buka')''')
+c.execute('''CREATE TABLE IF NOT EXISTS cuti (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, status TEXT DEFAULT 'Menunggu')''')
+c.execute('''CREATE TABLE IF NOT EXISTS aset (id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT, nama TEXT, status TEXT DEFAULT 'Aktif')''')
+c.execute('''CREATE TABLE IF NOT EXISTS ruko (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, status TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS tenant (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, penghuni TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS disiplin (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, status TEXT DEFAULT 'Aktif')''')
+c.execute('''CREATE TABLE IF NOT EXISTS payroll (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, periode TEXT, gaji_bersih REAL DEFAULT 0)''')
+c.execute('''CREATE TABLE IF NOT EXISTS utility (id INTEGER PRIMARY KEY AUTOINCREMENT, kategori TEXT, periode TEXT, total_bayar REAL DEFAULT 0)''')
+conn.commit()
+
+# ==================== FUNGSI GLOBAL ====================
+def format_rp(n):
+    try: return f"Rp {float(n):,.0f}".replace(",", ".")
+    except: return "Rp 0"
+
+def metric_card(label, value, sub="", warna="card-blue"):
+    sub_html = f'<div class="sub">{sub}</div>' if sub else ''
+    return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
+
+# ==================== SIDEBAR ====================
+with st.sidebar:
+    st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">OKANAHARIANTO</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: ADMIN</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    menu = ["🏠 Dashboard HRIS", "👥 Data Karyawan", "📋 Rekrutmen & CV", "💰 Payroll & Slip Gaji"]
+    pilihan = st.selectbox("📋 Menu Navigasi", menu)
+    st.markdown("---")
+    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
+    st.markdown("---")
+    if st.button("🚪 Logout"):
+        st.warning("Anda telah logout.")
+
+# ==================== DASHBOARD UTAMA ====================
+if pilihan == "🏠 Dashboard HRIS":
+    # Header Elegan
+    st.markdown("""
+    <div class="main-header">
+        <h1>HRIS & GA AMOEY</h1>
+        <p>Sistem Manajemen SDM & General Affairs Terpadu</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # --- AMBIL DATA DARI DATABASE ---
+    total_karyawan = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=1").fetchone()[0]
+    total_kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
+    total_lowongan = c.execute("SELECT COUNT(*) FROM lowongan WHERE status='Buka'").fetchone()[0]
+    total_cuti = c.execute("SELECT COUNT(*) FROM cuti WHERE status='Menunggu'").fetchone()[0]
+    total_resign = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=0").fetchone()[0]
+    
+    total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE status='Aktif'").fetchone()[0]
+    total_ruko = c.execute("SELECT COUNT(*) FROM ruko").fetchone()[0]
+    ruko_disewa = c.execute("SELECT COUNT(*) FROM ruko WHERE status='Disewa'").fetchone()[0]
+    total_tenant = c.execute("SELECT COUNT(*) FROM tenant").fetchone()[0]
+    tenant_terisi = c.execute("SELECT COUNT(*) FROM tenant WHERE penghuni IS NOT NULL AND penghuni != ''").fetchone()[0]
+    total_sp = c.execute("SELECT COUNT(*) FROM disiplin WHERE status='Aktif'").fetchone()[0]
+    
+    periode_ini = datetime.now().strftime("%Y-%m")
+    total_payroll = c.execute("SELECT COALESCE(SUM(gaji_bersih), 0) FROM payroll WHERE periode=?", (periode_ini,)).fetchone()[0]
+    total_utility = c.execute("SELECT COALESCE(SUM(total_bayar), 0) FROM utility WHERE periode=?", (periode_ini,)).fetchone()[0]
+
+    # Bagi layar: Kiri Dashboard (2.2), Kanan Flyer (1)
+    col_left, col_right = st.columns([2.2, 1])
+
+    with col_left:
+        # --- SECTION 1: SDM & REKRUTMEN ---
+        st.markdown('<div class="section-header"><h3>👥 SDM & Rekrutmen</h3></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="metric-grid">
+            {metric_card("Karyawan", str(total_karyawan), "Aktif", "card-blue")}
+            {metric_card("Kandidat", str(total_kandidat), "Pelamar", "card-purple")}
+            {metric_card("Lowongan", str(total_lowongan), "Buka", "card-green")}
+            {metric_card("Payroll", format_rp(total_payroll), "Bulan Ini", "card-gold")}
+            {metric_card("Cuti", str(total_cuti), "Menunggu", "card-orange")}
+            {metric_card("Resign", str(total_resign), "Total", "card-red")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # --- SECTION 2: GA & PROPERTI ---
+        st.markdown('<div class="section-header"><h3>🏢 GA & Properti</h3></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="metric-grid">
+            {metric_card("Aset", str(total_aset), "Aktif", "card-teal")}
+            {metric_card("Ruko", f"{ruko_disewa}/{total_ruko}", "Disewa", "card-dark")}
+            {metric_card("Tenant", f"{tenant_terisi}/{total_tenant}", "Terisi", "card-purple")}
+            {metric_card("Utility", format_rp(total_utility), "Bulan Ini", "card-blue")}
+            {metric_card("SP Aktif", str(total_sp), "Sanksi", "card-red")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # --- SECTION 3: ANALITIK ---
+        st.markdown('<div class="section-header"><h3>📈 Analitik & Distribusi</h3></div>', unsafe_allow_html=True)
+        
+        col_chart1, col_chart2 = st.columns(2)
+        with col_chart1:
+            with st.container(border=True):
+                st.markdown("**🏢 Distribusi Divisi**")
+                df_div = pd.read_sql_query("SELECT COALESCE(NULLIF(divisi,''),'Belum Diisi') as divisi, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY divisi", conn)
+                if not df_div.empty:
+                    chart_div = alt.Chart(df_div).mark_arc(innerRadius=60, cornerRadius=10).encode(
+                        theta=alt.Theta(field="jumlah", type="quantitative"),
+                        color=alt.Color(field="divisi", type="nominal", title="Divisi", scale=alt.Scale(scheme='tableau10')),
+                        tooltip=['divisi', 'jumlah']
+                    ).properties(height=250)
+                    st.altair_chart(chart_div, use_container_width=True)
+                else:
+                    st.info("Belum ada data karyawan.")
+
+        with col_chart2:
+            with st.container(border=True):
+                st.markdown("**🚻 Distribusi Gender**")
+                df_gender = pd.read_sql_query("SELECT COALESCE(NULLIF(gender,''),'Tidak Diketahui') as gender, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY gender", conn)
+                if not df_gender.empty:
+                    chart_gender = alt.Chart(df_gender).mark_arc(innerRadius=60, cornerRadius=10).encode(
+                        theta=alt.Theta(field="jumlah", type="quantitative"),
+                        color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita'], range=['#4facfe', '#f093fb'])),
+                        tooltip=['gender', 'jumlah']
+                    ).properties(height=250)
+                    st.altair_chart(chart_gender, use_container_width=True)
+                else:
+                    st.info("Belum ada data gender.")
+
+    with col_right:
+        # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
+        if tampilkan_flyer:
+            st.markdown("""
+            <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 12px; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; text-align: center; backdrop-filter: blur(10px);">
+                <h3 style="color: #1e3c72; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))][:2]
+            
+            if flyer_files:
+                img_tags = ""
+                for img_name in flyer_files:
+                    filepath = os.path.join("uploads/flyer", img_name)
+                    with open(filepath, "rb") as f:
+                        b64_str = base64.b64encode(f.read()).decode()
+                    img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" style="width:100%; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">'
+                
+                if len(flyer_files) > 1:
+                    marquee_html = f"""
+                    <style>
+                    @keyframes scroll-vert {{ 0% {{ transform: translateY(0); }} 100% {{ transform: translateY(-50%); }} }}
+                    .marquee-container {{ height: 600px; overflow: hidden; position: relative; }}
+                    .marquee-track {{ display: flex; flex-direction: column; animation: scroll-vert 15s linear infinite; }}
+                    .marquee-track:hover {{ animation-play-state: paused; }}
+                    </style>
+                    <div class="marquee-container">
+                        <div class="marquee-track">
+                            {img_tags}{img_tags}
+                        </div>
+                    </div>
+                    """
+                else:
+                    marquee_html = f"<div style='height:600px; overflow-y:auto;'>{img_tags}</div>"
+                
+                st.markdown(marquee_html, unsafe_allow_html=True)
+            else:
+                st.info("Belum ada gambar flyer. Silakan upload gambar .jpg/.png ke folder `uploads/flyer/`.")
+
+# ==================== KONTEN MENU LAIN (PLACEHOLDER) ====================
+elif pilihan == "👥 Data Karyawan":
+    st.title("👥 Data Karyawan")
+    st.info("Modul ini akan menampilkan tabel data karyawan.")
+
+elif pilihan == "📋 Rekrutmen & CV":
+    st.title("📋 Rekrutmen & CV")
+    st.info("Modul ini akan menampilkan daftar kandidat dan jadwal interview.")
+
+elif pilihan == "💰 Payroll & Slip Gaji":
+    st.title("💰 Payroll & Slip Gaji")
+    st.info("Modul ini akan menampilkan daftar payroll dan slip gaji.")
 # ==================== DATABASE & AUTO-REPAIR ====================
 conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
 c = conn.cursor()
