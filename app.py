@@ -162,9 +162,8 @@ def log_aksi(u, a, d=""):
         c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
     except Exception:
-        # Jika tabel log belum siap atau database terkunci, abaikan saja agar aplikasi tidak crash
+        # Jika tabel log bermasalah/hilang, abaikan saja agar aplikasi tidak error
         pass
-
 def metric_card(label, value, sub="", warna="card-blue"):
     sub_html = f'<div class="sub">{sub}</div>' if sub else ''
     return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
