@@ -863,14 +863,15 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             else:
                 st.info("Belum ada riwayat payroll.")# --- 8. REKRUTMEN & CV ---
 # --- 8. REKRUTMEN & CV (UPGRADE SESUAI GAMBAR PDF) ---
+# --- 8. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
-    st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1><p>Manajemen Kandidat & Jadwal Interview</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1><p>Manajemen Kandidat & Lowongan</p></div>', unsafe_allow_html=True)
     
-    tab_rek1, tab_rek2 = st.tabs(["🎯 Kandidat & Jadwal", "📢 Lowongan"])
+    tab_rek1, tab_rek2 = st.tabs(["🎯 Kandidat", "📢 Lowongan"])
     
     with tab_rek1:
         with st.expander("➕ Tambah Kandidat Baru", expanded=False):
-            with st.form("kandidat_form_upgrade"):
+            with st.form("kandidat_form_v2"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     k_nama = st.text_input("Nama Lengkap *", key="k_nama")
@@ -879,7 +880,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                 with col2:
                     k_email = st.text_input("Email", key="k_email")
                     k_sumber = st.selectbox("Sumber", ["Jobstreet", "Referral", "Walk-in", "LinkedIn", "Glints", "Lainnya"], key="k_sumber")
-                    k_status = st.selectbox("Status", ["Baru", "Screening", "Interview", "MCU", "Diterima", "Ditolak"], key="k_status")
+                    k_status = st.selectbox("Status", ["Baru", "Screening", "Wawancara", "MCU", "Diterima", "Ditolak"], key="k_status")
                 with col3:
                     k_jadwal = st.date_input("Jadwal Interview", key="k_jadwal")
                     k_jam = st.time_input("Jam Interview", key="k_jam")
@@ -926,7 +927,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                     "posisi_dilamar": st.column_config.TextColumn("posisi_dilamar", width="medium"),
                     "status": st.column_config.SelectboxColumn(
                         "Status",
-                        options=["Baru", "Screening", "Interview", "MCU", "Diterima", "Ditolak"],
+                        options=["Baru", "Screening", "Wawancara", "MCU", "Diterima", "Ditolak"],
                         required=True
                     ),
                     "jadwal_interview": st.column_config.DateColumn("jadwal_interview", format="YYYY-MM-DD"),
@@ -942,7 +943,7 @@ elif pilihan == "📋 Rekrutmen & CV":
                     "catatan": st.column_config.TextColumn("catatan", width="large"),
                 },
                 num_rows="dynamic", # Mengizinkan tambah/hapus baris dari tabel
-                key="editor_kandidat"
+                key="editor_kandidat_pdf"
             )
             
             # Tombol untuk menyimpan perubahan dari tabel
