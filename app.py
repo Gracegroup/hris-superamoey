@@ -7,23 +7,41 @@ st.set_page_config(page_title="HRIS & GA Amoey", layout="wide")
 
 # ==================== CUSTOM CSS ====================
 # PERHATIKAN: st.markdown harus diawali dengan """ (tiga kutip)
+# ==================== CUSTOM CSS ====================
 st.markdown("""
 <style>
-    /* CSS DASHBOARD WALLPAPER STYLE */
-    /* <-- Tulis komentar CSS di dalam tag <style> ini, bukan di luar */
-    
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
+    
+    /* CSS DASHBOARD WALLPAPER STYLE */
     .main-header { 
         background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
         padding: 30px; border-radius: 24px; color: white; text-align: center; margin-bottom: 25px; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
     }
     
-    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 25px; }
-    .metric-card { padding: 20px; border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); color: white; }
-    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; font-weight: 600; }
-    .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; }
-    
+    /* Card Glassmorphism */
+    .metric-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+        gap: 15px; margin-bottom: 25px; 
+    }
+    .metric-card { 
+        padding: 20px; border-radius: 20px; 
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
+        backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
+        transition: transform 0.3s ease, box-shadow 0.3s ease; 
+        color: white; position: relative; overflow: hidden;
+    }
+    .metric-card::before {
+        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
+    }
+    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.3); }
+    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+    .metric-card .value { font-size: 1.8em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
+    .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
+
+    /* Warna Gradient Modern */
     .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
     .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
@@ -33,7 +51,29 @@ st.markdown("""
     .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
     .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
 
-    /* ... (CSS lainnya) ... */
+    .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .section-header h3 { margin: 0; color: #1e3c72; }
+    
+    section[data-testid="stSidebar"] { background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); }
+    section[data-testid="stSidebar"] * { color: #ecf0f1 !important; }
+    
+    .stButton > button { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 600; transition: all 0.3s; width: 100%; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(42,82,152,0.5); }
+    
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { background: white; border-radius: 10px 10px 0 0; padding: 10px 20px; font-weight: 600; }
+    .stTabs [aria-selected="true"] { background: linear-gradient(135deg, #2a5298 0%, #7e57c2 100%); color: white !important; }
+    
+    .payroll-slip { background: white; padding: 20px; border-radius: 10px; border: 2px solid #2a5298; }
+    .payroll-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e0e0e0; }
+    .payroll-total { font-weight: bold; border-top: 2px solid #2a5298; border-bottom: none; margin-top: 8px; padding-top: 8px; }
+    
+    /* CSS Khusus Form Official */
+    .form-box { background: white; padding: 25px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: black;}
+    .form-title { text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 20px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 10px; }
+    .form-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    .form-table th, .form-table td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; }
+    .form-table th { background: #f0f0f0; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
 # ====================================================
