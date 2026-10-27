@@ -114,7 +114,7 @@ with st.sidebar:
     menu = ["🏠 Dashboard HRIS", "👥 Data Karyawan", "📋 Rekrutmen & CV", "💰 Payroll & Slip Gaji"]
     pilihan = st.selectbox("📋 Menu Navigasi", menu)
     st.markdown("---")
-   tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True, key="chk_flyer_sidebar")
+    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True, key="chk_flyer_sidebar")
     st.markdown("---")
     if st.button("🚪 Logout"):
         st.warning("Anda telah logout.")
