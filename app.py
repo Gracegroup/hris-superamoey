@@ -415,13 +415,19 @@ if pilihan == "🏠 Dashboard HRIS":
                     st.altair_chart(chart_kand, use_container_width=True)
                 else: st.info("Belum ada data kandidat.")
 
-
     with col_right:
-        # ================= BAGIAN KANAN: FLYER BERJALAN VERTIKAL =================
+        # ================= BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM) =================
         if tampilkan_flyer:
-            st.markdown("### 📢 Flyer Lowongan")
+            # Header Flyer yang lebih elegan
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e57c2 100%); padding: 12px; border-radius: 12px; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                <h3 style="color: white; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
             os.makedirs("uploads/flyer", exist_ok=True)
-            flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            # AMBIL MAKSIMAL 2 FLYER SAJA
+            flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))][:2]
             
             if flyer_files:
                 import base64
@@ -434,36 +440,46 @@ if pilihan == "🏠 Dashboard HRIS":
                         b64_str = base64.b64encode(f.read()).decode()
                     img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" class="flyer-img-vert">'
                 
-                # Duplikasi gambar agar animasi berputar seamless
-                img_tags_double = img_tags + img_tags
+                # Duplikasi gambar 3x lipat agar animasi looping tidak ada ruang kosong (gap)
+                img_tags_double = img_tags * 3
                 
-                # CSS Animasi Vertikal (Atas ke Bawah)
+                # CSS Animasi Vertikal Premium
                 marquee_html = f"""
                 <style>
                 @keyframes scroll-vertical {{
                     0% {{ transform: translateY(0); }}
-                    100% {{ transform: translateY(-50%); }}
+                    100% {{ transform: translateY(-33.33%); }} /* Geser sepertiga karena diduplikasi 3x */
                 }}
                 .vertical-marquee-container {{
-                    height: 800px; /* Tinggi area scroll */
+                    height: 600px; /* Tinggi frame di layar */
                     overflow: hidden;
                     position: relative;
-                    background: transparent;
+                    background: #ffffff;
+                    border-radius: 12px;
+                    padding: 15px;
+                    box-shadow: inset 0 0 10px rgba(0,0,0,0.05), 0 8px 20px rgba(0,0,0,0.1); /* Efek bingkai kaca */
+                    border: 1px solid #e0e7ff;
                 }}
                 .vertical-marquee-track {{
                     display: flex;
                     flex-direction: column;
-                    animation: scroll-vertical 20s linear infinite; /* Kecepatan 20 detik */
+                    align-items: center;
+                    animation: scroll-vertical 15s linear infinite; /* Kecepatan 15 detik */
                 }}
                 .vertical-marquee-track:hover {{
                     animation-play-state: paused; /* Berhenti saat di-hover */
                 }}
                 .flyer-img-vert {{
-                    width: 100%;
-                    margin-bottom: 15px;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                    width: 95%; /* Agar ada margin di kiri kanan */
+                    margin-bottom: 20px;
+                    border-radius: 8px;
+                    border: 3px solid #f8f9fa;
+                    box-shadow: 0 6px 15px rgba(0,0,0,0.15);
                     object-fit: cover;
+                    transition: transform 0.3s ease;
+                }}
+                .flyer-img-vert:hover {{
+                    transform: scale(1.02); /* Membesar sedikit saat di-hover */
                 }}
                 </style>
                 <div class="vertical-marquee-container">
@@ -474,20 +490,25 @@ if pilihan == "🏠 Dashboard HRIS":
                 """
                 st.markdown(marquee_html, unsafe_allow_html=True)
             else:
-                st.info("Belum ada gambar flyer.")
+                st.info("Belum ada gambar flyer. Silakan upload.")
                 
             # Fitur Upload Flyer
-            with st.expander("➕ Upload Flyer"):
+            with st.expander("➕ Upload / Ganti Flyer"):
+                st.write("Maksimal 2 poster akan ditampilkan di layar.")
                 uploaded_flyer = st.file_uploader("Pilih gambar flyer", type=["jpg", "jpeg", "png"], key="up_flyer", accept_multiple_files=True, label_visibility="collapsed")
                 if uploaded_flyer:
                     if st.button("💾 Simpan Flyer", use_container_width=True):
-                        for file in uploaded_flyer:
+                        # Hapus flyer lama agar hanya menyisakan 2 terbaru
+                        for old_file in os.listdir("uploads/flyer"):
+                            os.remove(os.path.join("uploads/flyer", old_file))
+                            
+                        for file in uploaded_flyer[:2]: # Maksimal simpan 2
                             with open(os.path.join("uploads/flyer", file.name), "wb") as f:
                                 f.write(file.getbuffer())
-                        st.success(f"✅ {len(uploaded_flyer)} Flyer disimpan!")
+                        st.success(f"✅ Flyer berhasil diperbarui!")
                         time.sleep(1)
                         st.rerun()
-# --- 2. FILING DATA MANPOWER ---
+   # --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
     
