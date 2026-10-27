@@ -498,7 +498,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
                         data_pdf = {"Nama": ck_nama_val, "NIK": ck_emp_id, "Divisi": ck_divisi, "Alasan Cuti Khusus": st.session_state.get("ck_alasan",""), "Tanggal Pengajuan": datetime.now().strftime("%Y-%m-%d")}
                         pdf_bytes = generate_pdf("Permohonan Cuti Khusus", data_pdf)
                         st.download_button("💾 Download PDF Cuti Khusus", data=pdf_bytes, file_name="Cuti_Khusus.pdf", mime="application/pdf")
-                            with tab3:
+    with tab3:
         st.subheader("Formulir Data Pelamar")
         with st.container(border=True):
             st.markdown('<div class="form-title">FORMULIR DATA PELAMAR</div>', unsafe_allow_html=True)
