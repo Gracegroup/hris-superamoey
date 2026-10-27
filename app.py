@@ -333,33 +333,41 @@ if pilihan == "🏠 Dashboard HRIS":
     else:
         st.info("Belum ada data karyawan aktif.")
     # --- FLYER LOWONGAN (MUNCUL JIKA CHECKBOX DICENTANG) ---
+       # --- FLYER LOWONGAN GAMBAR (MUNCUL JIKA CHECKBOX DICENTANG) ---
     if tampilkan_flyer:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('<div class="section-header"><h3>📢 Flyer Lowongan Tersedia</h3></div>', unsafe_allow_html=True)
         
-        # Ambil data lowongan yang statusnya 'Buka'
-        df_loker = pd.read_sql_query("SELECT posisi, departemen, jumlah_dibutuhkan, deskripsi FROM lowongan WHERE status='Buka'", conn)
+        # Pastikan folder untuk menyimpan flyer sudah ada
+        os.makedirs("uploads/flyer", exist_ok=True)
         
-        if not df_loker.empty:
-            # Bagi menjadi 3 kolom (menyesuaikan jumlah lowongan)
-            cols = st.columns(min(len(df_loker), 3))
-            for idx, row in df_loker.iterrows():
+        # Cari file gambar flyer di folder
+        flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        
+        if flyer_files:
+            # Tampilkan gambar flyer (maksimal 3 per baris)
+            cols = st.columns(min(len(flyer_files), 3))
+            for idx, img_name in enumerate(flyer_files):
                 with cols[idx % 3]:
-                    # Desain Flyer ala Poster
-                    st.markdown(f"""
-                    <div style="background: white; padding: 20px; border-radius: 12px; border-top: 6px solid #7e57c2; box-shadow: 0 6px 20px rgba(0,0,0,0.1); margin-bottom: 15px; text-align: center;">
-                        <h3 style="color: #1e3c72; margin-top: 0;">{row['posisi']}</h3>
-                        <p style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Divisi: <b>{row['departemen']}</b></p>
-                        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Dibutuhkan: <b>{row['jumlah_dibutuhkan']} Orang</b></p>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                            <p style="font-size: 0.85em; color: #555; margin: 0;">{row['deskripsi'] if row['deskripsi'] else 'Segera bergabung dengan tim kami!'}</p>
-                        </div>
-                        <hr style="margin: 10px 0; border-top: 1px dashed #ccc;">
-                        <p style="font-size: 0.8em; color: #2a5298; font-weight: bold; margin-bottom: 0;">Kirim CV ke: hrd@amoey.com</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Menggunakan use_container_width agar gambar menyesuaikan layar
+                    st.image(f"uploads/flyer/{img_name}", use_container_width=True, caption=img_name)
         else:
-            st.info("Saat ini tidak ada lowongan yang dibuka.")
+            st.info("Belum ada gambar flyer yang diunggah. Silakan upload poster Anda di bawah ini.")
+            
+        # Fitur Upload Flyer Langsung dari Dashboard
+        with st.expander("➕ Upload / Ganti Gambar Flyer (Poster)"):
+            st.write("Unggah gambar poster lowongan Anda (format JPG/PNG). Anda bisa mengunggah lebih dari satu gambar.")
+            uploaded_flyer = st.file_uploader("Pilih gambar flyer", type=["jpg", "jpeg", "png"], key="up_flyer", accept_multiple_files=True)
+            
+            if uploaded_flyer:
+                if st.button("💾 Simpan Flyer ke Aplikasi", key="btn_save_flyer"):
+                    for file in uploaded_flyer:
+                        # Simpan file ke folder uploads/flyer
+                        with open(os.path.join("uploads/flyer", file.name), "wb") as f:
+                            f.write(file.getbuffer())
+                    st.success(f"✅ {len(uploaded_flyer)} Flyer berhasil disimpan!")
+                    time.sleep(1)
+                    st.rerun()
 # --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
