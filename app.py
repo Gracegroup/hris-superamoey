@@ -296,7 +296,7 @@ elif pilihan == "🏖️ Cuti & Izin":
 elif pilihan == "💰 Payroll & Slip Gaji":
     st.markdown('<div class="main-header"><h1>💰 Payroll</h1></div>', unsafe_allow_html=True)
     st.info("Modul Payroll.")
-    elif pilihan == "📋 Rekrutmen & CV":
+elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen</h1></div>', unsafe_allow_html=True)
     df_k = pd.read_sql_query("SELECT id, nama, posisi_dilamar, status FROM kandidat", conn)
     st.dataframe(df_k, use_container_width=True)
