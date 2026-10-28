@@ -16,48 +16,40 @@ from datetime import datetime, timedelta, date
 from urllib.parse import quote
 from io import StringIO, BytesIO
 import qrcode
-import streamlit as st
 
-# =========================================================
-# BYPASS LOGIN UNTUK QR CODE (WAJIB DI PALING ATAS)
-# =========================================================
-if "mode" in st.query_params and st.query_params["mode"] == "gudang":
-    st.session_state.logged_in = True
-    st.session_state.username = "Petugas_Gudang"
-    st.session_state.nama = "Petugas Gudang"
-    st.session_state.role = "admin"
-    st.session_state.mode_gudang = True
 # ==================== 1. KONFIGURASI HALAMAN ====================
-import os
-os.makedirs("data", exist_ok=True)
-import os
-# ==================== 2. KONEKSI DATABASE ====================
-import os
-import sqlite3
+st.set_page_config(
+    page_title="HRIS & GA Amoey",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Deteksi lingkungan otomatis (Streamlit Cloud vs Hugging Face)
+# ==================== 2. KONEKSI DATABASE (SUDAH DIPERBAIKI) ====================
+# Mendeteksi path otomatis: Streamlit Cloud pakai "data/", Hugging Face pakai "/data"
 DB_PATH = "data/hris_ga.db" 
 if os.path.exists("/data") and os.access("/data", os.W_OK):
     DB_PATH = "/data/hris_ga.db"
 
-# Buat folder database jika belum ada (hanya di direktori proyek)
+# Buat folder database jika belum ada
 db_dir = os.path.dirname(DB_PATH)
 if db_dir:
     os.makedirs(db_dir, exist_ok=True)
 
-# Koneksi database & cursor
+# Koneksi Database & Cursor
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 c = conn.cursor()
 
-# ==================== 3. PENYADAP URL (BYPASS LOGIN QR CODE) ====================
-query_params = st.query_params
-if "mode" in query_params and query_params["mode"] == "gudang":
-    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = "Petugas_Gudang"
-    st.session_state["nama"] = "Petugas Gudang"
-    st.session_state["role"] = "admin" # Diberi akses admin agar tidak error saat inisialisasi DB
-    st.session_state["mode_gudang"] = True
+# ==================== 3. FUNGSI WAJIB (SUDAH DIPERBAIKI) ====================
+def hash_password(p): 
+    return hashlib.sha256(p.encode()).hexdigest()
+
+def log_aksi(u, a, d=""):
+    try:
+        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+    except Exception: 
+        pass
 
 # ==================== 4. CUSTOM CSS ====================
 st.markdown("""
@@ -243,6 +235,14 @@ if "logged_in" not in st.session_state:
     st.session_state.nama = ""
     st.session_state.role = ""
 
+query_params = st.query_params
+if "mode" in query_params and query_params["mode"] == "gudang":
+    st.session_state.logged_in = True
+    st.session_state.username = "Petugas_Gudang"
+    st.session_state.nama = "Petugas Gudang"
+    st.session_state.role = "admin"
+    st.session_state.mode_gudang = True
+
 if not st.session_state.logged_in:
     st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -263,7 +263,7 @@ if not st.session_state.logged_in:
                 else: 
                     st.error("❌ Username / password salah atau akun tidak aktif.")
         st.info("🔑 Default: **admin** / **admin123**")
-    st.stop() # Hentikan eksekusi jika belum login
+    st.stop()
 
 # ==================== 8. SIDEBAR MENU ====================
 with st.sidebar:
@@ -289,7 +289,6 @@ with st.sidebar:
     is_qr_mode = st.session_state.get("mode_gudang", False)
     
     if is_qr_mode:
-        # Jika dari QR Code, sembunyikan menu dropdown
         st.info("📦 Mode Scan Gudang Aktif")
         pilihan = "📦 Inventory & Kartu Stok (Barcode)"
     else:
@@ -304,7 +303,6 @@ with st.sidebar:
             st.session_state[k] = False if k in ["logged_in", "mode_gudang"] else ""
         st.query_params.clear() 
         st.rerun()
-
 
 # ==================== 9. KONTEN MENU ====================
 
@@ -2904,19 +2902,15 @@ elif pilihan == "📝 Log Aktivitas":
         cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
         c.execute("DELETE FROM log_aktivitas WHERE waktu < ?", (cutoff,))
         conn.commit(); st.success("✅ Log lama dihapus."); time.sleep(1); st.rerun()
+
 # --- 29. INVENTORY & KARTU STOK (BARCODE) ---
 elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
     
-    # =========================================================
-    # FUNGSI UNTUK MENAMPILKAN FORM SCAN
-    # =========================================================
     def render_form_scan():
         st.subheader("Form Pengambilan / Penambahan Barang")
-        
         with st.form("form_scan"):
             col_scan1, col_scan2 = st.columns([1, 2])
-            
             with col_scan1:
                 df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
                 
@@ -2924,7 +2918,6 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                     dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
                     pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_universal")
                     scan_code = dict_barang[pilih_nama_barang]
-                    
                     satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
                     st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
                 else:
@@ -2941,25 +2934,17 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             
             if submit_scan and scan_code:
                 barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
-                
                 if barang:
                     nama_barang, stok_lama = barang
-                    
                     if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
                         st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
                     else:
                         stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
-                        
                         c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
-                        
                         status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
                         waktu_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
-                                     VALUES (?,?,?,?,?,?)""",
-                                  (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
+                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) VALUES (?,?,?,?,?,?)""", (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
                         conn.commit()
-                        
                         st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
                         st.balloons()
                         time.sleep(1.5)
@@ -2967,31 +2952,19 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                 else:
                     st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
 
-    # =========================================================
-    # PENGATURAN TAMPILAN (TAB VS QR CODE)
-    # =========================================================
     is_qr_mode = st.session_state.get("mode_gudang", False)
-
     if is_qr_mode:
-        st.info("Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang dan proses transaksi di bawah ini.")
+        st.info("Anda mengakses melalui **QR Code Gudang**.")
         render_form_scan()
-        
         if st.button("⬅️ Kembali ke Menu Utama", use_container_width=True):
             st.session_state["mode_gudang"] = False
             st.query_params.clear()
             st.rerun()
     else:
-        tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
-            "Master Barang & Cetak QR", 
-            "Scan Via HP (Auto-Form)", 
-            "Kartu Stok", 
-            "Export Excel"
-        ])
-        
+        tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs(["Master Barang & Cetak QR", "Scan Via HP (Auto-Form)", "Kartu Stok", "Export Excel"])
         with tab_inv1:
             st.subheader("Master Barang & Cetak QR")
             
-            # URL Aplikasi Streamlit Anda
             app_url = "https://j4r5x4ubtfe2qr2h862bzb.streamlit.app"
             qr_url = f"{app_url}/?mode=gudang"
             
@@ -3005,8 +2978,6 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                 return buf.getvalue()
             
             st.markdown("### 📱 QR Code Universal Gudang")
-            st.write("Cetak dan tempel QR Code ini di pintu gudang. Karyawan cukup scan QR ini untuk langsung masuk ke form pengambilan/penambahan barang tanpa perlu login.")
-            
             col_qr1, col_qr2 = st.columns([1, 2])
             with col_qr1:
                 qr_img = generate_qr(qr_url)
@@ -3014,7 +2985,6 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             with col_qr2:
                 st.info("Link Tujuan QR Code:")
                 st.code(qr_url, language="text")
-                st.write("Anda bisa mengunduh gambar QR di atas dengan klik kanan -> Save Image.")
             
             st.markdown("---")
             st.markdown("### 📦 Daftar Barang Saat Ini")
@@ -3045,10 +3015,8 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                 st.info("Belum ada data.")
 
 # --- 30. UPLOAD EXCEL INVENTORY ---
-# --- 30. UPLOAD EXCEL INVENTORY ---
 elif pilihan == "📤 Upload Excel Inventory":
-    st.markdown('<div class="main-header"><h1>📤 Upload Excel Inventory</h1><p>Masukkan data dari Excel ke Database Streamlit</p></div>', unsafe_allow_html=True)
-    
+    st.markdown('<div class="main-header"><h1>📤 Upload Excel Inventory</h1><p>Masukkan data dari Excel ke Database</p></div>', unsafe_allow_html=True)
     st.warning("⚠️ Catatan: Setiap kali aplikasi di Reboot, database akan kembali kosong. Gunakan menu ini untuk memasukkan data kembali.")
     
     kategori_barang = st.selectbox("Pilih Kategori Barang", ["ATK", "RTK", "SOUVENIR"])
@@ -3056,9 +3024,7 @@ elif pilihan == "📤 Upload Excel Inventory":
     
     if uploaded_file is not None:
         try:
-            # Membaca nama kolom dari Baris ke-3 Excel
             df = pd.read_excel(uploaded_file, sheet_name=0, header=2) 
-            
             st.write(f"✅ File berhasil dibaca: **{len(df)} baris**.")
             st.dataframe(df.head(3), use_container_width=True)
             
@@ -3068,12 +3034,9 @@ elif pilihan == "📤 Upload Excel Inventory":
                 
                 for index, row in df.iterrows():
                     nama_barang = None
-                    if 'NAMA BARANG RTK' in df.columns: 
-                        nama_barang = row['NAMA BARANG RTK']
-                    elif 'NAMA BARANG' in df.columns: 
-                        nama_barang = row['NAMA BARANG']
-                    elif 'NAMA BARANG SOUVENIR' in df.columns:
-                        nama_barang = row['NAMA BARANG SOUVENIR']
+                    if 'NAMA BARANG RTK' in df.columns: nama_barang = row['NAMA BARANG RTK']
+                    elif 'NAMA BARANG' in df.columns: nama_barang = row['NAMA BARANG']
+                    elif 'NAMA BARANG SOUVENIR' in df.columns: nama_barang = row['NAMA BARANG SOUVENIR']
                     
                     satuan = str(row.get('SATUAN', '')).strip()
                     if satuan == 'nan': satuan = ''
@@ -3091,10 +3054,7 @@ elif pilihan == "📤 Upload Excel Inventory":
                         nama_bersih = str(nama_barang).strip()
                         
                         try:
-                            c.execute("""INSERT OR REPLACE INTO master_barang 
-                                         (barcode, nama_barang, kategori, satuan, stok_saat_ini) 
-                                         VALUES (?,?,?,?,?)""",
-                                      (barcode, nama_bersih, kategori_barang, satuan, stok))
+                            c.execute("""INSERT OR REPLACE INTO master_barang (barcode, nama_barang, kategori, satuan, stok_saat_ini) VALUES (?,?,?,?,?)""", (barcode, nama_bersih, kategori_barang, satuan, stok))
                             berhasil += 1
                         except Exception as e:
                             pass
