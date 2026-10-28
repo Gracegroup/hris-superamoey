@@ -72,8 +72,6 @@ st.markdown("""
     .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .section-header h3 { margin: 0; color: #1e3c72; }
 </style>
-""", unsafe_allow_html=True)
-<style>
     /* BACKGROUND APLIKASI */
    # ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
 st.markdown("""
