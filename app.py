@@ -2905,7 +2905,147 @@ elif pilihan == "📝 Log Aktivitas":
         cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
         c.execute("DELETE FROM log_aktivitas WHERE waktu < ?", (cutoff,))
         conn.commit(); st.success("✅ Log lama dihapus."); time.sleep(1); st.rerun()
+# --- 29. INVENTORY & KARTU STOK (BARCODE) ---
+elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
+    st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
+    
+    # =========================================================
+    # FUNGSI UNTUK MENAMPILKAN FORM SCAN
+    # =========================================================
+    def render_form_scan():
+        st.subheader("Form Pengambilan / Penambahan Barang")
+        
+        with st.form("form_scan"):
+            col_scan1, col_scan2 = st.columns([1, 2])
+            
+            with col_scan1:
+                df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
+                
+                if not df_pilih_barang.empty:
+                    dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
+                    pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_universal")
+                    scan_code = dict_barang[pilih_nama_barang]
+                    
+                    satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
+                    st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
+                else:
+                    scan_code = ""
+                    st.warning("Belum ada data barang di database.")
+                
+                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_universal")
+                
+            with col_scan2:
+                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_universal")
+                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_universal")
+            
+            submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
+            
+            if submit_scan and scan_code:
+                barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
+                
+                if barang:
+                    nama_barang, stok_lama = barang
+                    
+                    if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
+                        st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
+                    else:
+                        stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
+                        
+                        c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
+                        
+                        status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
+                        waktu_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
+                                     VALUES (?,?,?,?,?,?)""",
+                                  (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
+                        conn.commit()
+                        
+                        st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
+                        st.balloons()
+                        time.sleep(1.5)
+                        st.rerun()
+                else:
+                    st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
 
+    # =========================================================
+    # PENGATURAN TAMPILAN (TAB VS QR CODE)
+    # =========================================================
+    is_qr_mode = st.session_state.get("mode_gudang", False)
+
+    if is_qr_mode:
+        st.info("Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang dan proses transaksi di bawah ini.")
+        render_form_scan()
+        
+        if st.button("⬅️ Kembali ke Menu Utama", use_container_width=True):
+            st.session_state["mode_gudang"] = False
+            st.query_params.clear()
+            st.rerun()
+    else:
+        tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
+            "Master Barang & Cetak QR", 
+            "Scan Via HP (Auto-Form)", 
+            "Kartu Stok", 
+            "Export Excel"
+        ])
+        
+        with tab_inv1:
+            st.subheader("Master Barang & Cetak QR")
+            
+            # URL Aplikasi Streamlit Anda
+            app_url = "https://j4r5x4ubtfe2qr2h862bzb.streamlit.app"
+            qr_url = f"{app_url}/?mode=gudang"
+            
+            def generate_qr(data):
+                qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                qr.add_data(data)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                buf = BytesIO()
+                img.save(buf, format="PNG")
+                return buf.getvalue()
+            
+            st.markdown("### 📱 QR Code Universal Gudang")
+            st.write("Cetak dan tempel QR Code ini di pintu gudang. Karyawan cukup scan QR ini untuk langsung masuk ke form pengambilan/penambahan barang tanpa perlu login.")
+            
+            col_qr1, col_qr2 = st.columns([1, 2])
+            with col_qr1:
+                qr_img = generate_qr(qr_url)
+                st.image(qr_img, caption="Scan QR ini", width=250)
+            with col_qr2:
+                st.info("Link Tujuan QR Code:")
+                st.code(qr_url, language="text")
+                st.write("Anda bisa mengunduh gambar QR di atas dengan klik kanan -> Save Image.")
+            
+            st.markdown("---")
+            st.markdown("### 📦 Daftar Barang Saat Ini")
+            df_master = pd.read_sql_query("SELECT * FROM master_barang", conn)
+            if not df_master.empty:
+                st.dataframe(df_master, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Belum ada data barang. Silakan gunakan menu 'Upload Excel Inventory' di sidebar.")
+            
+        with tab_inv2:
+            render_form_scan()
+            
+        with tab_inv3:
+            st.subheader("Kartu Stok Barang")
+            df_log = pd.read_sql_query("SELECT * FROM log_stok ORDER BY id DESC LIMIT 100", conn)
+            if not df_log.empty:
+                st.dataframe(df_log, use_container_width=True, hide_index=True)
+            else:
+                st.info("Belum ada transaksi.")
+            
+        with tab_inv4:
+            st.subheader("Export Excel")
+            df_master = pd.read_sql_query("SELECT * FROM master_barang", conn)
+            if not df_master.empty:
+                csv = df_master.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Download Data Master Barang", data=csv, file_name="master_barang.csv", mime="text/csv")
+            else:
+                st.info("Belum ada data.")
+
+# --- 30. UPLOAD EXCEL INVENTORY ---
 # --- 30. UPLOAD EXCEL INVENTORY ---
 elif pilihan == "📤 Upload Excel Inventory":
     st.markdown('<div class="main-header"><h1>📤 Upload Excel Inventory</h1><p>Masukkan data dari Excel ke Database Streamlit</p></div>', unsafe_allow_html=True)
