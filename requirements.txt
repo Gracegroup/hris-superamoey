@@ -10,3 +10,5 @@ altair
 python-barcode
 pillow
 openpyxl
+qrcode
+pillow
