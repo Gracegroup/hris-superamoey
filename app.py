@@ -296,15 +296,23 @@ with st.sidebar:
 
 # ==================== KONTEN MENU ====================
 # ==================== URL ROUTING UNTUK QR CODE ====================
-# Menangkap parameter ?barcode=... dari URL HP yang scan
+# ==================== URL ROUTING UNTUK QR CODE ====================
+# Menangkap parameter ?barcode=... (QR per barang)
 url_barcode = st.query_params.get("barcode", None)
 if url_barcode:
     st.session_state["auto_barcode"] = url_barcode
     st.session_state["force_menu"] = "📦 Inventory & Kartu Stok (Barcode)"
 
+# Menangkap parameter ?scan=gudang (QR Universal Gudang)
+url_scan_gudang = st.query_params.get("scan", None)
+if url_scan_gudang == "gudang":
+    st.session_state["force_menu"] = "📦 Inventory & Kartu Stok (Barcode)"
+    st.session_state["mode_gudang"] = True
+
 # Memaksa menu pindah ke Inventory jika diakses via QR
 if st.session_state.get("force_menu") == "📦 Inventory & Kartu Stok (Barcode)":
     pilihan = "📦 Inventory & Kartu Stok (Barcode)"
+# ===================================================================
 # --- 1. DASHBOARD HRIS (LAYOUT 2 KOLOM & METRIK LENGKAP) ---
 if pilihan == "🏠 Dashboard HRIS":
     st.markdown('<div class="main-header"><h1>🏠 Dashboard HRIS & GA</h1><p>Ringkasan Eksekutif Data SDM, Rekrutmen, dan General Affairs</p></div>', unsafe_allow_html=True)
@@ -2930,7 +2938,7 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
     
     # ⚠️ GANTI URL INI DENGAN URL STREAMLIT CLOUD ANDA
-    app_url = "https://j4r5x4ubte2gr2h862bzb.streamlit.app" 
+    app_url = "https://j4r5x4ubfte2gr2h862bzb.streamlit.app" 
     
     tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
         "📝 Master Barang & Cetak QR", 
@@ -2998,23 +3006,62 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             st.dataframe(df_barang[['barcode', 'nama_barang', 'kategori', 'satuan', 'stok_saat_ini', 'lokasi']], use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada data barang.")
-
+                  # --- FITUR BARU: CETAK QR CODE UNIVERSAL GUDANG ---
+        st.markdown("---")
+        st.subheader("Cetak QR Code Universal (Untuk Pintu Gudang)")
+        st.write("Scan QR ini untuk membuka form pengambilan barang tanpa perlu scan barcode per item.")
+        
+        link_gudang = f"{app_url}/?scan=gudang"
+        st.info(f"🔗 Link Gudang: `{link_gudang}`")
+        
+        if st.button("🖨️ Generate QR Code Gudang", type="primary"):
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(link_gudang)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            buffer_gudang = BytesIO()
+            img.save(buffer_gudang, format="PNG")
+            
+            st.image(buffer_gudang.getvalue(), caption="QR Code Gudang (Universal)", width=300)
+            st.success("💡 Cetak gambar ini dan tempel di pintu gudang/meja GA!")
     # ================= TAB 2: SCAN VIA HP (AUTO-FORM) =================
+       # ================= TAB 2: SCAN VIA HP / INPUT MANUAL =================
     with tab_inv2:
         st.subheader("Form Pengambilan / Penambahan Barang")
         
-        auto_barcode = st.session_state.get("auto_barcode", "")
+        is_mode_gudang = st.session_state.get("mode_gudang", False)
         
-        if auto_barcode:
-            st.success(f"✅ QR Code Berhasil Dipindai! Barang: **{auto_barcode}**")
-            st.session_state["auto_barcode"] = "" 
-            st.session_state["force_menu"] = ""
-            
+        if is_mode_gudang:
+            st.info("📦 Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang yang ingin diambil/ditambah.")
+            st.session_state["mode_gudang"] = False # Reset setelah dibaca agar kembali normal saat di-refresh
+        else:
+            auto_barcode = st.session_state.get("auto_barcode", "")
+            if auto_barcode:
+                st.success(f"✅ QR Code Berhasil Dipindai! Barang: **{auto_barcode}**")
+                st.session_state["auto_barcode"] = "" 
+                st.session_state["force_menu"] = ""
+                
         with st.form("form_scan"):
             col_scan1, col_scan2 = st.columns([1, 2])
+            
             with col_scan1:
-                scan_code = st.text_input("Kode Barang (Otomatis terisi dari QR)", value=auto_barcode)
+                if is_mode_gudang:
+                    # JIKA VIA QR GUDANG: Tampilkan Dropdown Pilihan Barang
+                    df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang ORDER BY nama_barang", conn)
+                    if not df_pilih_barang.empty:
+                        dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
+                        pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()))
+                        scan_code = dict_barang[pilih_nama_barang]
+                    else:
+                        scan_code = ""
+                        st.warning("Belum ada data barang.")
+                else:
+                    # JIKA VIA QR PER ITEM: Text Input (Bisa pakai scanner USB atau otomatis dari QR)
+                    scan_code = st.text_input("Kode Barang (Otomatis terisi dari QR)", value=st.session_state.get("auto_barcode", ""))
+                
                 scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True)
+                
             with col_scan2:
                 scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1)
                 scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting")
