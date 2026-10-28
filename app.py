@@ -1,5 +1,4 @@
 import time
-from playwright.sync_api import sync_playwright
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -12,82 +11,13 @@ import calendar
 import altair as alt
 import base64
 import zipfile
+import datetime
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
-from io import StringIO
-import streamlit as st
-import pandas as pd
-import sqlite3
-import datetime
-import time
+from io import StringIO, BytesIO
 import qrcode
-from io import BytesIO
-# ... (import lainnya yang sudah ada) ...
 
-# =========================================================
-# 1. DETEKSI URL QUERY PARAMETERS UNTUK QR CODE
-# =========================================================
-# Membaca URL, misal: https://app-anda.streamlit.app/?mode=gudang
-query_params = st.query_params
-
-if "mode" in query_params and query_params["mode"] == "gudang":
-    # Paksa sistem menganggap user sudah login
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = "Petugas_Gudang"
-    st.session_state["role"] = "ADMIN" # Beri akses admin agar bisa akses database
-    st.session_state["mode_gudang"] = True # Penanda khusus mode gudang
-    st.session_state["force_menu"] = "Scan Via HP" # Opsional: memaksa menu tertentu
-import streamlit as st
-
-# =========================================================
-# PENYADAP URL: BYPASS LOGIN DARI QR CODE GUDANG
-# =========================================================
-query_params = st.query_params
-if "mode" in query_params and query_params["mode"] == "gudang":
-    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = "Petugas_Gudang"
-    st.session_state["nama"] = "Petugas Gudang"
-    st.session_state["role"] = "staff" 
-    st.session_state["mode_gudang"] = True
-    
-# =========================================================
-# LOGIN SYSTEM ANDA (JANGAN DIUBAH)
-# =========================================================
-# ... (Biarkan kode login asli Anda di bawah ini) ...
-# =========================================================
-# 2. LOGIKA LOGIN BAWAAN ANDA (JANGAN DIHAPUS)
-# =========================================================
-# (Biarkan kode cek login Anda di sini, contoh:)
-# ==================== LOGIN SYSTEM ====================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.nama = ""
-    st.session_state.role = ""
-
-if not st.session_state.logged_in:
-    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        with st.form("login"):
-            st.subheader("🔐 Login Sistem")
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("Masuk", use_container_width=True):
-                row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
-                if row and row[1] == hash_password(p) and row[4] == 1:
-                    st.session_state.logged_in = True
-                    st.session_state.username = row[0]
-                    st.session_state.nama = row[2]
-                    st.session_state.role = row[3]
-                    log_aksi(u, "LOGIN")
-                    st.rerun()
-                else: 
-                    st.error("❌ Username / password salah atau akun tidak aktif.")
-        st.info("🔑 Default: **admin** / **admin123**")
-    st.stop()
-# ==================== KONFIGURASI ====================
+# ==================== 1. KONFIGURASI HALAMAN ====================
 st.set_page_config(
     page_title="HRIS & GA Amoey",
     page_icon="⚡",
@@ -95,11 +25,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-os.makedirs("uploads/foto", exist_ok=True)
-os.makedirs("uploads/dokumen", exist_ok=True)
-os.makedirs("uploads/flyer", exist_ok=True)
+# ==================== 2. KONEKSI DATABASE ====================
+# WAJIB DI ATAS AGAR LOGIN TIDAK ERROR
+conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
+c = conn.cursor()
 
-# ==================== CUSTOM CSS ====================
+def hash_password(p): 
+    return hashlib.sha256(p.encode()).hexdigest()
+
+def log_aksi(u, a, d=""):
+    try:
+        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+    except Exception: 
+        pass
+
+# ==================== 3. PENYADAP URL (BYPASS LOGIN QR CODE) ====================
+query_params = st.query_params
+if "mode" in query_params and query_params["mode"] == "gudang":
+    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
+    st.session_state["logged_in"] = True
+    st.session_state["username"] = "Petugas_Gudang"
+    st.session_state["nama"] = "Petugas Gudang"
+    st.session_state["role"] = "admin" # Diberi akses admin agar tidak error saat inisialisasi DB
+    st.session_state["mode_gudang"] = True
+
+# ==================== 4. CUSTOM CSS ====================
 st.markdown("""
 <style>
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
@@ -133,8 +84,6 @@ st.markdown("""
     .payroll-slip { background: white; padding: 20px; border-radius: 10px; border: 2px solid #2a5298; }
     .payroll-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e0e0e0; }
     .payroll-total { font-weight: bold; border-top: 2px solid #2a5298; border-bottom: none; margin-top: 8px; padding-top: 8px; }
-    
-    /* CSS Khusus Form Official */
     .form-box { background: white; padding: 25px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: black;}
     .form-title { text-align: center; font-weight: bold; font-size: 1.4em; margin-bottom: 20px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 10px; }
     .form-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
@@ -143,18 +92,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== DATABASE & AUTO-REPAIR ====================
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
-c = conn.cursor()
+# ==================== 5. INISIALISASI DATABASE (TABEL) ====================
+os.makedirs("uploads/foto", exist_ok=True)
+os.makedirs("uploads/dokumen", exist_ok=True)
+os.makedirs("uploads/flyer", exist_ok=True)
 
-# Fitur Auto-Repair: Memastikan database lama tidak menyebabkan error
 try:
     c.execute("SELECT divisi FROM karyawan LIMIT 1")
 except sqlite3.OperationalError:
     c.execute("DROP TABLE IF EXISTS karyawan")
     conn.commit()
 
-# ==================== HELPER ANTI-NAN ====================
 def clean(val, default=""):
     if val is None: return default
     try:
@@ -172,7 +120,7 @@ def clean_date(val):
     try: return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
     except Exception: return None
 
-# ==================== PEMBUATAN TABEL ====================
+# Pembuatan Tabel HRIS & GA
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, versatility TEXT, pendidikan_terakhir TEXT, asal_sekolah TEXT, no_ktp TEXT, no_kk TEXT, poh TEXT, status_poh TEXT, mine_permit_start TEXT, mine_permit_end TEXT, status_mine_permit TEXT, peringatan_pkwt TEXT, gaji REAL DEFAULT 0, aktif INTEGER DEFAULT 1)''')
 c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, jadwal_interview TEXT, tipe_interview TEXT, jam_interview TEXT, tahapan TEXT, status_berkas TEXT, catatan_berkas TEXT, tgl_interview TEXT, hasil_interview TEXT, tgl_ground_test TEXT, hasil_ground_test TEXT, tgl_induksi TEXT, hasil_induksi TEXT, tgl_mcu TEXT, hasil_mcu TEXT, tgl_sign_contract TEXT, tmk TEXT, lead_time_hari INTEGER)''')
@@ -194,45 +142,26 @@ c.execute('''CREATE TABLE IF NOT EXISTS im (id INTEGER PRIMARY KEY AUTOINCREMENT
 c.execute('''CREATE TABLE IF NOT EXISTS arsip_dokumen (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal_upload TEXT, nama_dokumen TEXT, kategori TEXT, keterangan TEXT, file_data BLOB, file_name TEXT, file_type TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS lampiran (id INTEGER PRIMARY KEY AUTOINCREMENT, ref_modul TEXT, ref_id TEXT, file_name TEXT, file_type TEXT, file_data BLOB, tanggal_upload TEXT, keterangan TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
-
-# Tabel Tambahan Formulir HRD
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_wawancara (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, jabatan TEXT, usia TEXT, tanggal_wawancara TEXT, f1 TEXT, f2 TEXT, f3 TEXT, f4 TEXT, f5 TEXT, kelebihan TEXT, kekurangan TEXT, keputusan TEXT, pewawancara TEXT, nama_pewawancara TEXT, jabatan_pewawancara TEXT, data_fisik TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_coaching (id INTEGER PRIMARY KEY AUTOINCREMENT, nama_karyawan TEXT, nik TEXT, tanggal_masuk TEXT, jabatan TEXT, status_karyawan TEXT, isu TEXT, observasi TEXT, langkah_perbaikan TEXT, komitmen TEXT, rekomendasi TEXT, hal_dilakukan TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_fpk (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, divisi TEXT, jumlah INTEGER, penempatan TEXT, lokasi TEXT, tanggal_pengajuan TEXT, tujuan TEXT, alasan TEXT, magang TEXT, jangka_waktu TEXT, pendidikan TEXT, rentang_usia TEXT, jenis_kelamin TEXT, pengalaman TEXT, keahlian TEXT, bahasa TEXT, sertifikasi TEXT, persyaratan_tambahan TEXT, sumber_kandidat TEXT, proses_rekrutmen TEXT, technical_tes TEXT, deskripsi_pekerjaan TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_exit (id INTEGER PRIMARY KEY AUTOINCREMENT, jenis_form TEXT, nama TEXT, nik TEXT, posisi TEXT, departemen TEXT, data_json TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_izin (id INTEGER PRIMARY KEY AUTOINCREMENT, jenis_form TEXT, nama TEXT, jabatan TEXT, tanggal TEXT, alasan TEXT, pukul TEXT, keterangan TEXT, data_json TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_perubahan (id INTEGER PRIMARY KEY AUTOINCREMENT, no_urut TEXT, tanggal TEXT, data_json TEXT, pengaju TEXT, created_by TEXT, created_at TEXT)''')
-conn.commit()
-# Tambahan Tabel untuk Inventory & Kartu Stok
 
-# Tabel untuk Inventory
-c.execute('''CREATE TABLE IF NOT EXISTS master_barang (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    barcode TEXT UNIQUE,
-    nama_barang TEXT,
-    kategori TEXT,
-    satuan TEXT,
-    stok_saat_ini INTEGER DEFAULT 0,
-    lokasi TEXT
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS log_stok (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    barcode TEXT,
-    tanggal TEXT,
-    status TEXT,
-    jumlah INTEGER,
-    keterangan TEXT,
-    petugas TEXT
-)''')
+# Pembuatan Tabel Inventory
+c.execute('''CREATE TABLE IF NOT EXISTS master_barang (id INTEGER PRIMARY KEY AUTOINCREMENT, barcode TEXT UNIQUE, nama_barang TEXT, kategori TEXT, satuan TEXT, stok_saat_ini INTEGER DEFAULT 0, lokasi TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS log_stok (id INTEGER PRIMARY KEY AUTOINCREMENT, barcode TEXT, tanggal TEXT, status TEXT, jumlah INTEGER, keterangan TEXT, petugas TEXT)''')
 conn.commit()
-# ==================== MIGRASI KOLOM EXCEL ====================
+
+# Migrasi Kolom
 kolom_tambahan = ["npwp TEXT", "ptkp_status TEXT", "bank_name TEXT", "bank_account TEXT", "bank_account_holder TEXT", "bpjs_ketenagakerjaan TEXT", "bpjs_kesehatan TEXT", "citizen_id_address TEXT", "residential_address TEXT", "nik_npwp_16 TEXT", "phone TEXT", "branch_name TEXT", "religion TEXT", "marital_status TEXT", "blood_type TEXT", "length_of_service TEXT", "manager TEXT", "grade TEXT"]
 for kol in kolom_tambahan:
     try: c.execute(f"ALTER TABLE karyawan ADD COLUMN {kol}")
     except sqlite3.OperationalError: pass
 conn.commit()
 
-# ==================== SEEDING DEFAULT ====================
+# Seeding Data Awal
 c.execute("SELECT COUNT(*) FROM lowongan")
 if c.fetchone()[0] == 0:
     tgl_buka = date.today().strftime("%Y-%m-%d"); tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
@@ -246,18 +175,10 @@ if c.fetchone()[0] == 0:
     c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashlib.sha256("hrd123".encode()).hexdigest(), "HRD Staff", "hrd"))
     conn.commit()
 
-# ==================== FUNGSI GLOBAL ====================
-def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
-
+# ==================== 6. FUNGSI GLOBAL ====================
 def format_rp(n):
     try: return f"Rp {float(n):,.0f}".replace(",", ".")
     except: return "Rp 0"
-
-def log_aksi(u, a, d=""):
-    try:
-        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-    except Exception: pass
 
 def metric_card(label, value, sub="", warna="card-blue"):
     sub_html = f'<div class="sub">{sub}</div>' if sub else ''
@@ -305,25 +226,8 @@ def render_edit_delete_table(table_name, query, editable_cols, display_cols, key
         conn.commit()
         st.success(f"✅ Berhasil menyimpan {success_count} data dan menghapus {delete_count} data.")
         time.sleep(1); st.rerun()
-        # ==================== LOGIN SYSTEM ====================
-import streamlit as st
-import datetime
 
-# =========================================================
-# 1. PENYADAP URL: BYPASS LOGIN DARI QR CODE GUDANG
-# =========================================================
-query_params = st.query_params
-if "mode" in query_params and query_params["mode"] == "gudang":
-    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = "Petugas_Gudang"
-    st.session_state["nama"] = "Petugas Gudang"
-    st.session_state["role"] = "staff"
-    st.session_state["mode_gudang"] = True
-
-# =========================================================
-# 2. LOGIN SYSTEM (JIKA BUKAN DARI QR CODE)
-# =========================================================
+# ==================== 7. SISTEM LOGIN ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
@@ -339,7 +243,6 @@ if not st.session_state.logged_in:
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
             if st.form_submit_button("Masuk", use_container_width=True):
-                # Pastikan variabel 'c' (cursor database) sudah dideklarasikan di atas file Anda
                 row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
                 if row and row[1] == hash_password(p) and row[4] == 1:
                     st.session_state.logged_in = True
@@ -353,9 +256,7 @@ if not st.session_state.logged_in:
         st.info("🔑 Default: **admin** / **admin123**")
     st.stop() # Hentikan eksekusi jika belum login
 
-# =========================================================
-# 3. SIDEBAR MENU (MULAI DARI SINI HARUS RATA KIRI)
-# =========================================================
+# ==================== 8. SIDEBAR MENU ====================
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
@@ -375,7 +276,6 @@ with st.sidebar:
     if st.session_state.role == "admin": 
         menu += ["👤 Manajemen User", "🔄 Sinkronisasi Uniquip", "📝 Log Aktivitas"]
         
-    # Cek apakah sedang dalam mode QR Gudang
     is_qr_mode = st.session_state.get("mode_gudang", False)
     
     if is_qr_mode:
@@ -383,7 +283,6 @@ with st.sidebar:
         st.info("📦 Mode Scan Gudang Aktif")
         pilihan = "📦 Inventory & Kartu Stok (Barcode)"
     else:
-        # Jika login normal, tampilkan menu seperti biasa
         pilihan = st.selectbox("📋 Menu Navigasi", menu)
         st.markdown("---")
         tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
@@ -393,37 +292,16 @@ with st.sidebar:
         log_aksi(st.session_state.username, "LOGOUT")
         for k in ["logged_in", "username", "nama", "role", "mode_gudang"]: 
             st.session_state[k] = False if k in ["logged_in", "mode_gudang"] else ""
-        # Bersihkan URL dari parameter QR
         st.query_params.clear() 
         st.rerun()
 
-# ==================== KONTEN MENU ====================
-# (Sisa kode Anda dari if pilihan == "🏠 Dashboard HRIS": dan seterusnya ada di bawah sini)
 
-# ==================== KONTEN MENU ====================
-# ==================== URL ROUTING UNTUK QR CODE ====================
-# ==================== URL ROUTING UNTUK QR CODE ====================
-# Menangkap parameter ?barcode=... (QR per barang)
-url_barcode = st.query_params.get("barcode", None)
-if url_barcode:
-    st.session_state["auto_barcode"] = url_barcode
-    st.session_state["force_menu"] = "📦 Inventory & Kartu Stok (Barcode)"
+# ==================== 9. KONTEN MENU ====================
 
-# Menangkap parameter ?scan=gudang (QR Universal Gudang)
-url_scan_gudang = st.query_params.get("scan", None)
-if url_scan_gudang == "gudang":
-    st.session_state["force_menu"] = "📦 Inventory & Kartu Stok (Barcode)"
-    st.session_state["mode_gudang"] = True
-
-# Memaksa menu pindah ke Inventory jika diakses via QR
-if st.session_state.get("force_menu") == "📦 Inventory & Kartu Stok (Barcode)":
-    pilihan = "📦 Inventory & Kartu Stok (Barcode)"
-# ===================================================================
-# --- 1. DASHBOARD HRIS (LAYOUT 2 KOLOM & METRIK LENGKAP) ---
+# --- 1. DASHBOARD HRIS ---
 if pilihan == "🏠 Dashboard HRIS":
     st.markdown('<div class="main-header"><h1>🏠 Dashboard HRIS & GA</h1><p>Ringkasan Eksekutif Data SDM, Rekrutmen, dan General Affairs</p></div>', unsafe_allow_html=True)
     
-    # AMBIL SEMUA DATA DARI DATABASE
     total_karyawan = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=1").fetchone()[0]
     total_kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
     total_lowongan = c.execute("SELECT COUNT(*) FROM lowongan WHERE status='Buka'").fetchone()[0]
@@ -441,7 +319,6 @@ if pilihan == "🏠 Dashboard HRIS":
     total_payroll = c.execute("SELECT COALESCE(SUM(gaji_bersih), 0) FROM payroll WHERE periode=?", (periode_ini,)).fetchone()[0]
     total_utility = c.execute("SELECT COALESCE(SUM(total_bayar), 0) FROM utility WHERE periode=?", (periode_ini,)).fetchone()[0]
 
-    # BAGI LAYAR: KIRI (DATA), KANAN (FLYER)
     col_left, col_right = st.columns([2.5, 1])
 
     with col_left:
@@ -528,7 +405,6 @@ if pilihan == "🏠 Dashboard HRIS":
                 else: st.info("Belum ada data kandidat.")
 
     with col_right:
-        # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
         if tampilkan_flyer:
             st.markdown("""
             <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e57c2 100%); padding: 12px; border-radius: 12px; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
@@ -540,7 +416,6 @@ if pilihan == "🏠 Dashboard HRIS":
             flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))][:2]
             
             if flyer_files:
-                import base64
                 img_tags = ""
                 for img_name in flyer_files:
                     filepath = os.path.join("uploads/flyer", img_name)
@@ -611,7 +486,8 @@ if pilihan == "🏠 Dashboard HRIS":
                         st.success(f"✅ Flyer berhasil diperbarui!")
                         time.sleep(1)
                         st.rerun()
-                        # --- 2. FILING DATA MANPOWER ---
+
+# --- 2. FILING DATA MANPOWER ---
 elif pilihan == "🗂️ Filing Data Manpower":
     st.markdown('<div class="main-header"><h1>🗂️ Filing Data Manpower</h1><p>Pencarian & Filter Data Karyawan</p></div>', unsafe_allow_html=True)
     
@@ -677,14 +553,13 @@ elif pilihan == "👥 Data Karyawan":
         "main_karyawan"
     )
 
-# --- 4. MANPOWER REPORT (UPGRADE + IMPORT EXCEL) ---
+# --- 4. MANPOWER REPORT ---
 elif pilihan == "📈 Manpower Report":
     st.markdown('<div class="main-header"><h1>📈 Manpower Report</h1><p>Analitik Data Karyawan Terintegrasi</p></div>', unsafe_allow_html=True)
     
     tab_mp1, tab_mp2 = st.tabs(["📊 Dashboard Manpower", "📥 Import Excel Manpower"])
     
     with tab_mp1:
-        # Filter
         col1, col2, col3 = st.columns(3)
         with col1:
             filter_org = st.selectbox("Filter Divisi/Organization", ["(Semua)"] + [r[0] for r in c.execute("SELECT DISTINCT divisi FROM karyawan WHERE divisi IS NOT NULL AND divisi != ''").fetchall()])
@@ -707,14 +582,12 @@ elif pilihan == "📈 Manpower Report":
         
         df_mp = pd.read_sql_query(q_mp, conn, params=tuple(params_mp))
         
-        # Metrik
         total_mp = len(df_mp)
         aktif_mp = len(df_mp[df_mp['resign_date'].isna() | (df_mp['resign_date'] == '')])
         st.markdown(f"**Total Karyawan (Terfilter): {total_mp} | Aktif: {aktif_mp}**")
         
         st.dataframe(df_mp, use_container_width=True, hide_index=True)
         
-        # Chart Distribusi
         if not df_mp.empty:
             st.markdown('<div class="section-header"><h3>📊 Distribusi Karyawan</h3></div>', unsafe_allow_html=True)
             c_chart1, c_chart2 = st.columns(2)
@@ -768,7 +641,8 @@ elif pilihan == "📈 Manpower Report":
                     time.sleep(2); st.rerun()
             except Exception as e:
                 st.error(f"Gagal membaca file: {e}")
-                # --- 5. ABSENSI & KEHADIRAN (TERINTEGRASI DROPDOWN) ---
+
+# --- 5. ABSENSI & KEHADIRAN ---
 elif pilihan == "📅 Absensi & Kehadiran":
     st.markdown('<div class="main-header"><h1>📅 Absensi & Kehadiran</h1><p>Pencatatan Kehadiran Harian</p></div>', unsafe_allow_html=True)
     
@@ -781,14 +655,10 @@ elif pilihan == "📅 Absensi & Kehadiran":
             with st.form("absensi_form"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    # DROPDOWN KARYAWAN
                     pilih_kar = st.selectbox("Pilih Karyawan *", list(karyawan_options.keys()), key="abs_kar")
                     emp_id_abs = karyawan_options[pilih_kar]
                     data_kar = get_karyawan_data(emp_id_abs)
-                    
-                    # Otomatis tampil divisi & jabatan
                     st.info(f"Divisi: {data_kar.get('divisi', '-')} | Jabatan: {data_kar.get('job_position', '-')}")
-                    
                     tgl_abs = st.date_input("Tanggal *", key="abs_tgl")
                 with col2:
                     jam_masuk = st.text_input("Jam Masuk (HH:MM)", key="abs_jam_in", placeholder="08:00")
@@ -838,7 +708,6 @@ elif pilihan == "🏖️ Cuti & Izin":
                 with col1:
                     pilih_kar = st.selectbox("Karyawan *", list(karyawan_options.keys()), key="cuti_kar")
                     emp_id_cuti = karyawan_options[pilih_kar]
-                    
                     jenis = st.selectbox("Jenis Cuti *", ["Tahunan", "Sakit", "Izin", "Melahirkan", "Cuti Khusus (Menikah)", "Cuti Khusus (Keluarga Meninggal)", "Lainnya"], key="cuti_jenis")
                 with col2:
                     tgl_mulai = st.date_input("Tanggal Mulai *", key="cuti_mulai")
@@ -873,7 +742,6 @@ elif pilihan == "🏖️ Cuti & Izin":
     if not df_cuti.empty:
         st.dataframe(df_cuti, use_container_width=True, hide_index=True)
         
-        # Approve / Reject
         st.markdown("**Approve / Reject Cuti:**")
         col_a, col_b, col_c = st.columns([2, 1, 1])
         with col_a:
@@ -969,7 +837,6 @@ elif pilihan == "💰 Payroll & Slip Gaji":
             if not df_pr.empty:
                 st.dataframe(df_pr, use_container_width=True, hide_index=True)
                 
-                # Slip gaji viewer
                 st.markdown("---")
                 st.subheader("🖨️ Lihat Slip Gaji")
                 slip_id = st.number_input("ID Payroll", min_value=0, step=1, key="slip_id")
@@ -1009,7 +876,8 @@ elif pilihan == "💰 Payroll & Slip Gaji":
                             st.warning(f"❌ Payroll ID {slip_id} tidak ditemukan.")
             else:
                 st.info("Belum ada riwayat payroll.")
-                # --- 8. REKRUTMEN & CV ---
+
+# --- 8. REKRUTMEN & CV ---
 elif pilihan == "📋 Rekrutmen & CV":
     st.markdown('<div class="main-header"><h1>📋 Rekrutmen & CV</h1><p>Manajemen Kandidat & Lowongan</p></div>', unsafe_allow_html=True)
     
@@ -1522,7 +1390,8 @@ elif pilihan == "📱 WhatsApp Reminder":
                 st.success("✅ Copy URL di atas dengan Ctrl+C / Cmd+C")
         else:
             st.warning("⚠️ Isi nomor WA dan pesan dulu.")
-            # --- 18. ASET & PROPERTI ---
+
+# --- 18. ASET & PROPERTI ---
 elif pilihan == "🚛 Aset & Properti":
     st.markdown('<div class="main-header"><h1>🚛 Aset & Properti</h1><p>Manajemen Aset Perusahaan</p></div>', unsafe_allow_html=True)
     
@@ -1594,7 +1463,6 @@ elif pilihan == "🏪 Ruko & Tenant":
     
     tab_rt1, tab_rt2 = st.tabs(["🏪 Ruko", "🏠 Tenant"])
     
-    # --- TAB RUKO ---
     with tab_rt1:
         with st.expander("➕ Tambah Ruko Baru", expanded=False):
             with st.form("ruko_form"):
@@ -1646,7 +1514,6 @@ elif pilihan == "🏪 Ruko & Tenant":
             "main_ruko"
         )
     
-    # --- TAB TENANT ---
     with tab_rt2:
         with st.expander("➕ Tambah Tenant Baru", expanded=False):
             with st.form("tenant_form"):
@@ -1952,22 +1819,20 @@ elif pilihan == "📎 Lampiran / Attachment":
             )
     else:
         st.info("Belum ada lampiran.")
-        # --- 23. FORMULIR HRD (OFFICIAL) ---
+
+# --- 23. FORMULIR HRD (OFFICIAL) ---
 elif pilihan == "📋 Formulir HRD (Official)":
     st.markdown('<div class="main-header"><h1>📋 Formulir HRD (Official)</h1><p>Cetak & Input Data Formulir Standar Perusahaan</p></div>', unsafe_allow_html=True)
     
-    # Membuat 7 Tab (Tab 7 adalah form perubahan data yang akan kita buat di stage terakhir)
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📝 Wawancara & Coaching", "🌴 Permohonan Cuti", "🧑‍💼 Data Pelamar", 
         "📋 Permintaan Karyawan (FPK)", "🚪 Exit & Clearance", "⏱️ Izin & Kehadiran",
         "📝 Perubahan Data"
     ])
     
-    # ================= TAB 1: WAWANCARA & COACHING =================
     with tab1:
         st.subheader("Formulir Laporan Wawancara & Data Fisik Pelamar")
         
-        # --- FORM 1: LAPORAN WAWANCARA ---
         with st.container(border=True):
             st.markdown('<div class="form-title">FORMULIR LAPORAN WAWANCARA</div>', unsafe_allow_html=True)
             
@@ -2001,7 +1866,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.text_input("Nama Pewawancara", key="w_nama_pewawancara")
                 st.text_input("Jabatan Pewawancara", key="w_jabatan_pewawancara")
 
-        # --- FORM 2: DATA FISIK & CHECKLIST PELAMAR ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown('<div class="form-title">DATA PELAMAR & CHECKLIST FISIK</div>', unsafe_allow_html=True)
@@ -2055,7 +1919,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 st.text_input("Nama Pewawancara", key="p_nama_pewawancara")
                 st.text_input("Jabatan Pewawancara", key="p_jabatan_pewawancara")
 
-        # Tombol Simpan Wawancara & Fisik
         if st.button("💾 Simpan Formulir Wawancara & Fisik", type="primary", use_container_width=True, key="btn_save_wawancara_full"):
             try:
                 w_nama_val = st.session_state.get("w_nama", "")
@@ -2125,7 +1988,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
             except Exception as e:
                 st.error(f"❌ Gagal menyimpan: {e}")
 
-        # Riwayat Wawancara
         st.markdown("---")
         st.markdown("**📋 Riwayat Formulir Wawancara:**")
         df_waw = pd.read_sql_query(
@@ -2184,7 +2046,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
                 except Exception as e:
                     st.error(f"❌ Gagal menyimpan: {e}")
 
-        # Riwayat Coaching
         st.markdown("---")
         st.markdown("**📋 Riwayat Form Coaching:**")
         df_co = pd.read_sql_query(
@@ -2196,7 +2057,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.dataframe(df_co, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada form coaching yang tersimpan.")
-                # ================= TAB 2: PERMOHONAN CUTI =================
+
     with tab2:
         st.subheader("1. Surat Permohonan Cuti (Standard)")
         with st.container(border=True):
@@ -2295,7 +2156,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada riwayat permohonan cuti.")
 
-    # ================= TAB 3: DATA PELAMAR =================
     with tab3:
         st.subheader("Formulir Data Pelamar")
         with st.container(border=True):
@@ -2414,7 +2274,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.dataframe(df_dp_hr, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada formulir data pelamar yang tersimpan.")
-                # ================= TAB 4: PERMINTAAN KARYAWAN (FPK) =================
+
     with tab4:
         st.subheader("Formulir Permintaan Karyawan (FPK)")
         with st.container(border=True):
@@ -2505,7 +2365,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada formulir FPK yang tersimpan.")
 
-    # ================= TAB 5: EXIT & CLEARANCE =================
     with tab5:
         st.subheader("Formulir Karyawan Keluar dari Perusahaan")
         
@@ -2694,7 +2553,7 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.dataframe(df_exit_hr, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada form Exit & Clearance yang tersimpan.")
-                # ================= TAB 6: IZIN & KEHADIRAN =================
+
     with tab6:
         st.subheader("1. Permohonan Izin Pulang Cepat")
         with st.container(border=True):
@@ -2841,7 +2700,6 @@ elif pilihan == "📋 Formulir HRD (Official)":
         else:
             st.info("Belum ada riwayat form izin & kehadiran.")
 
-    # ================= TAB 7: PERUBAHAN DATA =================
     with tab7:
         st.subheader("Form Perubahan Data Karyawan")
         with st.container(border=True):
@@ -2888,7 +2746,8 @@ elif pilihan == "📋 Formulir HRD (Official)":
             st.dataframe(df_per_hr, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada formulir perubahan data yang tersimpan.")
-            # --- 24. LAPORAN & ANALITIK ---
+
+# --- 24. LAPORAN & ANALITIK ---
 elif pilihan == "📊 Laporan & Analitik":
     st.markdown('<div class="main-header"><h1>📊 Laporan & Analitik</h1><p>Rekapitulasi Data HRIS</p></div>', unsafe_allow_html=True)
     
@@ -3035,12 +2894,9 @@ elif pilihan == "📝 Log Aktivitas":
         cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
         c.execute("DELETE FROM log_aktivitas WHERE waktu < ?", (cutoff,))
         conn.commit(); st.success("✅ Log lama dihapus."); time.sleep(1); st.rerun()
-# --- 29. INVENTORY & KARTU STOK (BARCODE) ---
+
 # --- 29. INVENTORY & KARTU STOK (BARCODE) ---
 elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
-    import qrcode
-    from io import BytesIO
-    
     st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
     
     # =========================================================
@@ -3088,7 +2944,7 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                         c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
                         
                         status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
-                        waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        waktu_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
                                      VALUES (?,?,?,?,?,?)""",
@@ -3148,9 +3004,6 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
 
 # --- FALLBACK ---
 else:
-    st.warning("⚠️ Menu tidak dikenali.")
-# --- FALLBACK ---
-
     st.warning("⚠️ Menu tidak dikenali.")
 
 # ==================== FOOTER ====================
