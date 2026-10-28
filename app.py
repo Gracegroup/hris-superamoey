@@ -17,48 +17,21 @@ st.set_page_config(
 os.makedirs("uploads/flyer", exist_ok=True)
 os.makedirs("uploads/foto", exist_ok=True)
 os.makedirs("uploads/dokumen", exist_ok=True)
-
 # ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
-st.markdown("""
+# ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
+css_style = """
 <style>
-    /* BACKGROUND APLIKASI */
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
-    
-    /* HEADER UTAMA */
-    .main-header { 
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
-        padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
-    }
+    .main-header { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
     .main-header h1 { margin: 0; font-weight: 800; letter-spacing: 1px; color: white; }
     .main-header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em; color: #e0e7ff; }
-    
-    /* GRID & KARTU (GLASSMORPHISM) */
-    .metric-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); 
-        gap: 12px; margin-bottom: 20px; 
-    }
-    .metric-card { 
-        padding: 15px; border-radius: 18px; 
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
-        backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
-        transition: all 0.3s ease; 
-        color: white; position: relative; overflow: hidden;
-    }
-    .metric-card::before {
-        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
-    }
-    .metric-card:hover { 
-        transform: translateY(-5px) scale(1.03); 
-        box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
-    }
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .metric-card { padding: 15px; border-radius: 18px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); transition: all 0.3s ease; color: white; position: relative; overflow: hidden; }
+    .metric-card::before { content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5; }
+    .metric-card:hover { transform: translateY(-5px) scale(1.03); box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); }
     .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
     .metric-card .value { font-size: 1.5em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); word-break: break-word; }
     .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
-
-    /* WARNA GRADIENT KARTU */
     .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
     .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
@@ -67,67 +40,11 @@ st.markdown("""
     .card-teal { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
     .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
     .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
-
-    /* HEADER SECTION */
     .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .section-header h3 { margin: 0; color: #1e3c72; }
 </style>
-    /* BACKGROUND APLIKASI */
-   # ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
-st.markdown("""
-<style>
-    /* BACKGROUND APLIKASI */
-    .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
-    
-    /* HEADER UTAMA */
-    .main-header { 
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
-        padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
-    }
-    .main-header h1 { margin: 0; font-weight: 800; letter-spacing: 1px; color: white; }
-    .main-header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em; color: #e0e7ff; }
-    
-    /* GRID & KARTU (GLASSMORPHISM) */
-    .metric-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); 
-        gap: 12px; margin-bottom: 20px; 
-    }
-    .metric-card { 
-        padding: 15px; border-radius: 18px; 
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
-        backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
-        transition: all 0.3s ease; 
-        color: white; position: relative; overflow: hidden;
-    }
-    .metric-card::before {
-        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
-    }
-    .metric-card:hover { 
-        transform: translateY(-5px) scale(1.03); 
-        box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
-    }
-    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-    .metric-card .value { font-size: 1.5em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); word-break: break-word; }
-    .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
-
-    /* WARNA GRADIENT KARTU */
-    .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
-    .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .card-orange { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
-    .card-red { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
-    .card-teal { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
-    .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
-    .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
-
-    /* HEADER SECTION */
-    .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .section-header h3 { margin: 0; color: #1e3c72; }
-</style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(css_style, unsafe_allow_html=True)
     
     page_title="HRIS & GA Amoey",
     page_icon="⚡",
