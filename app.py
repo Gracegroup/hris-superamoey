@@ -42,11 +42,34 @@ if "mode" in query_params and query_params["mode"] == "gudang":
 # 2. LOGIKA LOGIN BAWAAN ANDA (JANGAN DIHAPUS)
 # =========================================================
 # (Biarkan kode cek login Anda di sini, contoh:)
-if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
-    # Tampilkan form login
-    st.title("Silakan Login")
-    # ... kode form login Anda ...
-    st.stop() # Hentikan eksekusi jika belum login
+# ==================== LOGIN SYSTEM ====================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.username = ""
+    st.session_state.nama = ""
+    st.session_state.role = ""
+
+if not st.session_state.logged_in:
+    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        with st.form("login"):
+            st.subheader("🔐 Login Sistem")
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("Masuk", use_container_width=True):
+                row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
+                if row and row[1] == hash_password(p) and row[4] == 1:
+                    st.session_state.logged_in = True
+                    st.session_state.username = row[0]
+                    st.session_state.nama = row[2]
+                    st.session_state.role = row[3]
+                    log_aksi(u, "LOGIN")
+                    st.rerun()
+                else: 
+                    st.error("❌ Username / password salah atau akun tidak aktif.")
+        st.info("🔑 Default: **admin** / **admin123**")
+    st.stop()
 # ==================== KONFIGURASI ====================
 st.set_page_config(
     page_title="HRIS & GA Amoey",
