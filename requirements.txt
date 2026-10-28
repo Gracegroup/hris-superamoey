@@ -4,3 +4,9 @@ fpdf
 bcrypt
 playwright
 openpyxl
+streamlit
+pandas
+altair
+python-barcode
+pillow
+openpyxl
