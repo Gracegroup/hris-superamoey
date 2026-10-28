@@ -8,6 +8,61 @@ import altair as alt
 
 # ==================== KONFIGURASI HALAMAN ====================
 st.set_page_config(
+    st.markdown("""
+<style>
+    /* BACKGROUND APLIKASI */
+    .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
+    
+    /* HEADER UTAMA */
+    .main-header { 
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
+        padding: 18px 25px; border-radius: 20px; color: white; text-align: center; margin-bottom: 20px; 
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(10px);
+    }
+    .main-header h1 { margin: 0; font-weight: 800; letter-spacing: 1px; color: white; }
+    .main-header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em; color: #e0e7ff; }
+    
+    /* GRID & KARTU (GLASSMORPHISM) */
+    .metric-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); 
+        gap: 12px; margin-bottom: 20px; 
+    }
+    .metric-card { 
+        padding: 15px; border-radius: 18px; 
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); 
+        backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); 
+        transition: all 0.3s ease; 
+        color: white; position: relative; overflow: hidden;
+    }
+    .metric-card::before {
+        content: ""; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%); opacity: 0.5;
+    }
+    .metric-card:hover { 
+        transform: translateY(-5px) scale(1.03); 
+        box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.35); 
+    }
+    .metric-card .label { font-size: 0.75em; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+    .metric-card .value { font-size: 1.5em; font-weight: 800; margin: 5px 0; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); word-break: break-word; }
+    .metric-card .sub { font-size: 0.75em; opacity: 0.8; }
+
+    /* WARNA GRADIENT KARTU */
+    .card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .card-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
+    .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .card-orange { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
+    .card-red { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
+    .card-teal { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
+    .card-dark { background: linear-gradient(135deg, #232526 0%, #414345 100%); }
+    .card-gold { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
+
+    /* HEADER SECTION */
+    .section-header { background: white; padding: 15px 20px; border-radius: 12px; border-left: 5px solid #2a5298; margin: 20px 0 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .section-header h3 { margin: 0; color: #1e3c72; }
+</style>
+""", unsafe_allow_html=True)
+    
     page_title="HRIS & GA Amoey",
     page_icon="⚡",
     layout="wide",
@@ -120,12 +175,13 @@ with st.sidebar:
         st.warning("Anda telah logout.")
 
 # ==================== DASHBOARD UTAMA ====================
+# --- 1. DASHBOARD HRIS (WALLPAPER STYLE) ---
 if pilihan == "🏠 Dashboard HRIS":
     # Header Elegan
     st.markdown("""
     <div class="main-header">
-        <h1>HRIS & GA AMOEY</h1>
-        <p>Sistem Manajemen SDM & General Affairs Terpadu</p>
+        <h1 style="margin:0; font-weight:800; letter-spacing:1px;">HRIS & GA AMOEY</h1>
+        <p style="margin:5px 0 0 0; opacity:0.8; font-size:0.9em;">Sistem Manajemen SDM & General Affairs Terpadu</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -191,8 +247,6 @@ if pilihan == "🏠 Dashboard HRIS":
                         tooltip=['divisi', 'jumlah']
                     ).properties(height=250)
                     st.altair_chart(chart_div, use_container_width=True)
-                else:
-                    st.info("Belum ada data karyawan.")
 
         with col_chart2:
             with st.container(border=True):
@@ -201,355 +255,15 @@ if pilihan == "🏠 Dashboard HRIS":
                 if not df_gender.empty:
                     chart_gender = alt.Chart(df_gender).mark_arc(innerRadius=60, cornerRadius=10).encode(
                         theta=alt.Theta(field="jumlah", type="quantitative"),
-                        color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita'], range=['#4facfe', '#f093fb'])),
-                        tooltip=['gender', 'jumlah']
-                    ).properties(height=250)
-                    st.altair_chart(chart_gender, use_container_width=True)
-                else:
-                    st.info("Belum ada data gender.")
-
-    with col_right:
-        # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
-        if tampilkan_flyer:
-            st.markdown("""
-            <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 12px; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; text-align: center; backdrop-filter: blur(10px);">
-                <h3 style="color: #1e3c72; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            flyer_files = [f for f in os.listdir("uploads/flyer") if f.lower().endswith(('.png', '.jpg', '.jpeg'))][:2]
-            
-            if flyer_files:
-                img_tags = ""
-                for img_name in flyer_files:
-                    filepath = os.path.join("uploads/flyer", img_name)
-                    with open(filepath, "rb") as f:
-                        b64_str = base64.b64encode(f.read()).decode()
-                    img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" style="width:100%; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">'
-                
-                if len(flyer_files) > 1:
-                    marquee_html = f"""
-                    <style>
-                    @keyframes scroll-vert {{ 0% {{ transform: translateY(0); }} 100% {{ transform: translateY(-50%); }} }}
-                    .marquee-container {{ height: 600px; overflow: hidden; position: relative; }}
-                    .marquee-track {{ display: flex; flex-direction: column; animation: scroll-vert 15s linear infinite; }}
-                    .marquee-track:hover {{ animation-play-state: paused; }}
-                    </style>
-                    <div class="marquee-container">
-                        <div class="marquee-track">
-                            {img_tags}{img_tags}
-                        </div>
-                    </div>
-                    """
-                else:
-                    marquee_html = f"<div style='height:600px; overflow-y:auto;'>{img_tags}</div>"
-                
-                st.markdown(marquee_html, unsafe_allow_html=True)
-            else:
-                st.info("Belum ada gambar flyer. Silakan upload gambar .jpg/.png ke folder `uploads/flyer/`.")
-
-# ==================== KONTEN MENU LAIN (PLACEHOLDER) ====================
-elif pilihan == "👥 Data Karyawan":
-    st.title("👥 Data Karyawan")
-    st.info("Modul ini akan menampilkan tabel data karyawan.")
-
-elif pilihan == "📋 Rekrutmen & CV":
-    st.title("📋 Rekrutmen & CV")
-    st.info("Modul ini akan menampilkan daftar kandidat dan jadwal interview.")
-
-elif pilihan == "💰 Payroll & Slip Gaji":
-    st.title("💰 Payroll & Slip Gaji")
-    st.info("Modul ini akan menampilkan daftar payroll dan slip gaji.")
-# ==================== DATABASE & AUTO-REPAIR ====================
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
-c = conn.cursor()
-
-try:
-    c.execute("SELECT divisi FROM karyawan LIMIT 1")
-except sqlite3.OperationalError:
-    c.execute("DROP TABLE IF EXISTS karyawan")
-    conn.commit()
-
-# ==================== HELPER ANTI-NAN ====================
-def clean(val, default=""):
-    if val is None: return default
-    try:
-        if pd.isna(val): return default
-    except (TypeError, ValueError): pass
-    s = str(val).strip()
-    if s.lower() in ("nan", "none", "null", "nat", ""): return default
-    return s
-
-def clean_date(val):
-    if val is None: return None
-    try:
-        if pd.isna(val): return None
-    except (TypeError, ValueError): pass
-    try: return pd.to_datetime(val, errors="coerce").strftime("%Y-%m-%d")
-    except Exception: return None
-
-# ==================== PEMBUATAN TABEL ====================
-c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, nama_lengkap TEXT, role TEXT, aktif INTEGER DEFAULT 1)''')
-c.execute('''CREATE TABLE IF NOT EXISTS karyawan (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT UNIQUE, full_name TEXT, barcode TEXT, organization TEXT, job_position TEXT, job_level TEXT, join_date TEXT, resign_date TEXT, status_employee TEXT, end_date TEXT, sign_date TEXT, email TEXT, birth_date TEXT, age TEXT, birth_place TEXT, citizen_id_address TEXT, residential_address TEXT, npwp TEXT, ptkp_status TEXT, employee_tax_status TEXT, tax_config TEXT, bank_name TEXT, bank_account TEXT, bank_account_holder TEXT, bpjs_ketenagakerjaan TEXT, bpjs_kesehatan TEXT, nik_npwp_16 TEXT, mobile_phone TEXT, phone TEXT, branch_name TEXT, parent_branch_name TEXT, religion TEXT, gender TEXT, marital_status TEXT, blood_type TEXT, nationality_code TEXT, currency TEXT, length_of_service TEXT, payment_schedule TEXT, approval_line TEXT, manager TEXT, grade TEXT, class TEXT, profile_picture TEXT, cost_center TEXT, cost_center_category TEXT, sbu TEXT, npwp_16_new TEXT, passport TEXT, passport_expiration_date TEXT, jenis_dok_referensi_bukti_potong TEXT, nomor_dok_referensi_bukti_potong TEXT, tanggal_dok_referensi_bukti_potong TEXT, tin TEXT, divisi TEXT, keterangan TEXT, versatility TEXT, pendidikan_terakhir TEXT, asal_sekolah TEXT, no_ktp TEXT, no_kk TEXT, poh TEXT, status_poh TEXT, mine_permit_start TEXT, mine_permit_end TEXT, status_mine_permit TEXT, peringatan_pkwt TEXT, gaji REAL DEFAULT 0, aktif INTEGER DEFAULT 1)''')
-c.execute('''CREATE TABLE IF NOT EXISTS kandidat (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, telepon TEXT, posisi_dilamar TEXT, email TEXT, sumber TEXT, tanggal_lamar TEXT, status TEXT, catatan TEXT, jadwal_interview TEXT, tipe_interview TEXT, jam_interview TEXT, tahapan TEXT, status_berkas TEXT, catatan_berkas TEXT, tgl_interview TEXT, hasil_interview TEXT, tgl_ground_test TEXT, hasil_ground_test TEXT, tgl_induksi TEXT, hasil_induksi TEXT, tgl_mcu TEXT, hasil_mcu TEXT, tgl_sign_contract TEXT, tmk TEXT, lead_time_hari INTEGER)''')
-c.execute('''CREATE TABLE IF NOT EXISTS lowongan (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, departemen TEXT, jumlah_dibutuhkan INTEGER, status TEXT DEFAULT 'Buka', deskripsi TEXT, tanggal_dibuka TEXT, tanggal_ditutup TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS resign (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_resign TEXT, alasan TEXT, jenis TEXT, exit_interview TEXT, clearance_status TEXT, kategori_penyebab TEXT, tanggal_sign_in TEXT, tanggal_sign_out TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS aset (id INTEGER PRIMARY KEY AUTOINCREMENT, kode TEXT UNIQUE, nama TEXT, kategori TEXT, lokasi TEXT, kondisi TEXT, nilai REAL, tanggal_perolehan TEXT, penanggung_jawab TEXT, status TEXT, catatan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS utility (id INTEGER PRIMARY KEY AUTOINCREMENT, kategori TEXT, tanggal_bayar TEXT, periode TEXT, id_pelanggan TEXT, label TEXT, nominal REAL DEFAULT 0, admin REAL DEFAULT 0, total_bayar REAL DEFAULT 0, metode TEXT, status TEXT DEFAULT 'Lunas', penanggung_jawab TEXT, catatan TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS ruko (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, alamat TEXT, status TEXT, penyewa TEXT, nilai_sewa REAL, mulai_sewa TEXT, akhir_sewa TEXT, catatan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS tenant (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, lokasi TEXT, kamar TEXT, penghuni TEXT, biaya_bulanan REAL, status_ci TEXT, mulai TEXT, catatan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS absensi (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal TEXT, jam_masuk TEXT, jam_keluar TEXT, status TEXT, keterangan TEXT, terlambat_menit INTEGER DEFAULT 0)''')
-c.execute('''CREATE TABLE IF NOT EXISTS cuti (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, jenis_cuti TEXT, tanggal_mulai TEXT, tanggal_selesai TEXT, lama_hari INTEGER, alasan TEXT, status TEXT DEFAULT 'Menunggu', approved_by TEXT, approved_at TEXT, periode_cuti_ke INTEGER, actual_cuti TEXT, status_pengambilan TEXT, saldo_cuti INTEGER)''')
-c.execute('''CREATE TABLE IF NOT EXISTS payroll (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, periode TEXT, gaji_pokok REAL, tunjangan_jabatan REAL, tunjangan_transport REAL, tunjangan_makan REAL, bpjs_kesehatan_karyawan REAL, bpjs_kesehatan_perusahaan REAL, bpjs_jht_karyawan REAL, bpjs_jht_perusahaan REAL, bpjs_jp_karyawan REAL, bpjs_jp_perusahaan REAL, bpjs_jkk REAL, bpjs_jkm REAL, bpjs_jkp REAL, pph21 REAL, total_penghasilan_bruto REAL, total_potongan REAL, gaji_bersih REAL, status TEXT DEFAULT 'Final', tanggal_proses TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS disiplin (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, jenis_sanksi TEXT, tanggal_mulai TEXT, tanggal_akhir TEXT, rincian_pelanggaran TEXT, status TEXT DEFAULT 'Aktif', periode TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS mutasi (id INTEGER PRIMARY KEY AUTOINCREMENT, karyawan_id INTEGER, tanggal_mutasi TEXT, dari_divisi TEXT, ke_divisi TEXT, alasan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS jobdesk (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, departemen TEXT, tugas_utama TEXT, kpi TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS ci (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal TEXT, judul TEXT, departemen TEXT, deskripsi TEXT, status TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS skd (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal TEXT, no_surat TEXT, nama_karyawan TEXT, jenis_surat TEXT, keterangan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS im (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal TEXT, no_memo TEXT, perihal TEXT, pengirim TEXT, penerima TEXT, isi TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS arsip_dokumen (id INTEGER PRIMARY KEY AUTOINCREMENT, tanggal_upload TEXT, nama_dokumen TEXT, kategori TEXT, keterangan TEXT, file_data BLOB, file_name TEXT, file_type TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS lampiran (id INTEGER PRIMARY KEY AUTOINCREMENT, ref_modul TEXT, ref_id TEXT, file_name TEXT, file_type TEXT, file_data BLOB, tanggal_upload TEXT, keterangan TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS log_aktivitas (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, aksi TEXT, detail TEXT, waktu TEXT)''')
-
-# Tabel Tambahan Formulir HRD
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_wawancara (id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, jabatan TEXT, usia TEXT, tanggal_wawancara TEXT, f1 TEXT, f2 TEXT, f3 TEXT, f4 TEXT, f5 TEXT, kelebihan TEXT, kekurangan TEXT, keputusan TEXT, pewawancara TEXT, nama_pewawancara TEXT, jabatan_pewawancara TEXT, data_fisik TEXT, created_by TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_coaching (id INTEGER PRIMARY KEY AUTOINCREMENT, nama_karyawan TEXT, nik TEXT, tanggal_masuk TEXT, jabatan TEXT, status_karyawan TEXT, isu TEXT, observasi TEXT, langkah_perbaikan TEXT, komitmen TEXT, rekomendasi TEXT, hal_dilakukan TEXT, created_by TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_fpk (id INTEGER PRIMARY KEY AUTOINCREMENT, posisi TEXT, divisi TEXT, jumlah INTEGER, penempatan TEXT, lokasi TEXT, tanggal_pengajuan TEXT, tujuan TEXT, alasan TEXT, magang TEXT, jangka_waktu TEXT, pendidikan TEXT, rentang_usia TEXT, jenis_kelamin TEXT, pengalaman TEXT, keahlian TEXT, bahasa TEXT, sertifikasi TEXT, persyaratan_tambahan TEXT, sumber_kandidat TEXT, proses_rekrutmen TEXT, technical_tes TEXT, deskripsi_pekerjaan TEXT, created_by TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_exit (id INTEGER PRIMARY KEY AUTOINCREMENT, jenis_form TEXT, nama TEXT, nik TEXT, posisi TEXT, departemen TEXT, data_json TEXT, created_by TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_izin (id INTEGER PRIMARY KEY AUTOINCREMENT, jenis_form TEXT, nama TEXT, jabatan TEXT, tanggal TEXT, alasan TEXT, pukul TEXT, keterangan TEXT, data_json TEXT, created_by TEXT, created_at TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS formulir_perubahan (id INTEGER PRIMARY KEY AUTOINCREMENT, no_urut TEXT, tanggal TEXT, data_json TEXT, pengaju TEXT, created_by TEXT, created_at TEXT)''')
-conn.commit()
-
-# ==================== MIGRASI KOLOM EXCEL ====================
-kolom_tambahan = ["npwp TEXT", "ptkp_status TEXT", "bank_name TEXT", "bank_account TEXT", "bank_account_holder TEXT", "bpjs_ketenagakerjaan TEXT", "bpjs_kesehatan TEXT", "citizen_id_address TEXT", "residential_address TEXT", "nik_npwp_16 TEXT", "phone TEXT", "branch_name TEXT", "religion TEXT", "marital_status TEXT", "blood_type TEXT", "length_of_service TEXT", "manager TEXT", "grade TEXT"]
-for kol in kolom_tambahan:
-    try: c.execute(f"ALTER TABLE karyawan ADD COLUMN {kol}")
-    except sqlite3.OperationalError: pass
-conn.commit()
-
-# ==================== SEEDING DEFAULT ====================
-c.execute("SELECT COUNT(*) FROM lowongan")
-if c.fetchone()[0] == 0:
-    tgl_buka = date.today().strftime("%Y-%m-%d"); tgl_tutup = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
-    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup) VALUES (?,?,?,?,?,?,?)''', ("Mekanik 2 (M2)", "PRODUCT SUPPORT", 5, "Buka", "Pengganti: La Hajar, Ronald, Herdinus, Galant, Kurnia Bangun Samudera", tgl_buka, tgl_tutup))
-    c.execute('''INSERT INTO lowongan (posisi, departemen, jumlah_dibutuhkan, status, deskripsi, tanggal_dibuka, tanggal_ditutup) VALUES (?,?,?,?,?,?,?)''', ("Mekanik 3 (M3)", "PRODUCT SUPPORT", 4, "Buka", "Pengganti: Indra S, Mardiansyah, Fahri A, Ikmal", tgl_buka, tgl_tutup))
-    conn.commit()
-
-c.execute("SELECT COUNT(*) FROM users")
-if c.fetchone()[0] == 0:
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "OKANAHARIANTO", "admin"))
-    c.execute("INSERT INTO users (username, password, nama_lengkap, role) VALUES (?,?,?,?)", ("hrd", hashlib.sha256("hrd123".encode()).hexdigest(), "HRD Staff", "hrd"))
-    conn.commit()
-
-# ==================== FUNGSI GLOBAL ====================
-def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
-
-def format_rp(n):
-    try: return f"Rp {float(n):,.0f}".replace(",", ".")
-    except: return "Rp 0"
-
-def log_aksi(u, a, d=""):
-    try:
-        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-    except Exception: pass
-
-def metric_card(label, value, sub="", warna="card-blue"):
-    sub_html = f'<div class="sub">{sub}</div>' if sub else ''
-    return f'<div class="metric-card {warna}"><div class="label">{label}</div><div class="value">{value}</div>{sub_html}</div>'
-
-def get_karyawan_dropdown(only_active=True):
-    q = "SELECT employee_id, full_name FROM karyawan"
-    if only_active: q += " WHERE aktif=1"
-    q += " ORDER BY full_name"
-    df = pd.read_sql_query(q, conn)
-    return {f"{r['employee_id']} - {r['full_name']}": r['employee_id'] for _, r in df.iterrows()}
-
-def get_karyawan_data(emp_id):
-    df = pd.read_sql_query("SELECT * FROM karyawan WHERE employee_id=?", conn, params=(emp_id,))
-    return df.iloc[0] if not df.empty else None
-
-def render_edit_delete_table(table_name, query, editable_cols, display_cols, key_prefix, col_config=None, calc_func=None):
-    df = pd.read_sql_query(query, conn)
-    if df.empty:
-        st.info(f"Belum ada data {table_name}. Silakan tambah melalui form di atas.")
-        return
-    df['Hapus?'] = False
-    config = {"id": st.column_config.NumberColumn("ID", disabled=True, width="small"), "Hapus?": st.column_config.CheckboxColumn("Hapus?", default=False, width="small")}
-    if col_config: config.update(col_config)
-    edited_df = st.data_editor(df[display_cols + ['Hapus?']], column_config=config, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"ed_{table_name}_{key_prefix}")
-    
-    if st.button("💾 Simpan Perubahan / Hapus Data Terpilih", key=f"sv_{table_name}_{key_prefix}", type="primary", use_container_width=True):
-        success_count = 0; delete_count = 0
-        to_delete = edited_df[edited_df['Hapus?'] == True]['id'].dropna().tolist()
-        for did in to_delete:
-            try: c.execute(f"DELETE FROM {table_name} WHERE id=?", (did,)); delete_count += 1
-            except Exception as e: st.error(f"Gagal menghapus ID {did}: {e}")
-        for _, row in edited_df.iterrows():
-            if row['Hapus?']: continue
-            row_id = row.get('id')
-            vals = [row.get(col) if not pd.isna(row.get(col)) else None for col in editable_cols]
-            if calc_func: vals = calc_func(row, editable_cols, vals)
-            try:
-                if pd.isna(row_id) or row_id == 0 or row_id == "":
-                    c.execute(f"INSERT INTO {table_name} ({', '.join(editable_cols)}) VALUES ({', '.join(['?'] * len(editable_cols))})", tuple(vals))
-                else:
-                    c.execute(f"UPDATE {table_name} SET {', '.join([f'{col}=?' for col in editable_cols])} WHERE id=?", tuple(vals) + (int(row_id),))
-                success_count += 1
-            except Exception as e: st.error(f"Error pada baris ID {row_id}: {e}")
-        conn.commit()
-        st.success(f"✅ Berhasil menyimpan {success_count} data dan menghapus {delete_count} data.")
-        time.sleep(1); st.rerun()
-
-# ==================== LOGIN SYSTEM ====================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.nama = ""
-    st.session_state.role = ""
-
-if not st.session_state.logged_in:
-    st.markdown('<div class="main-header"><h1>⚡ HRIS, GA AMOEY</h1><p>Sistem Manajemen SDM, Absensi, Payroll, GA & Utility</p></div>', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        with st.form("login"):
-            st.subheader("🔐 Login Sistem")
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("Masuk", use_container_width=True):
-                row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
-                if row and row[1] == hash_password(p) and row[4] == 1:
-                    st.session_state.logged_in = True
-                    st.session_state.username = row[0]
-                    st.session_state.nama = row[2]
-                    st.session_state.role = row[3]
-                    log_aksi(u, "LOGIN")
-                    st.rerun()
-                else: 
-                    st.error("❌ Username / password salah atau akun tidak aktif.")
-        st.info("🔑 Default: **admin** / **admin123**")
-    st.stop()
-
-# ==================== SIDEBAR MENU ====================
-with st.sidebar:
-    st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
-    st.markdown("---")
-    
-    menu = [
-        "🏠 Dashboard HRIS", "🗂️ Filing Data Manpower", "👥 Data Karyawan", 
-        "📅 Absensi & Kehadiran", "🏖️ Cuti & Izin", "💰 Payroll & Slip Gaji", 
-        "📋 Rekrutmen & CV", "📋 Jobdesk", "💡 CI Report", "🏥 SKD", 
-        "📝 Internal Memo", "🔄 Mutasi & PKWT", "📉 Resign & Turnover", 
-        "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", 
-        "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", 
-        "📁 Arsip Dokumen (E-Filing)", "📎 Lampiran / Attachment", "📋 Formulir HRD (Official)",
-        "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"
-    ]
-    
-    if st.session_state.role == "admin": 
-        menu += ["👤 Manajemen User", "🔄 Sinkronisasi Uniquip", "📝 Log Aktivitas"]
-        
-    pilihan = st.selectbox("📋 Menu Navigasi", menu)
-    st.markdown("---")
-    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
-    st.markdown("---")
-    
-    if st.button("🚪 Logout"):
-        log_aksi(st.session_state.username, "LOGOUT")
-        for k in ["logged_in", "username", "nama", "role"]: 
-            st.session_state[k] = False if k == "logged_in" else ""
-        st.rerun()
-
-# ==================== KONTEN MENU ====================# --- 1. DASHBOARD HRIS (WALLPAPER STYLE) ---
-if pilihan == "🏠 Dashboard HRIS":
-    # Header Elegan
-    st.markdown("""
-    <div class="main-header">
-        <h1 style="margin:0; font-weight:800; letter-spacing:1px;">HRIS & GA AMOEY</h1>
-        <p style="margin:5px 0 0 0; opacity:0.8; font-size:0.9em;">Sistem Manajemen SDM & General Affairs Terpadu</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # --- AMBIL DATA ---
-    total_karyawan = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=1").fetchone()[0]
-    total_kandidat = c.execute("SELECT COUNT(*) FROM kandidat").fetchone()[0]
-    total_lowongan = c.execute("SELECT COUNT(*) FROM lowongan WHERE status='Buka'").fetchone()[0]
-    total_cuti = c.execute("SELECT COUNT(*) FROM cuti WHERE status='Menunggu'").fetchone()[0]
-    total_resign = c.execute("SELECT COUNT(*) FROM karyawan WHERE aktif=0").fetchone()[0]
-    
-    total_aset = c.execute("SELECT COUNT(*) FROM aset WHERE status='Aktif'").fetchone()[0]
-    total_ruko = c.execute("SELECT COUNT(*) FROM ruko").fetchone()[0]
-    ruko_disewa = c.execute("SELECT COUNT(*) FROM ruko WHERE status='Disewa'").fetchone()[0]
-    total_tenant = c.execute("SELECT COUNT(*) FROM tenant").fetchone()[0]
-    tenant_terisi = c.execute("SELECT COUNT(*) FROM tenant WHERE penghuni IS NOT NULL AND penghuni != ''").fetchone()[0]
-    total_sp = c.execute("SELECT COUNT(*) FROM disiplin WHERE status='Aktif'").fetchone()[0]
-    
-    periode_ini = datetime.now().strftime("%Y-%m")
-    total_payroll = c.execute("SELECT COALESCE(SUM(gaji_bersih), 0) FROM payroll WHERE periode=?", (periode_ini,)).fetchone()[0]
-    total_utility = c.execute("SELECT COALESCE(SUM(total_bayar), 0) FROM utility WHERE periode=?", (periode_ini,)).fetchone()[0]
-
-    # Bagi layar: Kiri Dashboard, Kanan Flyer
-    col_left, col_right = st.columns([2.2, 1])
-
-    with col_left:
-        # --- SECTION 1: SDM & REKRUTMEN ---
-        st.markdown('<div class="section-header"><h3>👥 SDM & Rekrutmen</h3></div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="metric-grid">
-            {metric_card("Karyawan", str(total_karyawan), "Aktif", "card-blue")}
-            {metric_card("Kandidat", str(total_kandidat), "Pelamar", "card-purple")}
-            {metric_card("Lowongan", str(total_lowongan), "Buka", "card-green")}
-            {metric_card("Payroll", format_rp(total_payroll), "Bulan Ini", "card-gold")}
-            {metric_card("Cuti", str(total_cuti), "Menunggu", "card-orange")}
-            {metric_card("Resign", str(total_resign), "Total", "card-red")}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # --- SECTION 2: GA & PROPERTI ---
-        st.markdown('<div class="section-header"><h3>🏢 GA & Properti</h3></div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="metric-grid">
-            {metric_card("Aset", str(total_aset), "Aktif", "card-teal")}
-            {metric_card("Ruko", f"{ruko_disewa}/{total_ruko}", "Disewa", "card-dark")}
-            {metric_card("Tenant", f"{tenant_terisi}/{total_tenant}", "Terisi", "card-purple")}
-            {metric_card("Utility", format_rp(total_utility), "Bulan Ini", "card-blue")}
-            {metric_card("SP Aktif", str(total_sp), "Sanksi", "card-red")}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # --- SECTION 3: ANALITIK ---
-        st.markdown('<div class="section-header"><h3>📈 Analitik & Distribusi</h3></div>', unsafe_allow_html=True)
-        
-        col_chart1, col_chart2 = st.columns(2)
-        with col_chart1:
-            with st.container(border=True):
-                st.markdown("**🏢 Distribusi Divisi**")
-                df_div = pd.read_sql_query("SELECT COALESCE(NULLIF(divisi,''),'Belum Diisi') as divisi, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY divisi", conn)
-                if not df_div.empty:
-                    chart_div = alt.Chart(df_div).mark_arc(innerRadius=60, cornerRadius=10).encode(
-                        theta=alt.Theta(field="jumlah", type="quantitative"),
-                        color=alt.Color(field="divisi", type="nominal", title="Divisi", scale=alt.Scale(scheme='tableau10')),
-                        tooltip=['divisi', 'jumlah']
-                    ).properties(height=250)
-                    st.altair_chart(chart_div, use_container_width=True)
-
-        with col_chart2:
-            with st.container(border=True):
-                st.markdown("**🚻 Distribusi Gender**")
-                df_gender = pd.read_sql_query("SELECT COALESCE(NULLIF(gender,''),'Tidak Diketahui') as gender, COUNT(*) as jumlah FROM karyawan WHERE aktif=1 GROUP BY gender", conn)
-                if not df_gender.empty:
-                    chart_gender = alt.Chart(df_gender).mark_arc(innerRadius=60, cornerRadius=10).encode(
-                        theta=alt.Theta(field="jumlah", type="quantitative"),
-                        color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita'], range=['#4facfe', '#f093fb'])),
+                        color=alt.Color(field="gender", type="nominal", title="Gender", scale=alt.Scale(domain=['Pria', 'Wanita', 'Male', 'Female'], range=['#4facfe', '#f093fb', '#00c6ff', '#8E2DE2'])),
                         tooltip=['gender', 'jumlah']
                     ).properties(height=250)
                     st.altair_chart(chart_gender, use_container_width=True)
 
     with col_right:
-        # BAGIAN KANAN: FLYER BERJALAN VERTIKAL (PREMIUM)
+        # BAGIAN KANAN: FLYER BERJALAN VERTIKAL
         if tampilkan_flyer:
             st.markdown("""
-          
             <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 12px; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; text-align: center;">
                 <h3 style="color: #fff; margin: 0; font-size: 1.2em;">📢 Info Lowongan</h3>
             </div>
@@ -567,7 +281,6 @@ if pilihan == "🏠 Dashboard HRIS":
                         b64_str = base64.b64encode(f.read()).decode()
                     img_tags += f'<img src="data:image/jpeg;base64,{b64_str}" style="width:100%; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">'
                 
-                # Efek Auto-scroll jika ada 2 flyer
                 if len(flyer_files) > 1:
                     marquee_html = f"""
                     <style>
