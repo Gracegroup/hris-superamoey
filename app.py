@@ -37,7 +37,24 @@ if "mode" in query_params and query_params["mode"] == "gudang":
     st.session_state["role"] = "ADMIN" # Beri akses admin agar bisa akses database
     st.session_state["mode_gudang"] = True # Penanda khusus mode gudang
     st.session_state["force_menu"] = "Scan Via HP" # Opsional: memaksa menu tertentu
+import streamlit as st
 
+# =========================================================
+# PENYADAP URL: BYPASS LOGIN DARI QR CODE GUDANG
+# =========================================================
+query_params = st.query_params
+if "mode" in query_params and query_params["mode"] == "gudang":
+    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
+    st.session_state["logged_in"] = True
+    st.session_state["username"] = "Petugas_Gudang"
+    st.session_state["nama"] = "Petugas Gudang"
+    st.session_state["role"] = "staff" 
+    st.session_state["mode_gudang"] = True
+    
+# =========================================================
+# LOGIN SYSTEM ANDA (JANGAN DIUBAH)
+# =========================================================
+# ... (Biarkan kode login asli Anda di bawah ini) ...
 # =========================================================
 # 2. LOGIKA LOGIN BAWAAN ANDA (JANGAN DIHAPUS)
 # =========================================================
@@ -337,15 +354,25 @@ with st.sidebar:
     if st.session_state.role == "admin": 
         menu += ["👤 Manajemen User", "🔄 Sinkronisasi Uniquip", "📝 Log Aktivitas"]
         
-    pilihan = st.selectbox("📋 Menu Navigasi", menu)
-    st.markdown("---")
-    tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
-    st.markdown("---")
+  with st.sidebar:
+    # ... (Kode tampilan profil user Anda tetap sama) ...
+    
+    # Cek apakah sedang dalam mode QR Gudang
+    is_qr_mode = st.session_state.get("mode_gudang", False)
+    
+    if is_qr_mode:
+        # Jika dari QR Code, sembunyikan menu dan kunci ke Inventory
+        st.info("📦 Mode Scan Gudang Aktif")
+        pilihan = "📦 Inventory & Kartu Stok (Barcode)"
+    else:
+        # Jika login normal, tampilkan menu seperti biasa
+        pilihan = st.selectbox("📋 Menu Navigasi", menu)
+        st.markdown("---")
+        tampilkan_flyer = st.checkbox("📢 Tampilkan Flyer Lowongan", value=True)
+        st.markdown("---")
     
     if st.button("🚪 Logout"):
-        log_aksi(st.session_state.username, "LOGOUT")
-        for k in ["logged_in", "username", "nama", "role"]: 
-            st.session_state[k] = False if k == "logged_in" else ""
+        # ... (Kode logout Anda) ...
         st.rerun()
 
 # ==================== KONTEN MENU ====================
@@ -2984,95 +3011,33 @@ elif pilihan == "📝 Log Aktivitas":
         c.execute("DELETE FROM log_aktivitas WHERE waktu < ?", (cutoff,))
         conn.commit(); st.success("✅ Log lama dihapus."); time.sleep(1); st.rerun()
 # --- 29. INVENTORY & KARTU STOK (BARCODE) ---
+# --- 29. INVENTORY & KARTU STOK (BARCODE) ---
 elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     import qrcode
     from io import BytesIO
     
     st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
     
-    # =========================================================
-    # FUNGSI UNTUK MENAMPILKAN FORM SCAN (Harus di atas/ luar if-else)
-    # =========================================================
+    # (Fungsi render_form_scan() Anda taruh di sini, pastikan di luar if-else)
     def render_form_scan():
-        st.subheader("Form Pengambilan / Penambahan Barang")
-        
-        with st.form("form_scan"):
-            col_scan1, col_scan2 = st.columns([1, 2])
-            
-            with col_scan1:
-                # Ambil data barang dari database (menggunakan variabel conn yang sudah ada di atas)
-                df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
-                
-                if not df_pilih_barang.empty:
-                    dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
-                    pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_universal")
-                    scan_code = dict_barang[pilih_nama_barang]
-                    
-                    # Tampilkan info satuan barang
-                    satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
-                    st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
-                else:
-                    scan_code = ""
-                    st.warning("Belum ada data barang di database.")
-                
-                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_universal")
-                
-            with col_scan2:
-                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_universal")
-                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_universal")
-            
-            submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
-            
-            if submit_scan and scan_code:
-                # Cek stok saat ini
-                barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
-                
-                if barang:
-                    nama_barang, stok_lama = barang
-                    
-                    if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
-                        st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
-                    else:
-                        stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
-                        
-                        # Update stok master
-                        c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
-                        
-                        # Insert log
-                        status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
-                        waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
-                                     VALUES (?,?,?,?,?,?)""",
-                                  (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
-                        conn.commit()
-                        
-                        st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
-                        st.balloons()
-                        time.sleep(1.5)
-                        st.rerun()
-                else:
-                    st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
+        # ... (Kode form isi barang & proses transaksi Anda) ...
 
-    # =========================================================
-    # PENGATURAN TAMPILAN (TAB VS QR CODE)
-    # =========================================================
+    # LOGIKA TAMPILAN
     is_qr_mode = st.session_state.get("mode_gudang", False)
 
     if is_qr_mode:
-        # --- TAMPILAN JIKA DARI SCAN QR CODE ---
-        st.info("Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang dan proses transaksi di bawah ini.")
-        
-        # Langsung tampilkan form
+        # Jika dari QR Code, langsung tampilkan form tanpa tab
+        st.success("✅ Berhasil masuk via QR Code. Silakan proses barang.")
         render_form_scan()
         
-        # Tombol opsional untuk kembali ke tampilan normal
-        if st.button("⬅️ Kembali ke Menu Utama", use_container_width=True):
+        # Tombol opsional untuk keluar dari mode gudang
+        if st.button("⬅️ Keluar dari Mode Gudang", use_container_width=True):
             st.session_state["mode_gudang"] = False
+            st.query_params.clear() # Hapus parameter URL
             st.rerun()
-
+            
     else:
-        # --- TAMPILAN JIKA LOGIN NORMAL (PAKAI TAB) ---
+        # Jika login normal, tampilkan Tab seperti biasa
         tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
             "Master Barang & Cetak QR", 
             "Scan Via HP (Auto-Form)", 
@@ -3081,20 +3046,19 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
         ])
         
         with tab_inv1:
-            st.subheader("Master Barang")
-            # Taruh kode tabel master barang / cetak QR Anda di sini
+            # Kode master barang
+            pass
             
         with tab_inv2:
-            # Panggil form scan yang sudah dibuat di atas
             render_form_scan()
             
         with tab_inv3:
-            st.subheader("Kartu Stok Barang")
-            # Taruh kode tabel kartu stok / log stok Anda di sini
+            # Kode kartu stok
+            pass
             
         with tab_inv4:
-            st.subheader("Export Excel")
-            # Taruh kode export excel Anda di sini
+            # Kode export
+            pass
 # --- FALLBACK ---
 
     st.warning("⚠️ Menu tidak dikenali.")
