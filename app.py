@@ -15,7 +15,38 @@ import zipfile
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 from io import StringIO
+import streamlit as st
+import pandas as pd
+import sqlite3
+import datetime
+import time
+import qrcode
+from io import BytesIO
+# ... (import lainnya yang sudah ada) ...
 
+# =========================================================
+# 1. DETEKSI URL QUERY PARAMETERS UNTUK QR CODE
+# =========================================================
+# Membaca URL, misal: https://app-anda.streamlit.app/?mode=gudang
+query_params = st.query_params
+
+if "mode" in query_params and query_params["mode"] == "gudang":
+    # Paksa sistem menganggap user sudah login
+    st.session_state["logged_in"] = True
+    st.session_state["username"] = "Petugas_Gudang"
+    st.session_state["role"] = "ADMIN" # Beri akses admin agar bisa akses database
+    st.session_state["mode_gudang"] = True # Penanda khusus mode gudang
+    st.session_state["force_menu"] = "Scan Via HP" # Opsional: memaksa menu tertentu
+
+# =========================================================
+# 2. LOGIKA LOGIN BAWAAN ANDA (JANGAN DIHAPUS)
+# =========================================================
+# (Biarkan kode cek login Anda di sini, contoh:)
+if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
+    # Tampilkan form login
+    st.title("Silakan Login")
+    # ... kode form login Anda ...
+    st.stop() # Hentikan eksekusi jika belum login
 # ==================== KONFIGURASI ====================
 st.set_page_config(
     page_title="HRIS & GA Amoey",
@@ -2940,288 +2971,109 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     # ⚠️ GANTI URL INI DENGAN URL STREAMLIT CLOUD ANDA
     app_url = "https://j4r5x4ubfte2gr2h862bzb.streamlit.app" 
     
+  # =========================================================
+# 3. PENGATURAN TAMPILAN (TAB VS QR CODE)
+# =========================================================
+st.title("📦 Inventory & Kartu Stok")
+is_qr_mode = st.session_state.get("mode_gudang", False)
+
+if is_qr_mode:
+    # --- TAMPILAN JIKA DARI SCAN QR CODE ---
+    st.info("Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang dan proses transaksi di bawah ini.")
+    
+    # Tampilkan form scan secara langsung (tanpa tab)
+    # KODE FORM SCAN ANDA DILETAKKAN DI SINI (Lihat Langkah 3)
+    render_form_scan()
+
+else:
+    # --- TAMPILAN JIKA LOGIN NORMAL (PAKAI TAB) ---
+    # =========================================================
+# FUNGSI UNTUK MENAMPILKAN FORM SCAN
+# =========================================================
+def render_form_scan():
+    st.subheader("Form Pengambilan / Penambahan Barang")
+    
+    with st.form("form_scan"):
+        col_scan1, col_scan2 = st.columns([1, 2])
+        
+        with col_scan1:
+            # Ambil data barang dari database untuk dropdown
+            conn = sqlite3.connect('inventory.db', check_same_thread=False)
+            df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
+            
+            if not df_pilih_barang.empty:
+                dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
+                pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_universal")
+                scan_code = dict_barang[pilih_nama_barang]
+                
+                # Tampilkan info satuan barang
+                satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
+                st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
+            else:
+                scan_code = ""
+                st.warning("Belum ada data barang di database.")
+            
+            scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_universal")
+            
+        with col_scan2:
+            scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_universal")
+            scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_universal")
+        
+        submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
+        
+        if submit_scan and scan_code:
+            cursor = conn.cursor()
+            # Cek stok saat ini
+            barang = cursor.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
+            
+            if barang:
+                nama_barang, stok_lama = barang
+                
+                if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
+                    st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
+                else:
+                    stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
+                    
+                    # Update stok master
+                    cursor.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
+                    
+                    # Insert log
+                    status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
+                    waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    cursor.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
+                                 VALUES (?,?,?,?,?,?)""",
+                              (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
+                    conn.commit()
+                    
+                    st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
+                    st.balloons()
+                    time.sleep(1.5)
+                    st.rerun()
+            else:
+                st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
     tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
-        "📝 Master Barang & Cetak QR", 
-        "📷 Scan via HP (Auto-Form)", 
-        "📋 Kartu Stok", 
-        "📊 Export Excel"
+        "Master Barang & Cetak QR", 
+        "Scan Via HP (Auto-Form)", 
+        "Kartu Stok", 
+        "Export Excel"
     ])
     
-    # ================= TAB 1: MASTER BARANG & QR CODE =================
     with tab_inv1:
-        st.subheader("Tambah Barang & Cetak QR Code Link")
-        with st.form("form_tambah_barang"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                new_barcode = st.text_input("Kode Barang (Unik) *", placeholder="Contoh: ATK-001")
-                new_nama = st.text_input("Nama Barang *", placeholder="Contoh: KERTAS HVS A4")
-            with col2:
-                new_kat = st.selectbox("Kategori", ["ATK", "RTK", "Lainnya"])
-                new_satuan = st.text_input("Satuan *", placeholder="RIM / PICIS / KOTAK")
-            with col3:
-                new_stok = st.number_input("Stok Awal", min_value=0, step=1)
-                new_lokasi = st.text_input("Lokasi Simpan", placeholder="Gudang A / Rak 1")
-            
-            if st.form_submit_button("💾 Simpan Barang", type="primary"):
-                if not new_barcode or not new_nama:
-                    st.error("❌ Kode Barcode dan Nama Barang wajib diisi!")
-                else:
-                    try:
-                        c.execute("""INSERT INTO master_barang (barcode, nama_barang, kategori, satuan, stok_saat_ini, lokasi) 
-                                     VALUES (?,?,?,?,?,?)""", 
-                                  (new_barcode, new_nama, new_kat, new_satuan, new_stok, new_lokasi))
-                        if new_stok > 0:
-                            c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
-                                         VALUES (?,?,?,?,?,?)""",
-                                      (new_barcode, datetime.now().strftime("%Y-%m-%d"), "Masuk", new_stok, "Stok Awal", st.session_state.username))
-                        conn.commit()
-                        st.success(f"✅ Barang **{new_nama}** berhasil ditambahkan.")
-                        time.sleep(1); st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("❌ Kode Barang sudah digunakan!")
-
-        st.markdown("---")
-        st.subheader("Cetak QR Code (Link Otomatis)")
-        df_barang = pd.read_sql_query("SELECT * FROM master_barang ORDER BY nama_barang", conn)
-        if not df_barang.empty:
-            selected_barcode = st.selectbox("Pilih Barang untuk Cetak QR Code", df_barang['nama_barang'].tolist())
-            barcode_row = df_barang[df_barang['nama_barang'] == selected_barcode].iloc[0]
-            
-            # Membuat Link Otomatis yang berisi kode barang
-            qr_link = f"{app_url}/?barcode={barcode_row['barcode']}"
-            st.info(f"🔗 Link Otomatis: `{qr_link}`")
-            
-            if st.button("🖨️ Generate QR Code", type="primary"):
-                qr = qrcode.QRCode(version=1, box_size=10, border=5)
-                qr.add_data(qr_link)
-                qr.make(fit=True)
-                img = qr.make_image(fill_color="black", back_color="white")
-                
-                buffer = BytesIO()
-                img.save(buffer, format="PNG")
-                
-                st.image(buffer.getvalue(), caption=f"QR Code: {barcode_row['nama_barang']}", width=300)
-                st.success("💡 Klik kanan pada gambar QR Code di atas, pilih 'Save Image As', lalu cetak dan tempel di rak barang!")
-                
-            st.dataframe(df_barang[['barcode', 'nama_barang', 'kategori', 'satuan', 'stok_saat_ini', 'lokasi']], use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data barang.")
-                  # --- FITUR BARU: CETAK QR CODE UNIVERSAL GUDANG ---
-        st.markdown("---")
-        st.subheader("Cetak QR Code Universal (Untuk Pintu Gudang)")
-        st.write("Scan QR ini untuk membuka form pengambilan barang tanpa perlu scan barcode per item.")
+        # Kode master barang Anda...
+        pass
         
-        link_gudang = f"{app_url}/?scan=gudang"
-        st.info(f"🔗 Link Gudang: `{link_gudang}`")
-        
-        if st.button("🖨️ Generate QR Code Gudang", type="primary"):
-            qr = qrcode.QRCode(version=1, box_size=10, border=5)
-            qr.add_data(link_gudang)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            
-            buffer_gudang = BytesIO()
-            img.save(buffer_gudang, format="PNG")
-            
-            st.image(buffer_gudang.getvalue(), caption="QR Code Gudang (Universal)", width=300)
-            st.success("💡 Cetak gambar ini dan tempel di pintu gudang/meja GA!")
-    # ================= TAB 2: SCAN VIA HP (AUTO-FORM) =================
-       # ================= TAB 2: SCAN VIA HP / INPUT MANUAL =================
-        # ================= TAB 2: SCAN VIA HP / INPUT MANUAL =================
     with tab_inv2:
-        st.subheader("Form Pengambilan / Penambahan Barang")
+        # Tampilkan form scan di dalam tab
+        render_form_scan()
         
-        is_mode_gudang = st.session_state.get("mode_gudang", False)
-        
-        if is_mode_gudang:
-            st.info("📦 Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang yang ingin diambil/ditambah.")
-            st.session_state["mode_gudang"] = False 
-        else:
-            auto_barcode = st.session_state.get("auto_barcode", "")
-            if auto_barcode:
-                st.success(f"✅ QR Code Berhasil Dipindai! Barang: **{auto_barcode}**")
-                st.session_state["auto_barcode"] = "" 
-                st.session_state["force_menu"] = ""
-                
-        with st.form("form_scan"):
-            col_scan1, col_scan2 = st.columns([1, 2])
-            
-            with col_scan1:
-                if is_mode_gudang:
-                    df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang ORDER BY nama_barang", conn)
-                    if not df_pilih_barang.empty:
-                        dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
-                        # PERBAIKAN: Tambahkan key unik
-                        pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_gudang")
-                        scan_code = dict_barang[pilih_nama_barang]
-                    else:
-                        scan_code = ""
-                        st.warning("Belum ada data barang.")
-                else:
-                    # PERBAIKAN: Tambahkan key unik
-                    scan_code = st.text_input("Kode Barang", value=st.session_state.get("auto_barcode", ""), key="input_barcode_scan")
-                
-                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_scan")
-                
-            with col_scan2:
-                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_scan")
-                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_scan")
-            
-            submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
-            
-            if submit_scan and scan_code:
-                barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
-                if barang:
-                    nama_barang, stok_lama = barang
-                    
-                    if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
-                        st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
-                    else:
-                        stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
-                        c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
-                        
-                        status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
-                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
-                                     VALUES (?,?,?,?,?,?)""",
-                                  (scan_code, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status_db, scan_jumlah, scan_ket, st.session_state.username))
-                        conn.commit()
-                        
-                        st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
-                        st.balloons()
-                        time.sleep(1); st.rerun()
-                else:
-                    st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
-
-    # ================= TAB 3: KARTU STOK =================
     with tab_inv3:
-        st.subheader("Kartu Stok Barang")
-        df_barang_ks = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang", conn)
+        # Kode kartu stok Anda...
+        pass
         
-        if not df_barang_ks.empty:
-            # PERBAIKAN: Key diganti menjadi 'pilih_kartu_stok_v2'
-            pilih_barang_ks = st.selectbox("Pilih Barang", df_barang_ks['nama_barang'].tolist(), key="pilih_kartu_stok_v2")
-            kode_barang_ks = df_barang_ks[df_barang_ks['nama_barang'] == pilih_barang_ks]['barcode'].iloc[0]
-            
-            df_log = pd.read_sql_query("""
-                SELECT tanggal as "Tgl", status as "Status", jumlah as "Jumlah", keterangan as "Keterangan", petugas as "Petugas"
-                FROM log_stok WHERE barcode=? ORDER BY id ASC
-            """, conn, params=(kode_barang_ks,))
-            
-            if not df_log.empty:
-                df_log['IN'] = df_log.apply(lambda row: row['Jumlah'] if row['Status'] == 'Masuk' else 0, axis=1)
-                df_log['OUT'] = df_log.apply(lambda row: row['Jumlah'] if row['Status'] == 'Keluar' else 0, axis=1)
-                df_log['BAL'] = (df_log['IN'] - df_log['OUT']).cumsum()
-                
-                df_tampil = df_log[['Tgl', 'Keterangan', 'IN', 'OUT', 'BAL', 'Petugas']]
-                st.dataframe(df_tampil, use_container_width=True, hide_index=True)
-            else:
-                st.info("Belum ada transaksi untuk barang ini.")
-    # ================= TAB 4: EXPORT EXCEL =================
     with tab_inv4:
-        st.subheader("Rekap Laporan Stok (Format Excel)")
-        if st.button("📥 Download Laporan Excel", type="primary"):
-            try:
-                df_rekap = pd.read_sql_query("SELECT * FROM master_barang ORDER BY kategori, nama_barang", conn)
-                
-                list_data = []
-                for _, row in df_rekap.iterrows():
-                    res_in = c.execute("SELECT COALESCE(SUM(jumlah),0) FROM log_stok WHERE barcode=? AND status='Masuk'", (row['barcode'],)).fetchone()[0]
-                    res_out = c.execute("SELECT COALESCE(SUM(jumlah),0) FROM log_stok WHERE barcode=? AND status='Keluar'", (row['barcode'],)).fetchone()[0]
-                    stok_akhir = row['stok_saat_ini']
-                    
-                    list_data.append({
-                        "NO": len(list_data) + 1,
-                        "NAMA BARANG RTK": row['nama_barang'],
-                        "SATUAN": row['satuan'],
-                        "STOK AWAL": stok_akhir - res_in + res_out,
-                        "MASUK": res_in,
-                        "KELUAR": res_out,
-                        "STOK AKHIR": stok_akhir,
-                        "STATUS": "Stok Kosong" if stok_akhir == 0 else "Tersedia"
-                    })
-                
-                df_excel = pd.DataFrame(list_data)
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_excel.to_excel(writer, index=False, sheet_name='REKAP STOK')
-                
-                st.download_button(
-                    label="💾 Klik untuk Download Laporan Excel",
-                    data=output.getvalue(),
-                    file_name=f"Laporan_Stok_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            except Exception as e:
-                st.error(f"Gagal membuat laporan: {e}")    # ================= TAB 3: KARTU STOK =================
-    with tab_inv3:
-        st.subheader("Kartu Stok Barang")
-        df_barang = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang", conn)
-        
-        if not df_barang.empty:
-            col_ks1, col_ks2 = st.columns(2)
-            with col_ks1:
-                pilih_barang = st.selectbox("Pilih Barang", df_barang['nama_barang'].tolist(), key="pilih_kartu_stok")
-                kode_barang = df_barang[df_barang['nama_barang'] == pilih_barang]['barcode'].iloc[0]
-            with col_ks2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.info(f"Kode Barcode: **{kode_barang}**")
-            
-            df_log = pd.read_sql_query("""
-                SELECT tanggal as "Tgl", status as "Status", jumlah as "Jumlah", keterangan as "Keterangan", petugas as "Petugas"
-                FROM log_stok WHERE barcode=? ORDER BY id ASC
-            """, conn, params=(kode_barang,))
-            
-            if not df_log.empty:
-                df_log['IN'] = df_log.apply(lambda row: row['Jumlah'] if row['Status'] == 'Masuk' else 0, axis=1)
-                df_log['OUT'] = df_log.apply(lambda row: row['Jumlah'] if row['Status'] == 'Keluar' else 0, axis=1)
-                df_log['BAL'] = (df_log['IN'] - df_log['OUT']).cumsum()
-                
-                df_tampil = df_log[['Tgl', 'Keterangan', 'IN', 'OUT', 'BAL', 'Petugas']]
-                st.dataframe(df_tampil, use_container_width=True, hide_index=True)
-            else:
-                st.info("Belum ada transaksi untuk barang ini.")
-
-    # ================= TAB 4: REKAP LAPORAN (EXCEL) =================
-    with tab_inv4:
-        st.subheader("Rekap Laporan Stok ATK & RTK")
-        st.write("Fitur ini akan men-generate file Excel persis seperti format laporan manual Anda.")
-        
-        if st.button("📥 Download Rekap Laporan (Excel)", type="primary"):
-            try:
-                df_rekap = pd.read_sql_query("SELECT * FROM master_barang ORDER BY kategori, nama_barang", conn)
-                
-                list_data = []
-                for _, row in df_rekap.iterrows():
-                    res_in = c.execute("SELECT COALESCE(SUM(jumlah),0) FROM log_stok WHERE barcode=? AND status='Masuk'", (row['barcode'],)).fetchone()[0]
-                    res_out = c.execute("SELECT COALESCE(SUM(jumlah),0) FROM log_stok WHERE barcode=? AND status='Keluar'", (row['barcode'],)).fetchone()[0]
-                    
-                    stok_akhir = row['stok_saat_ini']
-                    
-                    list_data.append({
-                        "NO": len(list_data) + 1,
-                        "NAMA BARANG": row['nama_barang'],
-                        "SATUAN": row['satuan'],
-                        "STOK AWAL": stok_akhir - res_in + res_out,
-                        "MASUK": res_in,
-                        "KELUAR": res_out,
-                        "STOK AKHIR": stok_akhir,
-                        "STATUS": "Stok Kosong" if stok_akhir == 0 else "Tersedia"
-                    })
-                
-                df_excel = pd.DataFrame(list_data)
-                
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_excel.to_excel(writer, index=False, sheet_name='REKAP STOK')
-                
-                st.download_button(
-                    label="💾 Klik untuk Download Laporan Excel",
-                    data=output.getvalue(),
-                    file_name=f"Laporan_Stok_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            except Exception as e:
-                st.error(f"Gagal membuat laporan: {e}")
+        # Kode export excel Anda...
+        pass
 # --- FALLBACK ---
 else:
     st.warning("⚠️ Menu tidak dikenali.")
