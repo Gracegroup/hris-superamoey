@@ -2985,7 +2985,6 @@ if is_qr_mode:
     # KODE FORM SCAN ANDA DILETAKKAN DI SINI (Lihat Langkah 3)
     render_form_scan()
 
-else:
     # --- TAMPILAN JIKA LOGIN NORMAL (PAKAI TAB) ---
     # =========================================================
 # FUNGSI UNTUK MENAMPILKAN FORM SCAN
