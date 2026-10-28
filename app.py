@@ -42,7 +42,6 @@ os.makedirs("data", exist_ok=True)
 import os
 os.makedirs("/data", exist_ok=True)
 conn = sqlite3.connect('/data/hris_ga.db', check_same_thread=False)
-c = conn.cursor()
 
 def hash_password(p): 
     return hashlib.sha256(p.encode()).hexdigest()
