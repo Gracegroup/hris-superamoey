@@ -31,28 +31,23 @@ if "mode" in st.query_params and st.query_params["mode"] == "gudang":
 import os
 os.makedirs("data", exist_ok=True)
 import os
-os.makedirs("/data", exist_ok=True)
-conn = sqlite3.connect('/data/hris_ga.db', check_same_thread=False)
-# ==================== 2. KONEKSI DATABASE ====================
 # ==================== 2. KONEKSI DATABASE ====================
 import os
 import sqlite3
 
-# 1. Tentukan path default untuk Streamlit Cloud / lokal
+# Deteksi lingkungan otomatis (Streamlit Cloud vs Hugging Face)
 DB_PATH = "data/hris_ga.db" 
-
-# 2. Cek apakah berjalan di Hugging Face Spaces (karena HF memiliki folder /data)
 if os.path.exists("/data") and os.access("/data", os.W_OK):
     DB_PATH = "/data/hris_ga.db"
 
-# 3. Buat foldernya jika belum ada
+# Buat folder database jika belum ada (hanya di direktori proyek)
 db_dir = os.path.dirname(DB_PATH)
 if db_dir:
     os.makedirs(db_dir, exist_ok=True)
 
-# 4. Hubungkan ke database DAN BUAT CURSOR (variabel 'c')
+# Koneksi database & cursor
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-c = conn.cursor()  # <--- INI YANG HILANG SEBELUMNYA, WAJIB DITAMBAHKAN
+c = conn.cursor()
 
 # ==================== 3. PENYADAP URL (BYPASS LOGIN QR CODE) ====================
 query_params = st.query_params
