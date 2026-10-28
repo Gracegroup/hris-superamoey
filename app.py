@@ -73,7 +73,7 @@ st.markdown("""
     .section-header h3 { margin: 0; color: #1e3c72; }
 </style>
 st.markdown(""" unsafe_allow_html=True)
-<style>)
+<style>
     /* BACKGROUND APLIKASI */
    # ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
 st.markdown("""
