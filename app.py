@@ -135,7 +135,6 @@ st.markdown("""
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
-)
 
 os.makedirs("uploads/flyer", exist_ok=True)
 
