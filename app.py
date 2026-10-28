@@ -19,7 +19,7 @@ os.makedirs("uploads/foto", exist_ok=True)
 os.makedirs("uploads/dokumen", exist_ok=True)
 
 # ==================== CUSTOM CSS (WALLPAPER STYLE) ====================
-st.markdown("""
+st.markdown(""")
 <style>
     /* BACKGROUND APLIKASI */
     .stApp { background: linear-gradient(135deg, #eef2f7 0%, #d9e4f5 100%); }
