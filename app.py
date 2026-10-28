@@ -3027,6 +3027,7 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             st.success("💡 Cetak gambar ini dan tempel di pintu gudang/meja GA!")
     # ================= TAB 2: SCAN VIA HP (AUTO-FORM) =================
        # ================= TAB 2: SCAN VIA HP / INPUT MANUAL =================
+        # ================= TAB 2: SCAN VIA HP / INPUT MANUAL =================
     with tab_inv2:
         st.subheader("Form Pengambilan / Penambahan Barang")
         
@@ -3034,7 +3035,7 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
         
         if is_mode_gudang:
             st.info("📦 Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang yang ingin diambil/ditambah.")
-            st.session_state["mode_gudang"] = False # Reset setelah dibaca agar kembali normal saat di-refresh
+            st.session_state["mode_gudang"] = False 
         else:
             auto_barcode = st.session_state.get("auto_barcode", "")
             if auto_barcode:
@@ -3047,24 +3048,24 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             
             with col_scan1:
                 if is_mode_gudang:
-                    # JIKA VIA QR GUDANG: Tampilkan Dropdown Pilihan Barang
                     df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang ORDER BY nama_barang", conn)
                     if not df_pilih_barang.empty:
                         dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
-                        pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()))
+                        # PERBAIKAN: Tambahkan key unik
+                        pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_gudang")
                         scan_code = dict_barang[pilih_nama_barang]
                     else:
                         scan_code = ""
                         st.warning("Belum ada data barang.")
                 else:
-                    # JIKA VIA QR PER ITEM: Text Input (Bisa pakai scanner USB atau otomatis dari QR)
-                    scan_code = st.text_input("Kode Barang (Otomatis terisi dari QR)", value=st.session_state.get("auto_barcode", ""))
+                    # PERBAIKAN: Tambahkan key unik
+                    scan_code = st.text_input("Kode Barang", value=st.session_state.get("auto_barcode", ""), key="input_barcode_scan")
                 
-                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True)
+                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_scan")
                 
             with col_scan2:
-                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1)
-                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting")
+                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_scan")
+                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_scan")
             
             submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
             
@@ -3094,16 +3095,17 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     # ================= TAB 3: KARTU STOK =================
     with tab_inv3:
         st.subheader("Kartu Stok Barang")
-        df_barang = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang", conn)
+        df_barang_ks = pd.read_sql_query("SELECT barcode, nama_barang FROM master_barang", conn)
         
-        if not df_barang.empty:
-            pilih_barang = st.selectbox("Pilih Barang", df_barang['nama_barang'].tolist(), key="pilih_kartu_stok")
-            kode_barang = df_barang[df_barang['nama_barang'] == pilih_barang]['barcode'].iloc[0]
+        if not df_barang_ks.empty:
+            # PERBAIKAN: Key diganti menjadi 'pilih_kartu_stok_v2'
+            pilih_barang_ks = st.selectbox("Pilih Barang", df_barang_ks['nama_barang'].tolist(), key="pilih_kartu_stok_v2")
+            kode_barang_ks = df_barang_ks[df_barang_ks['nama_barang'] == pilih_barang_ks]['barcode'].iloc[0]
             
             df_log = pd.read_sql_query("""
                 SELECT tanggal as "Tgl", status as "Status", jumlah as "Jumlah", keterangan as "Keterangan", petugas as "Petugas"
                 FROM log_stok WHERE barcode=? ORDER BY id ASC
-            """, conn, params=(kode_barang,))
+            """, conn, params=(kode_barang_ks,))
             
             if not df_log.empty:
                 df_log['IN'] = df_log.apply(lambda row: row['Jumlah'] if row['Status'] == 'Masuk' else 0, axis=1)
@@ -3114,7 +3116,6 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
                 st.dataframe(df_tampil, use_container_width=True, hide_index=True)
             else:
                 st.info("Belum ada transaksi untuk barang ini.")
-
     # ================= TAB 4: EXPORT EXCEL =================
     with tab_inv4:
         st.subheader("Rekap Laporan Stok (Format Excel)")
