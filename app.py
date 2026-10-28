@@ -306,6 +306,24 @@ def render_edit_delete_table(table_name, query, editable_cols, display_cols, key
         st.success(f"✅ Berhasil menyimpan {success_count} data dan menghapus {delete_count} data.")
         time.sleep(1); st.rerun()
         # ==================== LOGIN SYSTEM ====================
+import streamlit as st
+import datetime
+
+# =========================================================
+# 1. PENYADAP URL: BYPASS LOGIN DARI QR CODE GUDANG
+# =========================================================
+query_params = st.query_params
+if "mode" in query_params and query_params["mode"] == "gudang":
+    # Paksa sistem menganggap user sudah login sebagai Petugas Gudang
+    st.session_state["logged_in"] = True
+    st.session_state["username"] = "Petugas_Gudang"
+    st.session_state["nama"] = "Petugas Gudang"
+    st.session_state["role"] = "staff"
+    st.session_state["mode_gudang"] = True
+
+# =========================================================
+# 2. LOGIN SYSTEM (JIKA BUKAN DARI QR CODE)
+# =========================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
@@ -321,6 +339,7 @@ if not st.session_state.logged_in:
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
             if st.form_submit_button("Masuk", use_container_width=True):
+                # Pastikan variabel 'c' (cursor database) sudah dideklarasikan di atas file Anda
                 row = c.execute("SELECT username, password, nama_lengkap, role, aktif FROM users WHERE username=?", (u,)).fetchone()
                 if row and row[1] == hash_password(p) and row[4] == 1:
                     st.session_state.logged_in = True
@@ -332,9 +351,11 @@ if not st.session_state.logged_in:
                 else: 
                     st.error("❌ Username / password salah atau akun tidak aktif.")
         st.info("🔑 Default: **admin** / **admin123**")
-    st.stop()
+    st.stop() # Hentikan eksekusi jika belum login
 
-# ==================== SIDEBAR MENU ====================
+# =========================================================
+# 3. SIDEBAR MENU (MULAI DARI SINI HARUS RATA KIRI)
+# =========================================================
 with st.sidebar:
     st.markdown(f'<div style="text-align:center; padding: 15px 0;"><div style="font-size:3em;">👤</div><h3 style="margin:5px 0;">{st.session_state.nama}</h3><p style="opacity:0.8; margin:0; font-size:0.9em;">Role: {st.session_state.role.upper()}</p><p style="opacity:0.6; margin:5px 0 0 0; font-size:0.75em;">{datetime.now().strftime("%d/%m/%Y %H:%M")}</p></div>', unsafe_allow_html=True)
     st.markdown("---")
@@ -347,21 +368,18 @@ with st.sidebar:
         "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", 
         "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", 
         "📁 Arsip Dokumen (E-Filing)", "📎 Lampiran / Attachment", "📋 Formulir HRD (Official)",
-        "📦 Inventory & Kartu Stok (Barcode)", 
+        "📦 Inventory & Kartu Stok (Barcode)",
         "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"
     ]
     
     if st.session_state.role == "admin": 
         menu += ["👤 Manajemen User", "🔄 Sinkronisasi Uniquip", "📝 Log Aktivitas"]
         
-  with st.sidebar:
-    # ... (Kode tampilan profil user Anda tetap sama) ...
-    
     # Cek apakah sedang dalam mode QR Gudang
     is_qr_mode = st.session_state.get("mode_gudang", False)
     
     if is_qr_mode:
-        # Jika dari QR Code, sembunyikan menu dan kunci ke Inventory
+        # Jika dari QR Code, sembunyikan menu dropdown
         st.info("📦 Mode Scan Gudang Aktif")
         pilihan = "📦 Inventory & Kartu Stok (Barcode)"
     else:
@@ -372,8 +390,15 @@ with st.sidebar:
         st.markdown("---")
     
     if st.button("🚪 Logout"):
-        # ... (Kode logout Anda) ...
+        log_aksi(st.session_state.username, "LOGOUT")
+        for k in ["logged_in", "username", "nama", "role", "mode_gudang"]: 
+            st.session_state[k] = False if k in ["logged_in", "mode_gudang"] else ""
+        # Bersihkan URL dari parameter QR
+        st.query_params.clear() 
         st.rerun()
+
+# ==================== KONTEN MENU ====================
+# (Sisa kode Anda dari if pilihan == "🏠 Dashboard HRIS": dan seterusnya ada di bawah sini)
 
 # ==================== KONTEN MENU ====================
 # ==================== URL ROUTING UNTUK QR CODE ====================
