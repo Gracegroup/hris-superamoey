@@ -3038,72 +3038,73 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
             st.subheader("Export Excel")
             # (Taruh kode export Excel Anda di sini)
 # --- 30. UPLOAD EXCEL INVENTORY ---
+# --- 30. UPLOAD EXCEL INVENTORY ---
 elif pilihan == "📤 Upload Excel Inventory":
     st.markdown('<div class="main-header"><h1>📤 Upload Excel Inventory</h1><p>Masukkan data dari Excel ke Database Streamlit</p></div>', unsafe_allow_html=True)
     
     st.warning("⚠️ Catatan: Setiap kali aplikasi di Reboot, database akan kembali kosong. Gunakan menu ini untuk memasukkan data kembali.")
     
-    # Pilihan Kategori Barang
-    kategori_barang = st.selectbox("Pilih Kategori Barang (Sesuai File Excel)", ["ATK", "RTK", "SOUVENIR"])
-    uploaded_file = st.file_uploader("Upload file Excel (Contoh: ATK REPORT 26.xlsx)", type=["xlsx"])
+    kategori_barang = st.selectbox("Pilih Kategori Barang", ["ATK", "RTK", "SOUVENIR"])
+    uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
     
     if uploaded_file is not None:
         try:
-            df = pd.read_excel(uploaded_file, sheet_name=0) # Membaca sheet pertama
+            # PERBAIKAN: header=2 artinya membaca nama kolom dari Baris ke-3 Excel
+            df = pd.read_excel(uploaded_file, sheet_name=0, header=2) 
             
-            # Menampilkan preview
             st.write(f"✅ File berhasil dibaca: **{len(df)} baris**.")
-            st.dataframe(df.head(5), use_container_width=True)
+            st.dataframe(df.head(3), use_container_width=True)
             
             if st.button("🚀 Mulai Import ke Database", type="primary"):
                 berhasil = 0
-                counter = 0
+                counter = c.execute("SELECT COUNT(*) FROM master_barang WHERE kategori=?", (kategori_barang,)).fetchone()[0]
                 
-                # Looping setiap baris di Excel
                 for index, row in df.iterrows():
-                    # Mencari nama barang (mengantisipasi nama kolom yg berbeda-beda)
+                    # Cek nama kolom di Excel Anda
                     nama_barang = None
-                    if 'NAMA BARANG RTK' in df.columns: nama_barang = row['NAMA BARANG RTK']
-                    elif 'NAMA BARANG' in df.columns: nama_barang = row['NAMA BARANG']
+                    if 'NAMA BARANG RTK' in df.columns: 
+                        nama_barang = row['NAMA BARANG RTK']
+                    elif 'NAMA BARANG' in df.columns: 
+                        nama_barang = row['NAMA BARANG']
+                    elif 'NAMA BARANG SOUVENIR' in df.columns:
+                        nama_barang = row['NAMA BARANG SOUVENIR']
                     
-                    satuan = row.get('SATUAN', '')
+                    satuan = str(row.get('SATUAN', '')).strip()
+                    if satuan == 'nan': satuan = ''
                     
-                    # Ambil stok akhir
+                    # Cek Stok Akhir
                     stok = 0
                     for col in ['STOK AKHIR', 'STOK<br>AKHIR', 'STOK']:
                         if col in df.columns and pd.notna(row[col]):
-                            try:
-                                stok = int(row[col])
-                            except:
-                                stok = 0
+                            try: stok = int(row[col])
+                            except: stok = 0
                             break
                     
-                    # Jika nama barang ada dan bukan NaN (kosong)
-                    if nama_barang and str(nama_barang).strip() != 'nan' and str(nama_barang).strip() != '':
+                    # Jika nama barang valid (bukan NaN / kosong)
+                    if nama_barang and str(nama_barang).strip() not in ['nan', 'None', '']:
                         counter += 1
                         barcode = f"{kategori_barang[:3].upper()}-{counter:03d}"
+                        nama_bersih = str(nama_barang).strip()
                         
-                        # Masukkan ke database
                         try:
-                            c.execute("""INSERT OR IGNORE INTO master_barang 
+                            # Gunakan INSERT OR REPLACE agar jika barang sudah ada, stoknya diupdate
+                            c.execute("""INSERT OR REPLACE INTO master_barang 
                                          (barcode, nama_barang, kategori, satuan, stok_saat_ini) 
                                          VALUES (?,?,?,?,?)""",
-                                      (barcode, str(nama_barang).strip(), kategori_barang, str(satuan), stok))
+                                      (barcode, nama_bersih, kategori_barang, satuan, stok))
                             berhasil += 1
                         except Exception as e:
-                            pass
+                            st.error(f"Gagal insert {nama_bersih}: {e}")
                 
                 conn.commit()
-                st.success(f"🎉 Berhasil memasukkan **{berhasil}** data barang ke database!")
+                st.success(f"🎉 Berhasil memasukkan **{berhasil}** data barang {kategori_barang} ke database!")
                 st.balloons()
                 time.sleep(2)
                 st.rerun()
                 
         except Exception as e:
             st.error(f"❌ Gagal memproses file: {e}")
-            st.info("Pastikan file yang di-upload adalah file Excel (.xlsx) yang valid.")
 
-# ==================== FOOTER ====================
 # --- FALLBACK ---
 else:
     st.warning("⚠️ Menu tidak dikenali.")
