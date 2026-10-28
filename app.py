@@ -132,7 +132,26 @@ c.execute('''CREATE TABLE IF NOT EXISTS formulir_exit (id INTEGER PRIMARY KEY AU
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_izin (id INTEGER PRIMARY KEY AUTOINCREMENT, jenis_form TEXT, nama TEXT, jabatan TEXT, tanggal TEXT, alasan TEXT, pukul TEXT, keterangan TEXT, data_json TEXT, created_by TEXT, created_at TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS formulir_perubahan (id INTEGER PRIMARY KEY AUTOINCREMENT, no_urut TEXT, tanggal TEXT, data_json TEXT, pengaju TEXT, created_by TEXT, created_at TEXT)''')
 conn.commit()
-
+# Tambahan Tabel untuk Inventory & Kartu Stok
+c.execute('''CREATE TABLE IF NOT EXISTS master_barang (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barcode TEXT UNIQUE,
+    nama_barang TEXT,
+    kategori TEXT,
+    satuan TEXT,
+    stok_saat_ini INTEGER DEFAULT 0,
+    lokasi TEXT
+)''')
+c.execute('''CREATE TABLE IF NOT EXISTS log_stok (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barcode TEXT,
+    tanggal TEXT,
+    status TEXT,
+    jumlah INTEGER,
+    keterangan TEXT,
+    petugas TEXT
+)''')
+conn.commit()
 # ==================== MIGRASI KOLOM EXCEL ====================
 kolom_tambahan = ["npwp TEXT", "ptkp_status TEXT", "bank_name TEXT", "bank_account TEXT", "bank_account_holder TEXT", "bpjs_ketenagakerjaan TEXT", "bpjs_kesehatan TEXT", "citizen_id_address TEXT", "residential_address TEXT", "nik_npwp_16 TEXT", "phone TEXT", "branch_name TEXT", "religion TEXT", "marital_status TEXT", "blood_type TEXT", "length_of_service TEXT", "manager TEXT", "grade TEXT"]
 for kol in kolom_tambahan:
@@ -255,6 +274,7 @@ with st.sidebar:
         "⚠️ Disiplin & SP", "📤 Exit Clearance", "📱 WhatsApp Reminder", 
         "🚛 Aset & Properti", "🏪 Ruko & Tenant", "💡 Utility Melak", 
         "📁 Arsip Dokumen (E-Filing)", "📎 Lampiran / Attachment", "📋 Formulir HRD (Official)",
+        "📦 Inventory & Kartu Stok (Barcode)", 
         "📊 Laporan & Analitik", "📈 Manpower Report", "💾 Import, Export & Backup"
     ]
     
