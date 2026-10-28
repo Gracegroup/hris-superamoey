@@ -37,7 +37,9 @@ st.set_page_config(
 
 # ==================== 2. KONEKSI DATABASE ====================
 # WAJIB DI ATAS AGAR LOGIN TIDAK ERROR
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
+import os
+os.makedirs("data", exist_ok=True)
+conn = sqlite3.connect('data/hris_ga.db', check_same_thread=False)
 c = conn.cursor()
 
 def hash_password(p): 
