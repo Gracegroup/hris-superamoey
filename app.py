@@ -3043,26 +3043,86 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
     
     st.markdown('<div class="main-header"><h1>📦 Inventory & Kartu Stok</h1><p>Manajemen ATK & RTK (Scan QR via HP)</p></div>', unsafe_allow_html=True)
     
-    # (Fungsi render_form_scan() Anda taruh di sini, pastikan di luar if-else)
+    # =========================================================
+    # FUNGSI UNTUK MENAMPILKAN FORM SCAN (Kontennya wajib menjorok ke dalam)
+    # =========================================================
     def render_form_scan():
-        # ... (Kode form isi barang & proses transaksi Anda) ...
+        st.subheader("Form Pengambilan / Penambahan Barang")
+        
+        with st.form("form_scan"):
+            col_scan1, col_scan2 = st.columns([1, 2])
+            
+            with col_scan1:
+                df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
+                
+                if not df_pilih_barang.empty:
+                    dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
+                    pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_barang_universal")
+                    scan_code = dict_barang[pilih_nama_barang]
+                    
+                    satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
+                    st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
+                else:
+                    scan_code = ""
+                    st.warning("Belum ada data barang di database.")
+                
+                scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status_universal")
+                
+            with col_scan2:
+                scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah_universal")
+                scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket_universal")
+            
+            submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
+            
+            if submit_scan and scan_code:
+                barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
+                
+                if barang:
+                    nama_barang, stok_lama = barang
+                    
+                    if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
+                        st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
+                    else:
+                        stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
+                        
+                        c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
+                        
+                        status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
+                        waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
+                                     VALUES (?,?,?,?,?,?)""",
+                                  (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, st.session_state.username))
+                        conn.commit()
+                        
+                        st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
+                        st.balloons()
+                        time.sleep(1.5)
+                        st.rerun()
+                else:
+                    st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
 
-    # LOGIKA TAMPILAN
+    # =========================================================
+    # PENGATURAN TAMPILAN (TAB VS QR CODE)
+    # (Baris ini posisinya harus lurus dengan 'def render_form_scan')
+    # =========================================================
     is_qr_mode = st.session_state.get("mode_gudang", False)
 
     if is_qr_mode:
-        # Jika dari QR Code, langsung tampilkan form tanpa tab
-        st.success("✅ Berhasil masuk via QR Code. Silakan proses barang.")
+        # --- TAMPILAN JIKA DARI SCAN QR CODE ---
+        st.info("Anda mengakses melalui **QR Code Gudang**. Silakan pilih barang dan proses transaksi di bawah ini.")
+        
+        # Panggil fungsi form yang sudah dibuat di atas
         render_form_scan()
         
-        # Tombol opsional untuk keluar dari mode gudang
-        if st.button("⬅️ Keluar dari Mode Gudang", use_container_width=True):
+        # Tombol untuk kembali ke mode normal
+        if st.button("⬅️ Kembali ke Menu Utama", use_container_width=True):
             st.session_state["mode_gudang"] = False
-            st.query_params.clear() # Hapus parameter URL
+            st.query_params.clear()
             st.rerun()
-            
+
     else:
-        # Jika login normal, tampilkan Tab seperti biasa
+        # --- TAMPILAN JIKA LOGIN NORMAL (PAKAI TAB) ---
         tab_inv1, tab_inv2, tab_inv3, tab_inv4 = st.tabs([
             "Master Barang & Cetak QR", 
             "Scan Via HP (Auto-Form)", 
@@ -3071,19 +3131,24 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
         ])
         
         with tab_inv1:
-            # Kode master barang
-            pass
+            st.subheader("Master Barang")
+            # (Taruh kode master barang/cetak QR Anda di sini)
             
         with tab_inv2:
+            # Panggil fungsi form di dalam tab
             render_form_scan()
             
         with tab_inv3:
-            # Kode kartu stok
-            pass
+            st.subheader("Kartu Stok Barang")
+            # (Taruh kode kartu stok Anda di sini)
             
         with tab_inv4:
-            # Kode export
-            pass
+            st.subheader("Export Excel")
+            # (Taruh kode export Excel Anda di sini)
+
+# --- FALLBACK ---
+else:
+    st.warning("⚠️ Menu tidak dikenali.")
 # --- FALLBACK ---
 
     st.warning("⚠️ Menu tidak dikenali.")
