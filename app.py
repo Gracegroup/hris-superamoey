@@ -28,30 +28,31 @@ if "mode" in st.query_params and st.query_params["mode"] == "gudang":
     st.session_state.role = "admin"
     st.session_state.mode_gudang = True
 # ==================== 1. KONFIGURASI HALAMAN ====================
-st.set_page_config(
-    page_title="HRIS & GA Amoey",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ==================== 2. KONEKSI DATABASE ====================
-# WAJIB DI ATAS AGAR LOGIN TIDAK ERROR
 import os
 os.makedirs("data", exist_ok=True)
 import os
 os.makedirs("/data", exist_ok=True)
 conn = sqlite3.connect('/data/hris_ga.db', check_same_thread=False)
+# ==================== 2. KONEKSI DATABASE ====================
+# ==================== 2. KONEKSI DATABASE ====================
+import os
+import sqlite3
 
-def hash_password(p): 
-    return hashlib.sha256(p.encode()).hexdigest()
+# 1. Tentukan path default untuk Streamlit Cloud / lokal
+DB_PATH = "data/hris_ga.db" 
 
-def log_aksi(u, a, d=""):
-    try:
-        c.execute("INSERT INTO log_aktivitas (username, aksi, detail, waktu) VALUES (?,?,?,?)", (u, a, d, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-    except Exception: 
-        pass
+# 2. Cek apakah berjalan di Hugging Face Spaces (karena HF memiliki folder /data)
+if os.path.exists("/data") and os.access("/data", os.W_OK):
+    DB_PATH = "/data/hris_ga.db"
+
+# 3. Buat foldernya jika belum ada
+db_dir = os.path.dirname(DB_PATH)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
+
+# 4. Hubungkan ke database DAN BUAT CURSOR (variabel 'c')
+conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+c = conn.cursor()  # <--- INI YANG HILANG SEBELUMNYA, WAJIB DITAMBAHKAN
 
 # ==================== 3. PENYADAP URL (BYPASS LOGIN QR CODE) ====================
 query_params = st.query_params
