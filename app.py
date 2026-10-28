@@ -2906,73 +2906,70 @@ elif pilihan == "📝 Log Aktivitas":
         c.execute("DELETE FROM log_aktivitas WHERE waktu < ?", (cutoff,))
         conn.commit(); st.success("✅ Log lama dihapus."); time.sleep(1); st.rerun()
 
-import streamlit as st
-import pandas as pd
-import sqlite3
-import datetime
-import time
-
-st.set_page_config(page_title="Scan Gudang", page_icon="📦", layout="centered")
-
-# Koneksi Database
-conn = sqlite3.connect('hris_ga.db', check_same_thread=False)
-c = conn.cursor()
-
-st.title("📦 Form Pengambilan / Penambahan Barang")
-st.info("Silakan pilih barang dan proses transaksi di bawah ini.")
-
-with st.form("form_scan"):
-    col_scan1, col_scan2 = st.columns([1, 2])
+# --- 30. UPLOAD EXCEL INVENTORY ---
+elif pilihan == "📤 Upload Excel Inventory":
+    st.markdown('<div class="main-header"><h1>📤 Upload Excel Inventory</h1><p>Masukkan data dari Excel ke Database Streamlit</p></div>', unsafe_allow_html=True)
     
-    with col_scan1:
-        df_pilih_barang = pd.read_sql_query("SELECT barcode, nama_barang, satuan FROM master_barang ORDER BY nama_barang", conn)
-        
-        if not df_pilih_barang.empty:
-            dict_barang = dict(zip(df_pilih_barang['nama_barang'], df_pilih_barang['barcode']))
-            pilih_nama_barang = st.selectbox("Pilih Barang", list(dict_barang.keys()), key="dropdown_scan")
-            scan_code = dict_barang[pilih_nama_barang]
+    st.warning("⚠️ Catatan: Setiap kali aplikasi di Reboot, database akan kembali kosong. Gunakan menu ini untuk memasukkan data kembali.")
+    
+    kategori_barang = st.selectbox("Pilih Kategori Barang", ["ATK", "RTK", "SOUVENIR"])
+    uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
+    
+    if uploaded_file is not None:
+        try:
+            # Membaca nama kolom dari Baris ke-3 Excel
+            df = pd.read_excel(uploaded_file, sheet_name=0, header=2) 
             
-            satuan_barang = df_pilih_barang[df_pilih_barang['nama_barang'] == pilih_nama_barang]['satuan'].iloc[0]
-            st.caption(f"Kode: **{scan_code}** | Satuan: **{satuan_barang}**")
-        else:
-            scan_code = ""
-            st.warning("Belum ada data barang di database.")
-        
-        scan_status = st.radio("Status", ["Keluar (Ambil)", "Masuk (Tambah)"], horizontal=True, key="radio_status")
-        
-    with col_scan2:
-        scan_jumlah = st.number_input("Jumlah", min_value=1, step=1, value=1, key="input_jumlah")
-        scan_ket = st.text_input("Nama Pengambil / Keterangan", placeholder="Contoh: Diambil untuk Meeting", key="input_ket")
-    
-    submit_scan = st.form_submit_button("Proses Transaksi", type="primary", use_container_width=True)
-    
-    if submit_scan and scan_code:
-        barang = c.execute("SELECT nama_barang, stok_saat_ini FROM master_barang WHERE barcode=?", (scan_code,)).fetchone()
-        
-        if barang:
-            nama_barang, stok_lama = barang
+            st.write(f"✅ File berhasil dibaca: **{len(df)} baris**.")
+            st.dataframe(df.head(3), use_container_width=True)
             
-            if scan_status == "Keluar (Ambil)" and stok_lama < scan_jumlah:
-                st.error(f"❌ Gagal! Stok **{nama_barang}** tidak mencukupi (Sisa: {stok_lama}).")
-            else:
-                stok_baru = stok_lama - scan_jumlah if scan_status == "Keluar (Ambil)" else stok_lama + scan_jumlah
-                c.execute("UPDATE master_barang SET stok_saat_ini=? WHERE barcode=?", (stok_baru, scan_code))
+            if st.button("🚀 Mulai Import ke Database", type="primary"):
+                berhasil = 0
+                counter = c.execute("SELECT COUNT(*) FROM master_barang WHERE kategori=?", (kategori_barang,)).fetchone()[0]
                 
-                status_db = "Keluar" if scan_status == "Keluar (Ambil)" else "Masuk"
-                waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                for index, row in df.iterrows():
+                    nama_barang = None
+                    if 'NAMA BARANG RTK' in df.columns: 
+                        nama_barang = row['NAMA BARANG RTK']
+                    elif 'NAMA BARANG' in df.columns: 
+                        nama_barang = row['NAMA BARANG']
+                    elif 'NAMA BARANG SOUVENIR' in df.columns:
+                        nama_barang = row['NAMA BARANG SOUVENIR']
+                    
+                    satuan = str(row.get('SATUAN', '')).strip()
+                    if satuan == 'nan': satuan = ''
+                    
+                    stok = 0
+                    for col in ['STOK AKHIR', 'STOK<br>AKHIR', 'STOK']:
+                        if col in df.columns and pd.notna(row[col]):
+                            try: stok = int(row[col])
+                            except: stok = 0
+                            break
+                    
+                    if nama_barang and str(nama_barang).strip() not in ['nan', 'None', '']:
+                        counter += 1
+                        barcode = f"{kategori_barang[:3].upper()}-{counter:03d}"
+                        nama_bersih = str(nama_barang).strip()
+                        
+                        try:
+                            c.execute("""INSERT OR REPLACE INTO master_barang 
+                                         (barcode, nama_barang, kategori, satuan, stok_saat_ini) 
+                                         VALUES (?,?,?,?,?)""",
+                                      (barcode, nama_bersih, kategori_barang, satuan, stok))
+                            berhasil += 1
+                        except Exception as e:
+                            pass
                 
-                c.execute("""INSERT INTO log_stok (barcode, tanggal, status, jumlah, keterangan, petugas) 
-                             VALUES (?,?,?,?,?,?)""",
-                          (scan_code, waktu_sekarang, status_db, scan_jumlah, scan_ket, "Petugas Gudang"))
                 conn.commit()
-                
-                st.success(f"✅ Berhasil! **{nama_barang}** {status_db} sebanyak {scan_jumlah}. Sisa stok: {stok_baru}")
+                st.success(f"🎉 Berhasil memasukkan **{berhasil}** data barang {kategori_barang} ke database!")
                 st.balloons()
-                time.sleep(1.5)
+                time.sleep(2)
                 st.rerun()
-        else:
-            st.warning(f"❌ Kode Barang **{scan_code}** tidak terdaftar di sistem.")
-# --- FALLBACK ---
+                
+        except Exception as e:
+            st.error(f"❌ Gagal memproses file: {e}")
+
+# --- 31. FALLBACK (JIKA MENU TIDAK DIKENALI) ---
 else:
     st.warning("⚠️ Menu tidak dikenali.")
 
