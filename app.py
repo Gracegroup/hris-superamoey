@@ -2965,7 +2965,7 @@ elif pilihan == "📦 Inventory & Kartu Stok (Barcode)":
         with tab_inv1:
             st.subheader("Master Barang & Cetak QR")
             
-            app_url = "https://j4r5x4ubtfe2qr2h862bzb.streamlit.app"
+            app_url = "https://kana1903-hris-ga-amoey.hf.space"
             qr_url = f"{app_url}/?mode=gudang"
             
             def generate_qr(data):
